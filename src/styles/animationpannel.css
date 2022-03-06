@@ -1,0 +1,33 @@
+:root {
+    --main-gray-color: #6d6d6d;
+    --secondery-gray-color: #3c3c3c;
+    --text-info-color: #ababab;
+
+  }
+
+.animation-pannel {
+    display: flex;
+    justify-content: flex-end;
+    width: 100vw;
+    height: fit-content;
+    background-color: var(--main-gray-color);
+}
+
+.side-pannel {
+    display: flex;
+    flex-direction: column;
+    width: 18em;
+    height: calc(100vh - 14.5em);
+    padding: 0.5em;
+    background-color: var(--secondery-gray-color);
+}
+
+.text-input-info {
+    color: var(--text-info-color);
+}
+
+.animation-text-input {
+    max-height: 12em;
+    max-width: 100%;
+    resize: none;
+}
