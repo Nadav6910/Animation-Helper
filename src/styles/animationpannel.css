@@ -1,10 +1,15 @@
+/* global vars  */
 :root {
     --main-gray-color: #6d6d6d;
     --secondery-gray-color: #3c3c3c;
     --text-info-color: #ababab;
-
+    --desc-font-color: #292929;
+    --desc-font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
   }
 
+/* main pannel rules ****************  */
+
+/* main working pannel of the animation helper */
 .animation-pannel {
     display: flex;
     justify-content: flex-end;
@@ -13,21 +18,20 @@
     background-color: var(--main-gray-color);
 }
 
-.side-pannel {
+/* the animation pannel main section (all pannel except for side bar)  */
+.main-section {
+    order: 0;
     display: flex;
     flex-direction: column;
-    width: 18em;
-    height: calc(100vh - 14.5em);
-    padding: 0.5em;
-    background-color: var(--secondery-gray-color);
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
 }
 
-.text-input-info {
-    color: var(--text-info-color);
-}
-
-.animation-text-input {
-    max-height: 12em;
-    max-width: 100%;
-    resize: none;
+/* a small text description of the app  */
+.about-p {
+    margin-bottom: 1.5em;
+    font-size: 1.2rem;
+    font-family: var(--desc-font-family);
+    color: var(--desc-font-color);
 }

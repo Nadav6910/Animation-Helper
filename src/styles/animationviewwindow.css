@@ -1,0 +1,23 @@
+/* global vars  */
+:root {
+    --animation-window-background-color: #dddddd;
+  }
+
+/* animation view window rules ****************  */
+
+/* animation view window container  */
+.animation-view-window {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: var(--animation-window-background-color);
+    width: 17em;
+    height: 17em;
+    padding: 0.5em;
+}
+
+/* the text to be animated by user  */
+.animated-text {
+    line-break: anywhere;
+}
