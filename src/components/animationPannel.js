@@ -1,6 +1,7 @@
 import "../styles/animationpannel.css"
 import SidePannel from "./sidePannel"
 import AnimationViewWindow from "./animationViewWindow"
+import CodePreview from "./codePreview"
 import { useState } from "react"
 
 export default function AnimationPannel() {
@@ -19,6 +20,7 @@ export default function AnimationPannel() {
             <section className="main-section">
                 <p className="about-p">A tool for developers to create and test animations fast and easy.<br/> see the created animations here:</p>
                 <AnimationViewWindow text={textToAnimate}/>
+                <CodePreview />
             </section>
         </div>
     )

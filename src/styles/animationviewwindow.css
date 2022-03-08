@@ -15,9 +15,11 @@
     width: 17em;
     height: 17em;
     padding: 0.5em;
+    margin-bottom: 0.5em;
 }
 
 /* the text to be animated by user  */
 .animated-text {
     line-break: anywhere;
+    font-weight: bold;
 }

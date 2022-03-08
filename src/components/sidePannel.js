@@ -10,7 +10,7 @@ export default function SidePannel(props) {
     return (
         <div className="side-pannel">
             <h4 className="text-input-info">Write Something To Animate</h4>
-            <textarea className="animation-text-input" onChange={ForwardInputText} maxlength="100" placeholder="type here..." cols="30" rows="10"></textarea>
+            <textarea className="animation-text-input" onChange={ForwardInputText} maxLength="100" placeholder="type here..." cols="30" rows="10"></textarea>
         </div>
     )
 }
