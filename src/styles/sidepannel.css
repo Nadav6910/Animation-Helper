@@ -17,6 +17,12 @@
     background-color: var(--secondery-gray-color);
 }
 
+@media only screen and (max-height: 715px) {
+    .side-pannel {
+      height: 100vh;
+    }
+  }
+
 /* side bar info text  */
 .text-input-info {
     color: var(--text-info-color);

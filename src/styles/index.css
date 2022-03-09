@@ -12,6 +12,12 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+@media only screen and (max-height: 715px) {
+  html {
+    overflow-y: scroll;
+  }
+}
+
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;

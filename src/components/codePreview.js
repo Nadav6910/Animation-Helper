@@ -12,12 +12,15 @@ export default function CodePreview() {
     }, [])
 
     const copyCode = () => {
+
         const code = document.querySelector("code").textContent
         navigator.clipboard.writeText(code)
+
         setCopyState("Coppied!")
         document.getElementById("copy-btn").style.setProperty('--text-color', "#000")
         document.getElementById("copy-btn").style.setProperty('--opacity', 1)
         document.getElementById("copy-btn").style.setProperty('---background', "transparent")
+
         setTimeout(() => {
             document.getElementById("copy-btn").style.setProperty('--text-color', "#fff")
             document.getElementById("copy-btn").style.setProperty('--opacity', 0)
@@ -26,7 +29,7 @@ export default function CodePreview() {
         }, 2000)
     }
     
-    const rule = `p { 
+    const cssCode = `p { 
         color: red;
         background-color: blue;
         opacity: 0.5
@@ -37,7 +40,7 @@ export default function CodePreview() {
         <div className="code-box">
             <pre>
                 <code className="language-css" data-prismjs-copy="Copy the JavaScript snippet!">
-                    {rule}
+                    {cssCode}
                 </code>
             </pre>
             <button id="copy-btn" className="glow-on-hover" onClick={copyCode} type="button">{copyState}</button>

@@ -13,6 +13,14 @@
 
 .code-box pre {
     max-height: 8em;
+    /* Hide scrollbar for IE, Edge and Firefox */
+    scrollbar-width: none; 
+    -ms-overflow-style: none;  
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.code-box pre::-webkit-scrollbar {
+    display: none;  
 }
 
 /* rules for copy to clipboard botton and animations  */
