@@ -13,7 +13,7 @@
     --skewY-from: skewY(0);
     --skewY-to: skewY(0);
     --translateX-from: translateX(0);
-    --translateX-to: translateX(100px);
+    --translateX-to: translateX(0);
     --translateY-from: translateY(0);
     --translateY-to: translateY(0);
     --scaleX-from: scaleX(1);
@@ -49,24 +49,26 @@
 
 @keyframes play {
     from {
-        transform: var(--rotateX-from) var(--rotateY-from) var(--skewX-from) var(--skewY-from) var(--translateX-from) var(--translateY-from) var(--scaleX-from) var(--scaleY-from);
-        /* transform: var(--rotateY-from);
-        transform: var(--skewX-from);
-        transform: var(--skewY-from);
-        transform: var(--translateX-from);
-        transform: var(--translateY-from);
-        transform: var(--scaleX-from);
-        transform: var(--scaleY-from); */
+        transform: var(--rotateX-from) 
+        var(--rotateY-from) 
+        var(--skewX-from) 
+        var(--skewY-from) 
+        var(--translateX-from) 
+        var(--translateY-from) 
+        var(--scaleX-from) 
+        var(--scaleY-from);
+        
     }
 
     to {
-        transform: var(--rotateX-to) var(--rotateY-to) var(--skewX-to) var(--skewY-to) var(--translateX-to) var(--translateY-to) var(--scaleX-to) var(--scaleY-to);
-        /* transform: var(--rotateY-to);
-        transform: var(--skewX-to);
-        transform: var(--skewY-to);
-        transform: var(--translateX-to);
-        transform: var(--translateY-to);
-        transform: var(--scaleX-to);
-        transform: var(--scaleY-to); */
+        transform: var(--rotateX-to) 
+        var(--rotateY-to) 
+        var(--skewX-to) 
+        var(--skewY-to) 
+        var(--translateX-to) 
+        var(--translateY-to) 
+        var(--scaleX-to) 
+        var(--scaleY-to);
+        
     }
 }

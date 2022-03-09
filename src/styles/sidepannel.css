@@ -4,6 +4,11 @@
     --text-info-color: #ababab;
   }
 
+  /* global rule for removing number input arrows for inputs with type number FireFox!  */
+  input[type=number] {
+    -moz-appearance: textfield;
+  }
+
 /* side bar section rules ****************  */
 
 /* the side bar container to control and create animations */
@@ -17,6 +22,7 @@
     background-color: var(--secondery-gray-color);
 }
 
+/* make pannel fit height under screen height of 715px  */
 @media only screen and (max-height: 715px) {
     .side-pannel {
       height: 100vh;
@@ -24,7 +30,7 @@
   }
 
 /* side bar info text  */
-.text-input-info {
+.text-input-info, .info-title {
     color: var(--text-info-color);
 }
 
@@ -33,4 +39,81 @@
     max-height: 12em;
     max-width: 100%;
     resize: none;
+}
+
+/* the translate controlls container section  */
+.translate-controls-container {
+  display: flex;
+  flex-direction: column;
+}
+
+/* the translate controls main title  */
+.translate-controls-container .h4 {
+  height: fit-content;
+  display: flex;
+  justify-content: center;
+}
+
+/* container of all sub titles in a control section in the side pannel  */
+.sub-titles {
+  display: flex;
+  justify-content: space-around;
+}
+
+/* sub titles rules  */
+.sub-titles h6 {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+/* the translate input controls section  */
+.controls-input-container {
+  display: flex;
+  justify-content: space-around;
+}
+
+/* the animation controller input  */
+.counter-input {
+  width: 2.3em;
+  border-radius: 6px;
+  border-color: unset;
+  margin-left: 0.3em;
+  margin-right: 0.3em;
+}
+
+/* removing number input arrows for inputs with type number /Chrome, Safari, Edge, Opera */ 
+.counter-input::-webkit-outer-spin-button, .counter-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.control-from, .control-to {
+  margin-bottom: 0.3em;
+}
+
+/* a text indicator for controllers  */
+.from-text, .to-text {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-size: 0.7rem;
+  color: var(--text-info-color);
+  margin: 0;
+  margin-bottom: 0.5em;
+}
+
+/* container for input and plus and minus btns  */
+.input-and-btns {
+  display: flex;
+}
+
+/* add and decrease btns  */
+.plus-icon, .minus-icon {
+    stroke: gray;
+    width: 1.3em;
+    height: 1.3em;
+    cursor: pointer;
+}
+
+/* add and decrease btns on hover */
+.plus-icon:hover, .minus-icon:hover {
+  stroke: rgb(21, 91, 241);
 }
