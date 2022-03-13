@@ -20,6 +20,7 @@
     height: calc(100vh - 14.5em);
     padding: 0.5em;
     background-color: var(--secondery-gray-color);
+    /* overflow-x: hidden; */
 }
 
 /* make pannel fit height under screen height of 715px  */
@@ -116,4 +117,82 @@
 /* add and decrease btns on hover */
 .plus-icon:hover, .minus-icon:hover {
   stroke: rgb(21, 91, 241);
+}
+
+@media only screen and (max-width: 642px) {
+  .side-pannel {
+    display: none;
+  }
+
+  .hamburger-menu {
+    display: contents !important;
+  }
+}
+
+/* hamburger menu code ** */
+.hamburger-menu {
+  display: none;
+}
+
+#menu__toggle {
+  opacity: 0;
+}
+#menu__toggle:checked + .menu__btn > span {
+  transform: rotate(45deg);
+}
+#menu__toggle:checked + .menu__btn > span::before {
+  top: 0;
+  transform: rotate(0deg);
+}
+#menu__toggle:checked + .menu__btn > span::after {
+  top: 0;
+  transform: rotate(90deg);
+}
+#menu__toggle:checked ~ .menu__box {
+  right: 0 !important;
+}
+.menu__btn {
+  position: absolute;
+  display: flex;
+  width: 2em;
+  height: 2em;
+  cursor: pointer;
+  z-index: 1;
+  align-items: center;
+  z-index: 101;
+}
+.menu__btn > span,
+.menu__btn > span::before,
+.menu__btn > span::after {
+  display: block;
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  background-color: var(--text-info-color);
+  transition-duration: .25s;
+}
+.menu__btn > span::before {
+  content: '';
+  top: -8px;
+}
+.menu__btn > span::after {
+  content: '';
+  top: 8px;
+}
+.menu__box {
+  display: flex;
+  position: absolute;
+  bottom: 0;
+  right: -100%;
+  width: fit-content;
+  height: fit-content;
+  z-index: 100;
+  margin: 0;
+  list-style: none;
+  background-color: var(--secondery-gray-color);
+  box-shadow: 2px 2px 6px rgb(0 0 0 / 40%);
+  transition-duration: .25s;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
