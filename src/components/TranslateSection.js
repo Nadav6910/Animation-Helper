@@ -46,7 +46,7 @@ export default function TranslateSection(props) {
 
         ["e", "E", "+"].includes(e.key) && e.preventDefault()
 
-        if (e.key === "Backspace" && value.length < 2) {
+        if (e.key === "Backspace" && value === "") {
             e.preventDefault()
             setTranslateXTo(0)
             props.translatext(0)
@@ -109,7 +109,15 @@ export default function TranslateSection(props) {
                                         maxLength="4" 
                                         onChange={(e) => {setTranslateXFrom(e.target.value); props.translatexf(e.target.value)}} 
                                         onKeyPress={inputHandler} 
-                                        onKeyDown={keyPressHandlerXF}/>
+                                        onKeyDown={keyPressHandlerXF}
+                                        onKeyUp={(e) => {
+                                            if (e.key === "Backspace" && e.target.value === '') {
+                                                e.preventDefault()
+                                                setTranslateXFrom(0)
+                                                props.translatexf(0)
+                                            }
+                                        }}
+                                        />
                                     <MinusIcon minus={() => {setTranslateXFrom(Number(translateXFrom) - 1); props.translatexf(Number(translateXFrom) - 1)}}/>
                                 </div>    
                             </div>
@@ -125,7 +133,15 @@ export default function TranslateSection(props) {
                                         maxLength="4" 
                                         onChange={(e) => {setTranslateXTo(e.target.value); props.translatext(e.target.value)}} 
                                         onKeyPress={inputHandler} 
-                                        onKeyDown={keyPressHandlerXT}/>
+                                        onKeyDown={keyPressHandlerXT}
+                                        onKeyUp={(e) => {
+                                            if (e.key === "Backspace" && e.target.value === '') {
+                                                e.preventDefault()
+                                                setTranslateXTo(0)
+                                                props.translatext(0)
+                                            }
+                                        }}
+                                        />
                                     <MinusIcon minus={() => {setTranslateXTo(Number(translateXTo) - 1); props.translatext(Number(translateXTo) - 1)}}/>
                                 </div>
                             </div>
@@ -145,7 +161,15 @@ export default function TranslateSection(props) {
                                         maxLength="4" 
                                         onChange={(e) => {setTranslateYFrom(e.target.value); props.translateyf(e.target.value)}} 
                                         onKeyPress={inputHandler} 
-                                        onKeyDown={keyPressHandlerYF}/>
+                                        onKeyDown={keyPressHandlerYF}
+                                        onKeyUp={(e) => {
+                                            if (e.key === "Backspace" && e.target.value === '') {
+                                                e.preventDefault()
+                                                setTranslateYFrom(0)
+                                                props.translateyf(0)
+                                            }
+                                        }}
+                                        />
                                     <MinusIcon minus={() => {setTranslateYFrom(Number(translateYFrom) - 1); props.translateyf(Number(translateYFrom) - 1)}}/>
                                 </div>
                             </div>
@@ -161,7 +185,15 @@ export default function TranslateSection(props) {
                                         maxLength="4" 
                                         onChange={(e) => {setTranslateYTo(e.target.value); props.translateyt(e.target.value)}} 
                                         onKeyPress={inputHandler} 
-                                        onKeyDown={keyPressHandlerYT}/>
+                                        onKeyDown={keyPressHandlerYT}
+                                        onKeyUp={(e) => {
+                                            if (e.key === "Backspace" && e.target.value === '') {
+                                                e.preventDefault()
+                                                setTranslateYTo(0)
+                                                props.translateyt(0)
+                                            }
+                                        }}
+                                        />
                                     <MinusIcon minus={() => {setTranslateYTo(Number(translateYTo) - 1); props.translateyt(Number(translateYTo) - 1)}}/>
                                 </div>
                             </div>
