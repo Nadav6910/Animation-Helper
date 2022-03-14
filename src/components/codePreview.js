@@ -22,7 +22,7 @@ export default function CodePreview(props) {
 
     //detect a click on play button to update the code view
     window.onclick = e => {
-        if (e.target.className === "trigger-animation-btn") {
+        if (e.target.className === "trigger-animation-btn" || e.target.className === "svg-icon-play" || e.target.className.baseVal === "path-icon-play" || e.target.className.baseVal === "svg-icon-play" || e.target.className.baseVal === undefined) {
             setCssCodePreview(
 `p { 
     animation: play 2s ease

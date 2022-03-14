@@ -17,7 +17,7 @@
     flex-direction: column;
     order: 1;
     width: 18em;
-    height: calc(100vh - 14.5em);
+    height: 100vh;
     padding: 0.5em;
     background-color: var(--secondery-gray-color);
     /* overflow-x: hidden; */
@@ -120,37 +120,58 @@
 }
 
 @media only screen and (max-width: 642px) {
-  .side-pannel {
+  .side-pannel.desktop {
     display: none;
   }
 
   .hamburger-menu {
-    display: contents !important;
+    display: flex !important;
   }
+
+  .side-pannel.mobile {
+    display: flex !important;
+    height: 100vh !important;
+  }
+}
+
+.side-pannel.mobile {
+  display: none;
 }
 
 /* hamburger menu code ** */
 .hamburger-menu {
   display: none;
+  position: absolute;
 }
 
 #menu__toggle {
   opacity: 0;
 }
+
 #menu__toggle:checked + .menu__btn > span {
   transform: rotate(45deg);
 }
+
+#menu__toggle:checked + .menu__btn {
+  left: 18.2em;
+  top: 0.5em;
+}
+
 #menu__toggle:checked + .menu__btn > span::before {
   top: 0;
   transform: rotate(0deg);
 }
+
 #menu__toggle:checked + .menu__btn > span::after {
   top: 0;
   transform: rotate(90deg);
 }
+
 #menu__toggle:checked ~ .menu__box {
   right: 0 !important;
+  display: flex !important;
 }
+
 .menu__btn {
   position: absolute;
   display: flex;
@@ -160,7 +181,10 @@
   z-index: 1;
   align-items: center;
   z-index: 101;
+  bottom: 1.3em;
+  right: 0.2em;
 }
+
 .menu__btn > span,
 .menu__btn > span::before,
 .menu__btn > span::after {
@@ -171,23 +195,26 @@
   background-color: var(--text-info-color);
   transition-duration: .25s;
 }
+
 .menu__btn > span::before {
   content: '';
   top: -8px;
 }
+
 .menu__btn > span::after {
   content: '';
   top: 8px;
 }
+
 .menu__box {
-  display: flex;
-  position: absolute;
+  display: none;
   bottom: 0;
   right: -100%;
   width: fit-content;
   height: fit-content;
   z-index: 100;
   margin: 0;
+  padding: 0;
   list-style: none;
   background-color: var(--secondery-gray-color);
   box-shadow: 2px 2px 6px rgb(0 0 0 / 40%);
@@ -195,4 +222,29 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
+}
+
+/* play btn  */
+.trigger-animation-btn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 5em;
+  height: 2.5em;
+  background-color: rgb(21, 91, 241);
+  border-radius: 10px;
+  border-color: transparent;
+  align-self: center;
+  cursor: pointer;
+}
+
+.trigger-animation-btn:hover {
+  background-color: rgb(20, 75, 192);
+}
+
+.svg-icon-play {
+  stroke: black;
+  width: 1.8em;
+  height: 1.8em;
+  padding-top: 0.3em;
 }
