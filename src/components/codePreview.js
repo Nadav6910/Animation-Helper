@@ -22,7 +22,7 @@ export default function CodePreview(props) {
 
     //detect a click on play button to update the code view
     window.onclick = e => {
-        if (e.target.className === "trigger-animation-btn" || e.target.className === "svg-icon-play" || e.target.className.baseVal === "path-icon-play" || e.target.className.baseVal === "svg-icon-play" || e.target.className.baseVal === undefined) {
+        if (e.target.className === "trigger-animation-btn" || e.target.className === "svg-icon-play" || e.target.className.baseVal === "path-icon-play" || e.target.className.baseVal === "svg-icon-play") {
             setCssCodePreview(
 `p { 
     animation: play 2s ease
@@ -32,11 +32,23 @@ export default function CodePreview(props) {
     from {
         ${`transform: translateX(${props.animationsValues && props.animationsValues.translatexf}px)`}
         ${`transform: translateY(${props.animationsValues && props.animationsValues.translateyf}px)`}
+        ${`transform: rotateX(${props.animationsValues && props.animationsValues.rotatexf}deg)`}
+        ${`transform: rotateY(${props.animationsValues && props.animationsValues.rotateyf}deg)`}
+        ${`transform: skewX(${props.animationsValues && props.animationsValues.skewxf}deg)`}
+        ${`transform: skewY(${props.animationsValues && props.animationsValues.skewyf}deg)`}
+        ${`transform: scaleX(${props.animationsValues && props.animationsValues.scalexf})`}
+        ${`transform: scaleY(${props.animationsValues && props.animationsValues.scaleyf})`}
     }
 
     to {
         ${`transform: translateX(${props.animationsValues && props.animationsValues.translatext}px)`}
         ${`transform: translateY(${props.animationsValues && props.animationsValues.translateyt}px)`}
+        ${`transform: rotateX(${props.animationsValues && props.animationsValues.rotatext}deg)`}
+        ${`transform: rotateY(${props.animationsValues && props.animationsValues.rotateyt}deg)`}
+        ${`transform: skewX(${props.animationsValues && props.animationsValues.skewxt}deg)`}
+        ${`transform: skewY(${props.animationsValues && props.animationsValues.skewyt}deg)`}
+        ${`transform: scaleX(${props.animationsValues && props.animationsValues.scalext})`}
+        ${`transform: scaleY(${props.animationsValues && props.animationsValues.scaleyt})`}
     }
 }`
             )

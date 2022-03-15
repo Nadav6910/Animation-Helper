@@ -16,7 +16,6 @@ export default function AnimationPannel(props) {
     }
 
     const getAnimationsValues = (values) => {
-        console.log(values);
         setAnimationsValues(values)
     }
     
