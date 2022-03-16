@@ -17,7 +17,7 @@
     flex-direction: column;
     order: 1;
     width: 18.35em;
-    height: 77vh;
+    height: calc(100vh - 12em);
     padding: 0.5em;
     background-color: var(--secondery-gray-color);
     overflow-y: scroll;
@@ -232,6 +232,8 @@
   justify-content: flex-end;
   width: 5em;
   height: 2.5em;
+  margin-top: 2em;
+  margin-bottom: 1em;
   background-color: rgb(21, 91, 241);
   border-radius: 10px;
   border-color: transparent;
@@ -331,4 +333,168 @@
 
 .switch-button-checkbox + .switch-button-label .switch-button-label-span {
   position: relative;
+}
+
+/* range slider code  */
+
+.rangeValue {
+  position: relative;
+  display: block;
+  text-align: center;
+  font-size: 1.1rem;
+  color: #999;
+  font-weight: 400;
+}
+.range {
+  width: 7em;
+  height: 1em;
+  -webkit-appearance: none;
+  background: #111;
+  outline: none;
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: inset 0 0 5px rgba(0, 0, 0, 1);
+}
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: rgb(21, 91, 241);
+  cursor: pointer;
+  border: 4px solid #333;
+  box-shadow: -407px 0 0 400px rgb(21, 91, 241);
+}
+
+/* animation reapeat toggle code  */
+
+.toggle-container {
+  display: flex;
+  align-items: flex-start;
+  width: 11.7em;
+  margin: auto;
+}
+
+#toggle_checkbox, #toggle_checkbox_mobile {
+  display: none;
+}
+
+.animation-toggle {
+  display: block;
+  width: 6em;
+  height: 3em;
+  margin-top: 1.9em !important;
+  margin: 0 auto;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.animation-toggle:before {
+  top: 8px;
+  left: 8px;
+  width: 2em;
+  height: 2em;
+  border: 3px solid rgb(21, 91, 241);
+}
+
+.animation-toggle:after {
+  top: 0;
+  right: 0;
+  width: 6em;
+  height: 3em;
+  border: 3px solid black;
+}
+
+.animation-toggle:before,
+.animation-toggle:after {
+  content: "";
+  position: absolute;
+  border-radius: 50px;
+  box-sizing: border-box;
+  transition: 0.5s ease top, 0.5s ease left, 0.5s ease right, 0.5s ease width,
+    0.5s ease height, 0.5s ease border-color;
+}
+
+#toggle_checkbox:checked + label:before, #toggle_checkbox_mobile:checked + label:before {
+  top: 0;
+  left: 0;
+  width: 6em;
+  height: 3em;
+  border-color: black;
+}
+
+#toggle_checkbox:checked + label:after, #toggle_checkbox_mobile:checked + label:after {
+  top: 8px;
+  right: 8px;
+  width: 2em;
+  height: 2em;
+  border-color: rgb(21, 91, 241);
+}
+
+/* shape mode code  */
+
+.shape-mode-container {
+  display: grid;
+  justify-content: space-evenly;
+  justify-items: center;
+  grid-template-columns: repeat(3, 50px [col-start]);
+  grid-template-rows: repeat(2, 80px [col-start]);
+  margin-top: 2.2em;
+}
+
+.shape-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3em;
+  height: 3em;
+  background-color: #dad3d3;
+  cursor: pointer;
+  transition: .3s ease;
+  box-sizing: border-box;
+}
+
+.shape-container:hover {
+  transform: scale(1.4);
+}
+
+.shape-square {
+  width: 1.8em;
+  height: 1.8em;
+  background-color: #111;
+}
+
+.shape-triangle {
+  width: 1.8em;
+  height: 1.8em;
+  background-color: #111;
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+}
+
+.shape-circle {
+  width: 1.8em;
+  height: 1.8em;
+  background-color: #111;
+  clip-path: circle(50% at 50% 50%);
+}
+
+.shape-star {
+  width: 1.8em;
+  height: 1.8em;
+  background-color: #111;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+
+.shape-arrow {
+  width: 1.8em;
+  height: 1.8em;
+  background-color: #111;
+  clip-path: polygon(0% 20%, 60% 20%, 60% 0%, 100% 50%, 60% 100%, 60% 80%, 0% 80%);
+}
+
+.shape-message {
+  width: 1.8em;
+  height: 1.8em;
+  background-color: #111;
+  clip-path: polygon(0% 0%, 100% 0%, 100% 75%, 75% 75%, 75% 100%, 50% 75%, 0% 75%);
 }

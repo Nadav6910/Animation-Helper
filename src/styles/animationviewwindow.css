@@ -3,7 +3,8 @@
     --animation-window-background-color: #dddddd;
 
     /* animations vars  */
-    --animation-duration: 2s;
+    --animation-repeat: ease;
+    --animation-duration: 1s;
     --rotateX-from: rotateX(0);
     --rotateX-to: rotateX(0);
     --rotateY-from: rotateY(0);
@@ -44,7 +45,11 @@
 }
 
 .animated-text.play {
-    animation: play var(--animation-duration) ease;
+    animation: play var(--animation-duration) var(--animation-repeat);
+}
+
+.animated-shape.play {
+    animation: play var(--animation-duration) var(--animation-repeat); 
 }
 
 @keyframes play {
@@ -57,7 +62,6 @@
         var(--translateY-from) 
         var(--scaleX-from) 
         var(--scaleY-from);
-        
     }
 
     to {
@@ -69,6 +73,5 @@
         var(--translateY-to) 
         var(--scaleX-to) 
         var(--scaleY-to);
-        
     }
 }

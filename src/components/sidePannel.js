@@ -3,13 +3,19 @@ import TranslateSection from "./TranslateSection"
 import RotateSection from "./RotateSection"
 import SkewSection from "./SkewSection"
 import ScaleSection from "./ScaleSection"
+import SettingsSection from "./SettingsSection"
 import { useState } from "react"
 
 
 export default function SidePannel(props) {
 
+    //state of btn for switching between text and shapes mode
+    const [switchBtn, setSwitchBtn] = useState(false)
+
     // onject that will contain all animations data to be sent to code preview component
     const [animationsValues] = useState({
+        animationRepeat: "ease",
+        animationDuration: "1s",
         translatexf: 0,
         translatext: 0, 
         translateyf: 0, 
@@ -28,8 +34,24 @@ export default function SidePannel(props) {
         scaleyt:0
     })
 
-    //getting the element that will be animated
-    const animatedText = document.getElementById("animated-text")
+    //change between text animation and shape animation modes
+    const switchTextShape = () => {
+        const switchBtn = document.querySelector(".switch-button-checkbox")
+
+        switchBtn.checked ? setSwitchBtn(true) : setSwitchBtn(false)
+        props.mode(switchBtn.checked)
+    }
+
+    // toggle between shapes 
+    const pickShape = (e) => {
+        const shapesArray = Array.from(document.getElementsByClassName("shape-container"))
+        shapesArray.forEach(shape => {
+            shape.style.border = "unset"
+        })
+
+        e.currentTarget.style.border = "3px solid rgb(21, 91, 241)"
+        props.shape(e.currentTarget.childNodes[0].className)
+    }
 
     //send the user input text to the animation pannel and animated
     const ForwardInputText = (e) => {
@@ -38,25 +60,37 @@ export default function SidePannel(props) {
 
     //trigger the animation on button click by giving it the play class
     const triggerAnimation = () => {
-        animatedText && animatedText.classList.add("play")
+        document.getElementById("animated-text") && document.getElementById("animated-text").classList.add("play")
+        document.querySelector(".animated-shape") && document.querySelector(".animated-shape").classList.add("play")
         props.animationsValue(animationsValues)
     }
-
+    
     return (
         <>
         <div className="side-pannel desktop">
 
             <div className="switch-mode-container">
                 <div className="switch-button">
-                    <input className="switch-button-checkbox" type="checkbox"></input>
-                    <label className="switch-button-label" for=""><span className="switch-button-label-span">Text</span></label>
+                    <input className="switch-button-checkbox" onChange={switchTextShape} type="checkbox"></input>
+                    <label className="switch-button-label" htmlFor=""><span className="switch-button-label-span">Text</span></label>
                 </div>
             </div>
 
-            <div className="text-input-container">
+            {switchBtn ? 
+
+            <div className="shape-mode-container">
+                <div className="shape-container" onClick={pickShape}><div className="shape-square"></div></div>
+                <div className="shape-container" onClick={pickShape}><div className="shape-triangle"></div></div>
+                <div className="shape-container" onClick={pickShape}><div className="shape-circle"></div></div>
+                <div className="shape-container" onClick={pickShape}><div className="shape-star"></div></div>
+                <div className="shape-container" onClick={pickShape}><div className="shape-arrow"></div></div>
+                <div className="shape-container" onClick={pickShape}><div className="shape-message"></div></div>
+            </div> :
+
+             <div className="text-input-container">
                 <h4 className="text-input-info">Write Something To Animate</h4>
                 <textarea className="animation-text-input" onChange={ForwardInputText} maxLength="100" placeholder="type here..." cols="30" rows="10"></textarea>
-            </div>
+            </div>}
 
             <section className="control-sections">
                 <TranslateSection 
@@ -134,6 +168,21 @@ export default function SidePannel(props) {
                             if (state !== 0 || state !== "0") {animationsValues.scaleyt = state}
                             }}
                     />
+
+                    <SettingsSection 
+                        id={"toggle_checkbox"}
+
+                        animationDurationValue={value => {
+                            document.querySelector(':root').style.setProperty('--animation-duration', `${value + 's'}`)
+                            animationsValues.animationDuration = value + 's'
+                        }}
+
+                        animationRepeat={value => {
+                            document.querySelector(':root').style.setProperty('--animation-repeat', `${value ? "infinite" : "ease"}`)
+                            animationsValues.animationRepeat = value ? "infinite" : "ease"
+                        }}
+                    />
+                    
                 </section>
 
             <button className="trigger-animation-btn" onClick={triggerAnimation}>Play<span>
@@ -157,15 +206,29 @@ export default function SidePannel(props) {
 
                         <div className="switch-mode-container">
                             <div className="switch-button">
-                                <input className="switch-button-checkbox" type="checkbox"></input>
-                                <label className="switch-button-label" for=""><span className="switch-button-label-span">Text</span></label>
+                                    <input className="switch-button-checkbox" onClick={() => {document.querySelector(".switch-button-checkbox").checked = !document.querySelector(".switch-button-checkbox").checked}} onChange={switchTextShape} type="checkbox"></input>
+                                    <label className="switch-button-label" htmlFor=""><span className="switch-button-label-span">Text</span></label>
+                                </div>
                             </div>
+
+                        {switchBtn ? 
+
+                        <div>
+                            <div className="shape-mode-container">
+                            <div className="shape-container" onClick={pickShape}><div className="shape-square"></div></div>
+                            <div className="shape-container" onClick={pickShape}><div className="shape-triangle"></div></div>
+                            <div className="shape-container" onClick={pickShape}><div className="shape-circle"></div></div>
+                            <div className="shape-container" onClick={pickShape}><div className="shape-star"></div></div>
+                            <div className="shape-container" onClick={pickShape}><div className="shape-arrow"></div></div>
+                            <div className="shape-container" onClick={pickShape}><div className="shape-message"></div></div>
                         </div>
+
+                        </div> :
 
                         <div className="text-input-container">
                             <h4 className="text-input-info">Write Something To Animate</h4>
                             <textarea className="animation-text-input" onChange={ForwardInputText} maxLength="100" placeholder="type here..." cols="30" rows="10"></textarea>
-                        </div>      
+                        </div>}     
 
                         <TranslateSection 
                             translatexf={(state) => {
@@ -241,6 +304,20 @@ export default function SidePannel(props) {
                                 document.querySelector(':root').style.setProperty('--scaleY-to', `scaleY(${state})`)
                                 if (state !== 0 || state !== "0") {animationsValues.scaleyt = state}
                                 }}
+                        />
+
+                        <SettingsSection 
+                            id={"toggle_checkbox_mobile"}
+
+                            animationDurationValue={value => {
+                                document.querySelector(':root').style.setProperty('--animation-duration', `${value + 's'}`)
+                                animationsValues.animationDuration = value + 's'
+                            }}
+
+                            animationRepeat={value => {
+                                document.querySelector(':root').style.setProperty('--animation-repeat', `${value ? "infinite" : "ease"}`)
+                                animationsValues.animationRepeat = value ? "infinite" : "ease"
+                            }}
                         />
 
                         <button className="trigger-animation-btn" onClick={() => {triggerAnimation(); document.querySelector("#menu__toggle").checked = false}}>Play<span>

@@ -24,8 +24,8 @@ export default function CodePreview(props) {
     window.onclick = e => {
         if (e.target.className === "trigger-animation-btn" || e.target.className === "svg-icon-play" || e.target.className.baseVal === "path-icon-play" || e.target.className.baseVal === "svg-icon-play") {
             setCssCodePreview(
-`p { 
-    animation: play 2s ease
+`${props.mode ? ".shape" : "p"} { 
+    animation: play ${props.animationsValues && props.animationsValues.animationDuration} ${props.animationsValues && props.animationsValues.animationRepeat}
 }
 
 @keyframes play {
