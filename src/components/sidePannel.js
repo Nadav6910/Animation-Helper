@@ -77,7 +77,8 @@ export default function SidePannel(props) {
             </div>
 
             {switchBtn ? 
-
+            <>
+            <h4 className="text-input-info">Pick A Shape</h4>
             <div className="shape-mode-container">
                 <div className="shape-container" onClick={pickShape}><div className="shape-square"></div></div>
                 <div className="shape-container" onClick={pickShape}><div className="shape-triangle"></div></div>
@@ -85,7 +86,7 @@ export default function SidePannel(props) {
                 <div className="shape-container" onClick={pickShape}><div className="shape-star"></div></div>
                 <div className="shape-container" onClick={pickShape}><div className="shape-arrow"></div></div>
                 <div className="shape-container" onClick={pickShape}><div className="shape-message"></div></div>
-            </div> :
+            </div> </> :
 
              <div className="text-input-container">
                 <h4 className="text-input-info">Write Something To Animate</h4>

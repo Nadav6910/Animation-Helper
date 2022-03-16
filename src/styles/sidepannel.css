@@ -439,7 +439,7 @@
   justify-items: center;
   grid-template-columns: repeat(3, 50px [col-start]);
   grid-template-rows: repeat(2, 80px [col-start]);
-  margin-top: 2.2em;
+  margin-top: 1.2em;
 }
 
 .shape-container {
