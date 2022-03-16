@@ -1,6 +1,6 @@
 /* global vars  */
 :root {
-    --secondery-gray-color: #3c3c3c;
+    --secondery-gray-color: #343333;
     --text-info-color: #ababab;
   }
 
@@ -16,19 +16,13 @@
     display: flex;
     flex-direction: column;
     order: 1;
-    width: 18em;
-    height: 72vh;
+    width: 18.35em;
+    height: 77vh;
     padding: 0.5em;
     background-color: var(--secondery-gray-color);
     overflow-y: scroll;
+    box-shadow: -6px 10px 20px 0px #6c645e;
 }
-
-/* make pannel fit height under screen height of 715px  */
-@media only screen and (max-height: 715px) {
-    .side-pannel {
-      height: 100vh;
-    }
-  }
 
 /* side bar info text  */
 .text-input-info, .info-title {
@@ -41,6 +35,12 @@
     max-width: 100%;
     padding: 0;
     resize: none;
+}
+
+/* container of all pannel control sections  */
+.control-sections {
+  display: flex;
+  flex-direction: column;
 }
 
 /* the translate controlls container section  */
@@ -248,4 +248,87 @@
   width: 1.8em;
   height: 1.8em;
   padding-top: 0.3em;
+}
+
+/* switch modes section code  */
+
+.switch-mode-container {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 100vh;
+  width: 12.8em;
+  margin-top: 0.5em;
+	font-family: sans-serif;
+  align-self: center;
+}
+
+.switch-button {
+  background: rgba(255, 255, 255, 0.56);
+  border-radius: 30px;
+  overflow: hidden;
+  width: 280px;
+  text-align: center;
+  font-size: 18px;
+  letter-spacing: 1px;
+  color: rgb(21, 91, 241);
+  position: relative;
+  padding-right: 6.5em;
+  position: relative;
+}
+
+.switch-button:before {
+  content: "Shape";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 5em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.switch-button-checkbox {
+  cursor: pointer;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  z-index: 2;
+}
+
+.switch-button-checkbox:checked + .switch-button-label:before {
+  transform: translateX(120px);
+  transition: transform 300ms linear;
+}
+
+.switch-button-checkbox + .switch-button-label {
+  position: relative;
+  padding: 15px 0;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+
+.switch-button-checkbox + .switch-button-label:before {
+  content: "";
+  background: #fff;
+  height: 100%;
+  width: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 30px;
+  transform: translateX(0);
+  transition: transform 300ms;
+}
+
+.switch-button-checkbox + .switch-button-label .switch-button-label-span {
+  position: relative;
 }

@@ -3,22 +3,21 @@
 
 /* global vars  */
 :root {
-    --main-gray-color: #6d6d6d;
-    --secondery-gray-color: #3c3c3c;
+    --text-info-color: #ababab;
   }
 
 /* main header container  */
 .header {
     display: flex;
     width: 100vw;
-    height: 13em;
-    margin-top: 0.5em;
+    height: 11em;
+    background-color: #515151;
 }
 
 /* header image  */
 .header img {
-    width: 12em;
-    height: 14em;
+    width: 10em;
+    height: 12em;
 }
 
 /* header text container */
@@ -31,12 +30,12 @@
 .header-text {
     font-size: 2rem;
     font-family: 'Sansita Swashed', cursive;
-    color: var(--main-gray-color);
+    color: var(--text-info-color);
     margin-bottom: 12px;
 }
 
 /* header below app name text  */
 .header-sub-text {
     margin: 0;
-    color: var(--secondery-gray-color);
+    color: var(--text-info-color);
 }

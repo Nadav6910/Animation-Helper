@@ -46,86 +46,95 @@ export default function SidePannel(props) {
         <>
         <div className="side-pannel desktop">
 
+            <div className="switch-mode-container">
+                <div className="switch-button">
+                    <input className="switch-button-checkbox" type="checkbox"></input>
+                    <label className="switch-button-label" for=""><span className="switch-button-label-span">Text</span></label>
+                </div>
+            </div>
+
             <div className="text-input-container">
                 <h4 className="text-input-info">Write Something To Animate</h4>
                 <textarea className="animation-text-input" onChange={ForwardInputText} maxLength="100" placeholder="type here..." cols="30" rows="10"></textarea>
             </div>
 
-            <TranslateSection 
-                translatexf={(state) => {
-                    document.querySelector(':root').style.setProperty('--translateX-from', `translateX(${state + "px"})`)
-                    if (state !== 0 || state !== "0") {animationsValues.translatexf = state}
-                    }} 
-                translatext={(state) => {
-                    document.querySelector(':root').style.setProperty('--translateX-to', `translateX(${state + "px"})`)
-                    if (state !== 0 || state !== "0") {animationsValues.translatext = state}
-                    }}
-                translateyf={(state) => {
-                    document.querySelector(':root').style.setProperty('--translateY-from', `translateY(${state + "px"})`)
-                    if (state !== 0 || state !== "0") {animationsValues.translateyf = state}
-                    }}
-                translateyt={(state) => {
-                    document.querySelector(':root').style.setProperty('--translateY-to', `translateY(${state + "px"})`)
-                    if (state !== 0 || state !== "0") {animationsValues.translateyt = state}
-                    }}
-                />
-
-                <RotateSection 
-                    rotatexf={(state) => {
-                        document.querySelector(':root').style.setProperty('--rotateX-from', `rotateX(${state + "deg"})`)
-                        if (state !== 0 || state !== "0") {animationsValues.rotatexf = state}
+            <section className="control-sections">
+                <TranslateSection 
+                    translatexf={(state) => {
+                        document.querySelector(':root').style.setProperty('--translateX-from', `translateX(${state + "px"})`)
+                        if (state !== 0 || state !== "0") {animationsValues.translatexf = state}
                         }} 
-                    rotatext={(state) => {
-                        document.querySelector(':root').style.setProperty('--rotateX-to', `rotateX(${state + "deg"})`)
-                        if (state !== 0 || state !== "0") {animationsValues.rotatext = state}
+                    translatext={(state) => {
+                        document.querySelector(':root').style.setProperty('--translateX-to', `translateX(${state + "px"})`)
+                        if (state !== 0 || state !== "0") {animationsValues.translatext = state}
                         }}
-                    rotateyf={(state) => {
-                        document.querySelector(':root').style.setProperty('--rotateY-from', `rotateY(${state + "deg"})`)
-                        if (state !== 0 || state !== "0") {animationsValues.rotateyf = state}
+                    translateyf={(state) => {
+                        document.querySelector(':root').style.setProperty('--translateY-from', `translateY(${state + "px"})`)
+                        if (state !== 0 || state !== "0") {animationsValues.translateyf = state}
                         }}
-                    rotateyt={(state) => {
-                        document.querySelector(':root').style.setProperty('--rotateY-to', `rotateY(${state + "deg"})`)
-                        if (state !== 0 || state !== "0") {animationsValues.rotateyt = state}
+                    translateyt={(state) => {
+                        document.querySelector(':root').style.setProperty('--translateY-to', `translateY(${state + "px"})`)
+                        if (state !== 0 || state !== "0") {animationsValues.translateyt = state}
                         }}
-                />
+                    />
 
-                <SkewSection 
-                    skewxf={(state) => {
-                        document.querySelector(':root').style.setProperty('--skewX-from', `skewX(${state + "deg"})`)
-                        if (state !== 0 || state !== "0") {animationsValues.skewxf = state}
-                        }} 
-                    skewxt={(state) => {
-                        document.querySelector(':root').style.setProperty('--skewX-to', `skewX(${state + "deg"})`)
-                        if (state !== 0 || state !== "0") {animationsValues.skewxt = state}
-                        }}
-                    skewyf={(state) => {
-                        document.querySelector(':root').style.setProperty('--skewY-from', `skewY(${state + "deg"})`)
-                        if (state !== 0 || state !== "0") {animationsValues.skewyf = state}
-                        }}
-                    skewyt={(state) => {
-                        document.querySelector(':root').style.setProperty('--skewY-to', `skewY(${state + "deg"})`)
-                        if (state !== 0 || state !== "0") {animationsValues.skewyt = state}
-                        }}
-                />
+                    <RotateSection 
+                        rotatexf={(state) => {
+                            document.querySelector(':root').style.setProperty('--rotateX-from', `rotateX(${state + "deg"})`)
+                            if (state !== 0 || state !== "0") {animationsValues.rotatexf = state}
+                            }} 
+                        rotatext={(state) => {
+                            document.querySelector(':root').style.setProperty('--rotateX-to', `rotateX(${state + "deg"})`)
+                            if (state !== 0 || state !== "0") {animationsValues.rotatext = state}
+                            }}
+                        rotateyf={(state) => {
+                            document.querySelector(':root').style.setProperty('--rotateY-from', `rotateY(${state + "deg"})`)
+                            if (state !== 0 || state !== "0") {animationsValues.rotateyf = state}
+                            }}
+                        rotateyt={(state) => {
+                            document.querySelector(':root').style.setProperty('--rotateY-to', `rotateY(${state + "deg"})`)
+                            if (state !== 0 || state !== "0") {animationsValues.rotateyt = state}
+                            }}
+                    />
 
-                <ScaleSection 
-                    scalexf={(state) => {
-                        document.querySelector(':root').style.setProperty('--scaleX-from', `scaleX(${state})`)
-                        if (state !== 0 || state !== "0") {animationsValues.scalexf = state}
-                        }} 
-                    scalext={(state) => {
-                        document.querySelector(':root').style.setProperty('--scaleX-to', `scaleX(${state})`)
-                        if (state !== 0 || state !== "0") {animationsValues.scalext = state}
-                        }}
-                    scaleyf={(state) => {
-                        document.querySelector(':root').style.setProperty('--scaleY-from', `scaleY(${state})`)
-                        if (state !== 0 || state !== "0") {animationsValues.scaleyf = state}
-                        }}
-                    scaleyt={(state) => {
-                        document.querySelector(':root').style.setProperty('--scaleY-to', `scaleY(${state})`)
-                        if (state !== 0 || state !== "0") {animationsValues.scaleyt = state}
-                        }}
-                />
+                    <SkewSection 
+                        skewxf={(state) => {
+                            document.querySelector(':root').style.setProperty('--skewX-from', `skewX(${state + "deg"})`)
+                            if (state !== 0 || state !== "0") {animationsValues.skewxf = state}
+                            }} 
+                        skewxt={(state) => {
+                            document.querySelector(':root').style.setProperty('--skewX-to', `skewX(${state + "deg"})`)
+                            if (state !== 0 || state !== "0") {animationsValues.skewxt = state}
+                            }}
+                        skewyf={(state) => {
+                            document.querySelector(':root').style.setProperty('--skewY-from', `skewY(${state + "deg"})`)
+                            if (state !== 0 || state !== "0") {animationsValues.skewyf = state}
+                            }}
+                        skewyt={(state) => {
+                            document.querySelector(':root').style.setProperty('--skewY-to', `skewY(${state + "deg"})`)
+                            if (state !== 0 || state !== "0") {animationsValues.skewyt = state}
+                            }}
+                    />
+
+                    <ScaleSection 
+                        scalexf={(state) => {
+                            document.querySelector(':root').style.setProperty('--scaleX-from', `scaleX(${state})`)
+                            if (state !== 0 || state !== "0") {animationsValues.scalexf = state}
+                            }} 
+                        scalext={(state) => {
+                            document.querySelector(':root').style.setProperty('--scaleX-to', `scaleX(${state})`)
+                            if (state !== 0 || state !== "0") {animationsValues.scalext = state}
+                            }}
+                        scaleyf={(state) => {
+                            document.querySelector(':root').style.setProperty('--scaleY-from', `scaleY(${state})`)
+                            if (state !== 0 || state !== "0") {animationsValues.scaleyf = state}
+                            }}
+                        scaleyt={(state) => {
+                            document.querySelector(':root').style.setProperty('--scaleY-to', `scaleY(${state})`)
+                            if (state !== 0 || state !== "0") {animationsValues.scaleyt = state}
+                            }}
+                    />
+                </section>
 
             <button className="trigger-animation-btn" onClick={triggerAnimation}>Play<span>
                     <svg className="svg-icon-play" viewBox="0 0 20 20">
@@ -143,11 +152,20 @@ export default function SidePannel(props) {
 
             <ul className="menu__box">
                 <li className="menu__item">
+
                     <div className="side-pannel mobile">
+
+                        <div className="switch-mode-container">
+                            <div className="switch-button">
+                                <input className="switch-button-checkbox" type="checkbox"></input>
+                                <label className="switch-button-label" for=""><span className="switch-button-label-span">Text</span></label>
+                            </div>
+                        </div>
+
                         <div className="text-input-container">
                             <h4 className="text-input-info">Write Something To Animate</h4>
                             <textarea className="animation-text-input" onChange={ForwardInputText} maxLength="100" placeholder="type here..." cols="30" rows="10"></textarea>
-                        </div>
+                        </div>      
 
                         <TranslateSection 
                             translatexf={(state) => {
