@@ -115,13 +115,13 @@ export function MobileSheet() {
           </button>
         )}
 
-        <div
-          className="flex-1 overflow-y-auto scrollbar-thin px-2 sm:px-3"
-          style={{ paddingBottom: 'env(safe-area-inset-bottom, 12px)' }}
-        >
-          <AnimatePresence mode="wait" initial={false}>
-            {!isClosed &&
-              (tab === 'controls' ? (
+        {!isClosed && (
+          <div
+            className="flex-1 overflow-y-auto scrollbar-thin px-2 sm:px-3"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 12px)' }}
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {tab === 'controls' ? (
                 <motion.div
                   key="controls"
                   initial={{ opacity: 0, y: 8 }}
@@ -143,9 +143,10 @@ export function MobileSheet() {
                 >
                   <CodePanel />
                 </motion.div>
-              ))}
-          </AnimatePresence>
-        </div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
       </motion.div>
     </div>
   );
