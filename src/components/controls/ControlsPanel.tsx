@@ -8,6 +8,7 @@ import {
   Target,
   Spline,
   Type,
+  PenLine,
 } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
 import { Section } from './Section';
@@ -18,6 +19,7 @@ import { EasingPicker } from './EasingPicker';
 import { ColorFilterSection } from './ColorFilterSection';
 import { StaggerControls } from './StaggerControls';
 import { KeyframeTimeline } from './KeyframeTimeline';
+import { PathDrawControls } from './PathDrawControls';
 
 export function ControlsPanel() {
   const target = useAnimationStore((s) => s.config.target);
@@ -73,6 +75,16 @@ export function ControlsPanel() {
           defaultOpen={false}
         >
           <StaggerControls />
+        </Section>
+      )}
+
+      {target === 'svg' && (
+        <Section
+          title="Path draw"
+          description="Layer stroke draw on top of transforms & filters"
+          icon={<PenLine size={16} />}
+        >
+          <PathDrawControls />
         </Section>
       )}
 

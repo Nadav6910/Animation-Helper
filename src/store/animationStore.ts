@@ -68,6 +68,7 @@ export type AnimationState = {
   setFill: (f: FillMode) => void;
   setEasing: (e: Easing) => void;
   setStagger: (step: number | null) => void;
+  setPathDraw: (enabled: boolean) => void;
   // keyframes
   selectKeyframe: (id: string) => void;
   addKeyframe: (at?: number) => void;
@@ -144,6 +145,30 @@ export const useAnimationStore = create<AnimationState>((set) => ({
         stagger: step === null ? undefined : { step },
       },
     })),
+
+  setPathDraw: (enabled) =>
+    set((s) => {
+      if (!enabled) {
+        // Strip strokeDashoffset from every keyframe; preserve all other props.
+        const stripped = s.config.keyframes.map((k) => {
+          if (typeof k.strokeDashoffset !== 'number') return k;
+          const { strokeDashoffset: _drop, ...rest } = k;
+          return rest as Keyframe;
+        });
+        return { config: { ...s.config, keyframes: stripped } };
+      }
+      // Enable: 100 on the first keyframe (sorted by `at`), 0 on the last,
+      // intermediates left alone so CSS interpolates between the endpoints.
+      const sorted = [...s.config.keyframes].sort((a, b) => a.at - b.at);
+      const firstId = sorted[0]?.id;
+      const lastId = sorted[sorted.length - 1]?.id;
+      const next = s.config.keyframes.map((k) => {
+        if (k.id === firstId) return { ...k, strokeDashoffset: 100 };
+        if (k.id === lastId) return { ...k, strokeDashoffset: 0 };
+        return k;
+      });
+      return { config: { ...s.config, keyframes: next } };
+    }),
 
   selectKeyframe: (id) => set({ selectedKeyframeId: id }),
 
