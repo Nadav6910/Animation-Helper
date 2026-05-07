@@ -1,0 +1,158 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg: 11 11 15;
+    --bg-soft: 17 17 23;
+    --bg-panel: 22 22 30;
+    --fg: 235 235 245;
+    --fg-muted: 170 170 185;
+    --fg-subtle: 120 120 135;
+    --accent: 124 92 255;
+    --accent-soft: 60 40 140;
+    --accent-contrast: 255 255 255;
+    --border: 50 50 65;
+    --border-strong: 80 80 100;
+
+    color-scheme: dark;
+  }
+
+  :root.light {
+    --bg: 248 248 252;
+    --bg-soft: 240 240 246;
+    --bg-panel: 255 255 255;
+    --fg: 18 18 24;
+    --fg-muted: 70 70 85;
+    --fg-subtle: 130 130 145;
+    --accent: 99 71 255;
+    --accent-soft: 230 224 255;
+    --accent-contrast: 255 255 255;
+    --border: 220 220 230;
+    --border-strong: 200 200 215;
+
+    color-scheme: light;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-bg text-fg font-sans antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  ::selection {
+    background: rgb(var(--accent) / 0.4);
+    color: rgb(var(--accent-contrast));
+  }
+
+  /* Hide scrollbars but keep functionality, where appropriate */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgb(var(--border-strong));
+    border-radius: 999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Honor reduced motion for app chrome (NOT generated previews) */
+  @media (prefers-reduced-motion: reduce) {
+    .motion-safe-only {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-bg-panel/60 backdrop-blur-xl border border-border/70 shadow-glass;
+  }
+
+  .focus-ring {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
+  }
+
+  .card {
+    @apply glass rounded-2xl;
+  }
+
+  .gradient-text {
+    background: linear-gradient(
+      135deg,
+      rgb(var(--accent)) 0%,
+      rgb(var(--accent) / 0.6) 60%,
+      rgb(var(--fg)) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .ah-slider {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .ah-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 18px;
+    width: 18px;
+    border-radius: 999px;
+    background: rgb(var(--accent));
+    border: 3px solid rgb(var(--bg));
+    box-shadow:
+      0 0 0 1px rgb(var(--accent) / 0.5),
+      0 4px 12px -2px rgb(var(--accent) / 0.5);
+    cursor: grab;
+    transition: transform 120ms ease;
+  }
+  .ah-slider::-webkit-slider-thumb:active {
+    cursor: grabbing;
+    transform: scale(1.12);
+  }
+  .ah-slider::-moz-range-thumb {
+    height: 18px;
+    width: 18px;
+    border-radius: 999px;
+    background: rgb(var(--accent));
+    border: 3px solid rgb(var(--bg));
+    box-shadow:
+      0 0 0 1px rgb(var(--accent) / 0.5),
+      0 4px 12px -2px rgb(var(--accent) / 0.5);
+    cursor: grab;
+  }
+
+  /* Shiki overrides */
+  .ah-shiki pre {
+    background: transparent !important;
+  }
+  .ah-shiki code {
+    font-family: inherit;
+  }
+
+  /* hide native number-input arrows for cleaner UI */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+}
