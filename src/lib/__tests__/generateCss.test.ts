@@ -124,6 +124,28 @@ describe('generateCss — keyframes & filters', () => {
     expect(css).toContain('stroke-dashoffset: 0;');
   });
 
+  it('emits stroke-dasharray:100 in the rule body for SVG targets', () => {
+    const css = generateCss(
+      makeConfig({
+        target: 'svg',
+        selector: '.path',
+        keyframes: [
+          { id: 'a', at: 0, strokeDashoffset: 100 },
+          { id: 'b', at: 100, strokeDashoffset: 0 },
+        ],
+      })
+    );
+    // stroke-dasharray must appear on the selector rule, not inside @keyframes
+    const rule = css.split('@keyframes')[0];
+    expect(rule).toContain('stroke-dasharray: 100;');
+    expect(rule).toContain('pathLength="100"');
+  });
+
+  it('omits stroke-dasharray for non-svg targets', () => {
+    const css = generateCss(makeConfig({ target: 'shape' }));
+    expect(css).not.toContain('stroke-dasharray');
+  });
+
   it('emits stagger rule when stagger is set on text target', () => {
     const css = generateCss(
       makeConfig({ target: 'text', selector: '.txt', stagger: { step: 80 } })

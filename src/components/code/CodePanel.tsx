@@ -39,7 +39,7 @@ export function CodePanel() {
   }, []);
 
   return (
-    <div className="card flex h-full min-h-[360px] flex-col p-0 overflow-hidden">
+    <div className="card flex h-full min-h-[240px] flex-col p-0 overflow-hidden sm:min-h-[360px]">
       <div className="flex items-center justify-between gap-2 border-b border-border/60 p-3">
         <Tabs value={format} onChange={setFormat} tabs={TABS} size="sm" />
         <CopyButton

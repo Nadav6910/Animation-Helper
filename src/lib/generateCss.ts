@@ -90,8 +90,16 @@ export function generateCss(
 
   const ruleSelector = c.selector;
   const lines: string[] = [];
+  if (c.target === 'svg') {
+    lines.push(
+      '/* For path-draw, your <path> needs pathLength="100" so stroke-dasharray:100 covers it exactly. */',
+    );
+  }
   lines.push(`${ruleSelector} {`);
   lines.push(`${indent}animation: ${animationValue};`);
+  if (c.target === 'svg') {
+    lines.push(`${indent}stroke-dasharray: 100;`);
+  }
   lines.push('}');
   lines.push('');
 

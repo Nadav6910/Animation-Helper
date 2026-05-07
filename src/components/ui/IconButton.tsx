@@ -11,8 +11,8 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const sizes = {
-  sm: 'h-8 w-8',
-  md: 'h-10 w-10',
+  sm: 'h-9 w-9 sm:h-8 sm:w-8',
+  md: 'h-11 w-11 sm:h-10 sm:w-10',
   lg: 'h-12 w-12',
 };
 

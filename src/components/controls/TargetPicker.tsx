@@ -38,7 +38,7 @@ export function TargetPicker() {
       )}
 
       {config.target === 'shape' && (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {SHAPES.map((s) => {
             const active = config.shape === s.kind;
             return (
@@ -48,7 +48,7 @@ export function TargetPicker() {
                 whileHover={{ y: -2 }}
                 whileTap={{ scale: 0.96 }}
                 className={cn(
-                  'group relative aspect-square rounded-xl border bg-bg-soft p-3 focus-ring transition-colors',
+                  'group relative flex flex-col items-center gap-1.5 rounded-xl border bg-bg-soft p-2.5 focus-ring transition-colors',
                   active
                     ? 'border-accent/60 bg-accent/5 shadow-glow'
                     : 'border-border/70 hover:border-border-strong'
@@ -56,18 +56,41 @@ export function TargetPicker() {
                 aria-pressed={active}
                 aria-label={s.label}
               >
+                <span className="grid aspect-square w-full place-items-center">
+                  <svg
+                    viewBox="0 0 100 100"
+                    className={cn(
+                      'h-full w-full transition-colors',
+                      active
+                        ? 'fill-accent'
+                        : 'fill-fg-muted/70 group-hover:fill-fg/80'
+                    )}
+                    aria-hidden
+                    preserveAspectRatio="xMidYMid meet"
+                  >
+                    {s.preview.kind === 'rect' && (
+                      <rect
+                        x="0"
+                        y="0"
+                        width="100"
+                        height="100"
+                        rx={s.preview.rx}
+                      />
+                    )}
+                    {s.preview.kind === 'circle' && (
+                      <circle cx="50" cy="50" r="50" />
+                    )}
+                    {s.preview.kind === 'path' && <path d={s.preview.d} />}
+                  </svg>
+                </span>
                 <span
                   className={cn(
-                    'block h-full w-full',
-                    active
-                      ? 'bg-accent'
-                      : 'bg-fg-muted/70 group-hover:bg-fg/80 transition-colors'
+                    'text-[11px] font-medium leading-none',
+                    active ? 'text-fg' : 'text-fg-muted'
                   )}
-                  style={{
-                    clipPath: s.clipPath ?? undefined,
-                    borderRadius: s.borderRadius,
-                  }}
-                />
+                >
+                  {s.label}
+                </span>
               </motion.button>
             );
           })}
@@ -75,7 +98,7 @@ export function TargetPicker() {
       )}
 
       {config.target === 'svg' && (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {SVG_PATHS.map((p) => {
             const active = config.svgPath === p.id;
             return (
@@ -85,7 +108,7 @@ export function TargetPicker() {
                 whileHover={{ y: -2 }}
                 whileTap={{ scale: 0.96 }}
                 className={cn(
-                  'aspect-square rounded-xl border bg-bg-soft p-3 grid place-items-center focus-ring transition-colors',
+                  'flex flex-col items-center gap-1.5 rounded-xl border bg-bg-soft p-2.5 focus-ring transition-colors',
                   active
                     ? 'border-accent/60 bg-accent/5 shadow-glow text-accent'
                     : 'border-border/70 text-fg-muted hover:text-fg hover:border-border-strong'
@@ -93,17 +116,28 @@ export function TargetPicker() {
                 aria-pressed={active}
                 aria-label={p.label}
               >
-                <svg
-                  viewBox={p.viewBox}
-                  className="h-full w-full"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                <span className="grid aspect-square w-full place-items-center">
+                  <svg
+                    viewBox={p.viewBox}
+                    className="h-full w-full"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    preserveAspectRatio="xMidYMid meet"
+                  >
+                    <path d={p.d} />
+                  </svg>
+                </span>
+                <span
+                  className={cn(
+                    'text-[11px] font-medium leading-none',
+                    active ? 'text-fg' : 'text-fg-muted'
+                  )}
                 >
-                  <path d={p.d} />
-                </svg>
+                  {p.label}
+                </span>
               </motion.button>
             );
           })}

@@ -82,7 +82,29 @@ export const useAnimationStore = create<AnimationState>((set) => ({
   selectedKeyframeId: initialConfig.keyframes[0].id,
 
   setTarget: (target) =>
-    set((s) => ({ config: { ...s.config, target } })),
+    set((s) => {
+      // Seed path-draw keyframes when switching to SVG so the animation is
+      // visible immediately. Only injects strokeDashoffset where it's missing
+      // — existing user-edited keyframes are preserved.
+      if (target !== 'svg') {
+        return { config: { ...s.config, target } };
+      }
+      const hasDashoffset = s.config.keyframes.some(
+        (k) => typeof k.strokeDashoffset === 'number',
+      );
+      if (hasDashoffset) {
+        return { config: { ...s.config, target } };
+      }
+      const sorted = [...s.config.keyframes].sort((a, b) => a.at - b.at);
+      const first = sorted[0];
+      const last = sorted[sorted.length - 1];
+      const seeded = s.config.keyframes.map((k) => {
+        if (k.id === first?.id) return { ...k, strokeDashoffset: 100 };
+        if (k.id === last?.id) return { ...k, strokeDashoffset: 0 };
+        return k;
+      });
+      return { config: { ...s.config, target, keyframes: seeded } };
+    }),
   setShape: (shape) =>
     set((s) => ({ config: { ...s.config, shape } })),
   setText: (text) =>

@@ -40,7 +40,9 @@ export function Tabs<T extends string>({
               onClick={() => onChange(t.value)}
               className={cn(
                 'relative flex items-center justify-center gap-1.5 rounded-lg px-3 transition-colors focus-ring',
-                size === 'sm' ? 'h-7 text-xs' : 'h-8 text-sm',
+                size === 'sm'
+                  ? 'h-9 text-xs sm:h-7'
+                  : 'h-11 text-sm sm:h-8',
                 fullWidth && 'flex-1',
                 active ? 'text-fg' : 'text-fg-muted hover:text-fg'
               )}
