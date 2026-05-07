@@ -1,11 +1,14 @@
 import { useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAnimationStore } from '@/store/animationStore';
 import { TopBar } from './TopBar';
 import { DesktopGrid } from './DesktopGrid';
 import { MobileSheet } from './MobileSheet';
 
-export function Shell() {
+type Props = { ready: boolean };
+
+export function Shell({ ready }: Props) {
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const resetAll = useAnimationStore((s) => s.resetAll);
 
@@ -30,7 +33,21 @@ export function Shell() {
   }, [resetAll]);
 
   return (
-    <div className="relative h-full min-h-screen overflow-hidden flex flex-col">
+    <motion.div
+      initial="hidden"
+      animate={ready ? 'visible' : 'hidden'}
+      variants={{
+        hidden: { opacity: 0 },
+        visible: {
+          opacity: 1,
+          transition: {
+            staggerChildren: 0.08,
+            delayChildren: 0.05,
+          },
+        },
+      }}
+      className="relative h-full min-h-screen overflow-hidden flex flex-col"
+    >
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10"
@@ -39,10 +56,31 @@ export function Shell() {
             'radial-gradient(60% 50% at 20% 0%, rgb(var(--accent) / 0.12), transparent 70%), radial-gradient(50% 40% at 100% 0%, rgb(var(--accent) / 0.08), transparent 70%)',
         }}
       />
-      <TopBar />
-      <main className="relative flex-1 min-h-0">
+      <motion.div
+        variants={{
+          hidden: { y: -32, opacity: 0 },
+          visible: {
+            y: 0,
+            opacity: 1,
+            transition: { type: 'spring', stiffness: 220, damping: 26 },
+          },
+        }}
+      >
+        <TopBar />
+      </motion.div>
+      <motion.main
+        variants={{
+          hidden: { y: 16, opacity: 0 },
+          visible: {
+            y: 0,
+            opacity: 1,
+            transition: { type: 'spring', stiffness: 220, damping: 28 },
+          },
+        }}
+        className="relative flex-1 min-h-0"
+      >
         {isDesktop ? <DesktopGrid /> : <MobileSheet />}
-      </main>
-    </div>
+      </motion.main>
+    </motion.div>
   );
 }
