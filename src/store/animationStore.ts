@@ -83,27 +83,41 @@ export const useAnimationStore = create<AnimationState>((set) => ({
 
   setTarget: (target) =>
     set((s) => {
-      // Seed path-draw keyframes when switching to SVG so the animation is
-      // visible immediately. Only injects strokeDashoffset where it's missing
-      // — existing user-edited keyframes are preserved.
       if (target !== 'svg') {
         return { config: { ...s.config, target } };
       }
+      // Seed path-draw keyframes the first time the user switches to SVG.
+      // We replace the keyframes with a clean draw pair (strokeDashoffset
+      // 100 → 0) and identity transforms, because the shape default's
+      // translate of 120px is interpreted in SVG user-space and pushes the
+      // path far off the viewBox. Once the user has edited a strokeDashoffset
+      // anywhere, we leave their keyframes alone.
       const hasDashoffset = s.config.keyframes.some(
         (k) => typeof k.strokeDashoffset === 'number',
       );
       if (hasDashoffset) {
         return { config: { ...s.config, target } };
       }
-      const sorted = [...s.config.keyframes].sort((a, b) => a.at - b.at);
-      const first = sorted[0];
-      const last = sorted[sorted.length - 1];
-      const seeded = s.config.keyframes.map((k) => {
-        if (k.id === first?.id) return { ...k, strokeDashoffset: 100 };
-        if (k.id === last?.id) return { ...k, strokeDashoffset: 0 };
-        return k;
-      });
-      return { config: { ...s.config, target, keyframes: seeded } };
+      const draw: Keyframe[] = [
+        {
+          id: uid(),
+          at: 0,
+          transform: { ...blankTransform },
+          opacity: 1,
+          strokeDashoffset: 100,
+        },
+        {
+          id: uid(),
+          at: 100,
+          transform: { ...blankTransform },
+          opacity: 1,
+          strokeDashoffset: 0,
+        },
+      ];
+      return {
+        config: { ...s.config, target, keyframes: draw },
+        selectedKeyframeId: draw[0].id,
+      };
     }),
   setShape: (shape) =>
     set((s) => ({ config: { ...s.config, shape } })),

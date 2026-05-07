@@ -21,6 +21,9 @@ export function Toggle({
   const w = size === 'sm' ? 'w-9' : 'w-11';
   const h = size === 'sm' ? 'h-5' : 'h-6';
   const dot = size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4';
+  // Dot fits inside the track with a 2px gutter on each side.
+  const offCalc = '2px';
+  const onCalc = size === 'sm' ? 'calc(100% - 16px)' : 'calc(100% - 18px)';
 
   return (
     <label
@@ -56,7 +59,7 @@ export function Toggle({
             'absolute top-1/2 -translate-y-1/2 rounded-full bg-white shadow-md',
             dot
           )}
-          animate={{ left: checked ? 'calc(100% - 2px)' : '2px', x: checked ? '-100%' : '0%' }}
+          animate={{ left: checked ? onCalc : offCalc }}
           transition={{ type: 'spring', stiffness: 500, damping: 32 }}
         />
       </button>
