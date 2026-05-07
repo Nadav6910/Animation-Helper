@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
+import { motion, type PanInfo } from 'framer-motion';
 import { ControlsPanel } from '@/components/controls/ControlsPanel';
 import { CodePanel } from '@/components/code/CodePanel';
 import { PreviewStage } from '@/components/preview/PreviewStage';
 import { Tabs } from '@/components/ui/Tabs';
 import { Code2, Sliders, Maximize2, Minimize2 } from 'lucide-react';
+import { cn } from '@/lib/cn';
 
 type SheetSnap = 'closed' | 'peek' | 'half' | 'full';
 
@@ -120,31 +121,21 @@ export function MobileSheet() {
             className="flex-1 overflow-y-auto scrollbar-thin px-2 sm:px-3"
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 12px)' }}
           >
-            <AnimatePresence mode="wait" initial={false}>
-              {tab === 'controls' ? (
-                <motion.div
-                  key="controls"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.2 }}
-                  className="pb-6"
-                >
-                  <ControlsPanel />
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="code"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.2 }}
-                  className="h-full min-h-[240px] pb-6"
-                >
-                  <CodePanel />
-                </motion.div>
+            {/* Both panels stay mounted — toggling visibility instead of
+                unmounting avoids AnimatePresence wait-mode stalls and
+                preserves each panel's local state (e.g. CodePanel format,
+                ControlsPanel scroll position) across tab swaps. */}
+            <div className={cn('pb-6', tab === 'controls' ? 'block' : 'hidden')}>
+              <ControlsPanel />
+            </div>
+            <div
+              className={cn(
+                'h-full min-h-[240px] pb-6',
+                tab === 'code' ? 'block' : 'hidden',
               )}
-            </AnimatePresence>
+            >
+              <CodePanel />
+            </div>
           </div>
         )}
       </motion.div>
