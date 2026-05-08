@@ -2,7 +2,7 @@ import { useAnimationStore } from '@/store/animationStore';
 import { NumberInput } from '@/components/ui/NumberInput';
 import type { Transform, Vec2 } from '@/types/animation';
 
-type Axis = keyof Transform;
+type Axis = 'translate' | 'rotate' | 'skew' | 'scale';
 
 const AXIS_CONFIG: Record<
   Axis,

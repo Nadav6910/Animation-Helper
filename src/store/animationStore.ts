@@ -5,10 +5,12 @@ import type {
   Easing,
   FillMode,
   Keyframe,
+  OffsetPath,
   ShapeKind,
   TargetKind,
   Transform,
 } from '@/types/animation';
+import { createHistoryRecorder } from './middleware/history';
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -53,9 +55,14 @@ const initialConfig: AnimationConfig = {
   easing: { kind: 'cubic', v: [0.2, 0.8, 0.2, 1] },
 };
 
+const history = createHistoryRecorder(initialConfig, { debounceMs: 350 });
+
 export type AnimationState = {
   config: AnimationConfig;
   selectedKeyframeId: string;
+  canUndo: boolean;
+  canRedo: boolean;
+  isDirty: boolean;
   // setters
   setTarget: (t: TargetKind) => void;
   setShape: (s: ShapeKind) => void;
@@ -68,6 +75,7 @@ export type AnimationState = {
   setFill: (f: FillMode) => void;
   setEasing: (e: Easing) => void;
   setStagger: (step: number | null) => void;
+  setOffsetPath: (op: OffsetPath | undefined) => void;
   setPathDraw: (enabled: boolean) => void;
   // keyframes
   selectKeyframe: (id: string) => void;
@@ -76,28 +84,59 @@ export type AnimationState = {
   updateKeyframe: (id: string, patch: Partial<Keyframe>) => void;
   updateKeyframeTransform: (id: string, patch: Partial<Transform>) => void;
   resetAll: () => void;
+  // bulk replace (presets, undo/redo)
+  applyConfig: (next: AnimationConfig, opts?: { record?: boolean }) => void;
+  /** Apply a preset's animation, keeping the user's current target / shape /
+   * text / svgPath / offset-path so picking a preset doesn't erase what
+   * they're already looking at. */
+  applyPreset: (next: AnimationConfig) => void;
+  // history
+  undo: () => void;
+  redo: () => void;
+  markPristine: () => void;
 };
 
-export const useAnimationStore = create<AnimationState>((set) => ({
-  config: initialConfig,
-  selectedKeyframeId: initialConfig.keyframes[0].id,
+const refreshHistoryFlags = () => ({
+  canUndo: history.canUndo(),
+  canRedo: history.canRedo(),
+  isDirty: history.isDirty(),
+});
 
-  setTarget: (target) =>
-    set((s) => {
-      if (target !== 'svg') {
-        return { config: { ...s.config, target } };
-      }
+export const useAnimationStore = create<AnimationState>((set, get) => {
+  const commit = (next: AnimationConfig) => {
+    history.record(next);
+    set({ config: next, ...refreshHistoryFlags() });
+  };
+  const update = (mutator: (c: AnimationConfig) => AnimationConfig) => {
+    const next = mutator(get().config);
+    commit(next);
+  };
+
+  return {
+    config: initialConfig,
+    selectedKeyframeId: initialConfig.keyframes[0].id,
+    canUndo: false,
+    canRedo: false,
+    isDirty: false,
+
+    setTarget: (target) => {
+      const c = get().config;
       // Seed path-draw keyframes the first time the user switches to SVG.
-      // We replace the keyframes with a clean draw pair (strokeDashoffset
-      // 100 → 0) and identity transforms, because the shape default's
-      // translate of 120px is interpreted in SVG user-space and pushes the
-      // path far off the viewBox. Once the user has edited a strokeDashoffset
-      // anywhere, we leave their keyframes alone.
-      const hasDashoffset = s.config.keyframes.some(
-        (k) => typeof k.strokeDashoffset === 'number',
+      // The shape default's translate of 120px is interpreted in SVG
+      // user-space and pushes the path far off the viewBox; replace with
+      // a clean draw pair (strokeDashoffset 100 → 0) with identity
+      // transforms. If the user has already touched strokeDashoffset
+      // anywhere, leave their keyframes alone.
+      if (target !== 'svg') {
+        commit({ ...c, target });
+        return;
+      }
+      const hasDashoffset = c.keyframes.some(
+        (k) => typeof k.strokeDashoffset === 'number'
       );
       if (hasDashoffset) {
-        return { config: { ...s.config, target } };
+        commit({ ...c, target });
+        return;
       }
       const draw: Keyframe[] = [
         {
@@ -115,66 +154,91 @@ export const useAnimationStore = create<AnimationState>((set) => ({
           strokeDashoffset: 0,
         },
       ];
-      return {
-        config: { ...s.config, target, keyframes: draw },
-        selectedKeyframeId: draw[0].id,
+      const updated: AnimationConfig = {
+        ...c,
+        target,
+        keyframes: draw,
       };
-    }),
-  setShape: (shape) =>
-    set((s) => ({ config: { ...s.config, shape } })),
-  setText: (text) =>
-    set((s) => ({ config: { ...s.config, text } })),
-  setSvgPath: (id) =>
-    set((s) => ({ config: { ...s.config, svgPath: id } })),
-  setDuration: (duration) =>
-    set((s) => ({ config: { ...s.config, duration } })),
-  setDelay: (delay) =>
-    set((s) => ({ config: { ...s.config, delay } })),
-  setIterations: (iterations) =>
-    set((s) => ({ config: { ...s.config, iterations } })),
-  setDirection: (direction) =>
-    set((s) => ({ config: { ...s.config, direction } })),
-  setFill: (fill) =>
-    set((s) => ({ config: { ...s.config, fill } })),
-  setEasing: (easing) =>
-    set((s) => ({ config: { ...s.config, easing } })),
-  setStagger: (step) =>
-    set((s) => ({
-      config: {
-        ...s.config,
-        stagger: step === null ? undefined : { step },
-      },
-    })),
-
-  setPathDraw: (enabled) =>
-    set((s) => {
-      if (!enabled) {
-        // Strip strokeDashoffset from every keyframe; preserve all other props.
-        const stripped = s.config.keyframes.map((k) => {
-          if (typeof k.strokeDashoffset !== 'number') return k;
-          const { strokeDashoffset: _drop, ...rest } = k;
-          return rest as Keyframe;
-        });
-        return { config: { ...s.config, keyframes: stripped } };
-      }
-      // Enable: 100 on the first keyframe (sorted by `at`), 0 on the last,
-      // intermediates left alone so CSS interpolates between the endpoints.
-      const sorted = [...s.config.keyframes].sort((a, b) => a.at - b.at);
-      const firstId = sorted[0]?.id;
-      const lastId = sorted[sorted.length - 1]?.id;
-      const next = s.config.keyframes.map((k) => {
-        if (k.id === firstId) return { ...k, strokeDashoffset: 100 };
-        if (k.id === lastId) return { ...k, strokeDashoffset: 0 };
-        return k;
+      history.record(updated);
+      set({
+        config: updated,
+        selectedKeyframeId: draw[0].id,
+        ...refreshHistoryFlags(),
       });
-      return { config: { ...s.config, keyframes: next } };
-    }),
+    },
+    setShape: (shape) => update((c) => ({ ...c, shape })),
+    setText: (text) => update((c) => ({ ...c, text })),
+    setSvgPath: (id) => update((c) => ({ ...c, svgPath: id })),
+    setDuration: (duration) => update((c) => ({ ...c, duration })),
+    setDelay: (delay) => update((c) => ({ ...c, delay })),
+    setIterations: (iterations) => update((c) => ({ ...c, iterations })),
+    setDirection: (direction) => update((c) => ({ ...c, direction })),
+    setFill: (fill) => update((c) => ({ ...c, fill })),
+    setEasing: (easing) => update((c) => ({ ...c, easing })),
+    setStagger: (step) =>
+      update((c) => ({
+        ...c,
+        stagger: step === null ? undefined : { step },
+      })),
+    setOffsetPath: (op) =>
+      update((c) => {
+        if (!op) {
+          // Disabling: strip offsetDistance from every keyframe so the
+          // element returns to its natural position.
+          const stripped = c.keyframes.map((k) => {
+            if (typeof k.offsetDistance !== 'number') return k;
+            const { offsetDistance: _drop, ...rest } = k;
+            return rest as Keyframe;
+          });
+          return { ...c, offsetPath: undefined, keyframes: stripped };
+        }
+        // Enabling (or first-time setup): make sure first keyframe has
+        // offsetDistance: 0 and last has 100, otherwise the element pins
+        // to the path's start and looks "frozen". Switching between path
+        // presets while already on doesn't re-seed.
+        const hasAny = c.keyframes.some(
+          (k) => typeof k.offsetDistance === 'number'
+        );
+        if (hasAny) return { ...c, offsetPath: op };
+        const sorted = [...c.keyframes].sort((a, b) => a.at - b.at);
+        const firstId = sorted[0]?.id;
+        const lastId = sorted[sorted.length - 1]?.id;
+        const keyframes = c.keyframes.map((k) => {
+          if (k.id === firstId) return { ...k, offsetDistance: 0 };
+          if (k.id === lastId) return { ...k, offsetDistance: 100 };
+          return k;
+        });
+        return { ...c, offsetPath: op, keyframes };
+      }),
+    setPathDraw: (enabled) =>
+      update((c) => {
+        if (!enabled) {
+          // Strip strokeDashoffset from every keyframe; preserve all other props.
+          const stripped = c.keyframes.map((k) => {
+            if (typeof k.strokeDashoffset !== 'number') return k;
+            const { strokeDashoffset: _drop, ...rest } = k;
+            return rest as Keyframe;
+          });
+          return { ...c, keyframes: stripped };
+        }
+        // Enable: 100 on the first keyframe (sorted by `at`), 0 on the last,
+        // intermediates left alone so CSS interpolates between the endpoints.
+        const sorted = [...c.keyframes].sort((a, b) => a.at - b.at);
+        const firstId = sorted[0]?.id;
+        const lastId = sorted[sorted.length - 1]?.id;
+        const next = c.keyframes.map((k) => {
+          if (k.id === firstId) return { ...k, strokeDashoffset: 100 };
+          if (k.id === lastId) return { ...k, strokeDashoffset: 0 };
+          return k;
+        });
+        return { ...c, keyframes: next };
+      }),
 
-  selectKeyframe: (id) => set({ selectedKeyframeId: id }),
+    selectKeyframe: (id) => set({ selectedKeyframeId: id }),
 
-  addKeyframe: (at) =>
-    set((s) => {
-      const sorted = [...s.config.keyframes].sort((a, b) => a.at - b.at);
+    addKeyframe: (at) => {
+      const c = get().config;
+      const sorted = [...c.keyframes].sort((a, b) => a.at - b.at);
       let position = at;
       if (position == null) {
         const gaps = sorted.map((k, i) =>
@@ -188,38 +252,39 @@ export const useAnimationStore = create<AnimationState>((set) => ({
         transform: { ...blankTransform },
         opacity: 1,
       };
-      return {
-        config: { ...s.config, keyframes: [...s.config.keyframes, next] },
+      const updated = { ...c, keyframes: [...c.keyframes, next] };
+      history.record(updated);
+      set({
+        config: updated,
         selectedKeyframeId: next.id,
-      };
-    }),
+        ...refreshHistoryFlags(),
+      });
+    },
 
-  removeKeyframe: (id) =>
-    set((s) => {
-      if (s.config.keyframes.length <= 2) return s;
+    removeKeyframe: (id) => {
+      const s = get();
+      if (s.config.keyframes.length <= 2) return;
       const remaining = s.config.keyframes.filter((k) => k.id !== id);
-      return {
-        config: { ...s.config, keyframes: remaining },
+      const updated = { ...s.config, keyframes: remaining };
+      history.record(updated);
+      set({
+        config: updated,
         selectedKeyframeId:
           s.selectedKeyframeId === id ? remaining[0].id : s.selectedKeyframeId,
-      };
-    }),
+        ...refreshHistoryFlags(),
+      });
+    },
 
-  updateKeyframe: (id, patch) =>
-    set((s) => ({
-      config: {
-        ...s.config,
-        keyframes: s.config.keyframes.map((k) =>
-          k.id === id ? { ...k, ...patch } : k
-        ),
-      },
-    })),
+    updateKeyframe: (id, patch) =>
+      update((c) => ({
+        ...c,
+        keyframes: c.keyframes.map((k) => (k.id === id ? { ...k, ...patch } : k)),
+      })),
 
-  updateKeyframeTransform: (id, patch) =>
-    set((s) => ({
-      config: {
-        ...s.config,
-        keyframes: s.config.keyframes.map((k) =>
+    updateKeyframeTransform: (id, patch) =>
+      update((c) => ({
+        ...c,
+        keyframes: c.keyframes.map((k) =>
           k.id === id
             ? {
                 ...k,
@@ -227,14 +292,77 @@ export const useAnimationStore = create<AnimationState>((set) => ({
               }
             : k
         ),
-      },
-    })),
+      })),
 
-  resetAll: () =>
-    set({
-      config: {
+    resetAll: () => {
+      const fresh: AnimationConfig = {
         ...initialConfig,
         keyframes: [startKeyframe(), endKeyframe()],
-      },
-    }),
-}));
+      };
+      history.reset(fresh);
+      set({
+        config: fresh,
+        selectedKeyframeId: fresh.keyframes[0].id,
+        ...refreshHistoryFlags(),
+      });
+    },
+
+    applyConfig: (next, opts) => {
+      const cloned: AnimationConfig = JSON.parse(JSON.stringify(next));
+      if (opts?.record === false) {
+        history.reset(cloned);
+      } else {
+        history.record(cloned);
+      }
+      set({
+        config: cloned,
+        selectedKeyframeId: cloned.keyframes[0]?.id ?? get().selectedKeyframeId,
+        ...refreshHistoryFlags(),
+      });
+    },
+
+    applyPreset: (next) => {
+      // Presets are designed as cohesive animations — duration, easing,
+      // direction, fill, and keyframes are all tuned to look right
+      // together — so we apply them wholesale. The one exception:
+      // override iterations to 'infinite' so users see the motion loop
+      // continuously while previewing different presets. Entrance/exit
+      // presets ship as one-shots which would silently finish before the
+      // user could see them. They can toggle loop off in Timing if they
+      // want the original one-shot behavior.
+      const cloned: AnimationConfig = JSON.parse(JSON.stringify(next));
+      cloned.iterations = 'infinite';
+      history.record(cloned);
+      set({
+        config: cloned,
+        selectedKeyframeId: cloned.keyframes[0]?.id ?? get().selectedKeyframeId,
+        ...refreshHistoryFlags(),
+      });
+    },
+
+    undo: () => {
+      const prev = history.undo();
+      if (!prev) return;
+      set({
+        config: prev,
+        selectedKeyframeId: prev.keyframes[0]?.id ?? get().selectedKeyframeId,
+        ...refreshHistoryFlags(),
+      });
+    },
+
+    redo: () => {
+      const next = history.redo();
+      if (!next) return;
+      set({
+        config: next,
+        selectedKeyframeId: next.keyframes[0]?.id ?? get().selectedKeyframeId,
+        ...refreshHistoryFlags(),
+      });
+    },
+
+    markPristine: () => {
+      history.markPristine();
+      set(refreshHistoryFlags());
+    },
+  };
+});

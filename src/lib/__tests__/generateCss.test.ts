@@ -45,7 +45,7 @@ describe('generateCss — single transform declaration (bug fix)', () => {
       rotate: [0, 45],
       scale: [1.2, 1.2],
     });
-    expect(out).toBe('translate3d(10px, 20px, 0) rotateY(45deg) scale(1.2, 1.2)');
+    expect(out).toBe('translate3d(10px, 20px, 0px) rotateY(45deg) scale(1.2, 1.2)');
   });
 
   it('returns null when transform has no axes', () => {
@@ -155,6 +155,167 @@ describe('generateCss — keyframes & filters', () => {
   });
 });
 
+describe('generateCss — 3D & perspective', () => {
+  it('emits translate3d Z axis', () => {
+    const out = transformToCss({
+      translate: [10, 20],
+      translateZ: 30,
+    });
+    expect(out).toBe('translate3d(10px, 20px, 30px)');
+  });
+
+  it('emits perspective() before transforms', () => {
+    const out = transformToCss({
+      translate: [0, 0],
+      perspective: 600,
+    });
+    expect(out?.startsWith('perspective(600px)')).toBe(true);
+  });
+
+  it('emits rotate3d when supplied', () => {
+    const out = transformToCss({
+      rotate3d: { x: 1, y: 1, z: 0, deg: 45 },
+    });
+    expect(out).toBe('rotate3d(1, 1, 0, 45deg)');
+  });
+
+  it('prefers rotate3d over rotateX/Y when both are set', () => {
+    const out = transformToCss({
+      rotate: [30, 45],
+      rotate3d: { x: 1, y: 0, z: 0, deg: 90 },
+    });
+    expect(out).toContain('rotate3d(1, 0, 0, 90deg)');
+    expect(out).not.toContain('rotateX');
+    expect(out).not.toContain('rotateY');
+  });
+
+  it('skips a rotate3d with zero angle (no-op)', () => {
+    const out = transformToCss({
+      rotate: [10, 0],
+      rotate3d: { x: 1, y: 1, z: 0, deg: 0 },
+    });
+    expect(out).toContain('rotateX(10deg)');
+    expect(out).not.toContain('rotate3d');
+  });
+
+  it('skips a rotate3d with degenerate (all-zero) axis', () => {
+    const out = transformToCss({
+      rotate: [10, 0],
+      rotate3d: { x: 0, y: 0, z: 0, deg: 45 },
+    });
+    expect(out).toContain('rotateX(10deg)');
+    expect(out).not.toContain('rotate3d');
+  });
+
+  it('emits Z-only translate when only translateZ is set', () => {
+    const out = transformToCss({ translateZ: 50 });
+    expect(out).toBe('translate3d(0px, 0px, 50px)');
+  });
+});
+
+describe('generateCss — per-keyframe easing & steps', () => {
+  it('emits animation-timing-function for keyframes with easing', () => {
+    const css = generateCss(
+      makeConfig({
+        keyframes: [
+          { id: 'a', at: 0, opacity: 0 },
+          {
+            id: 'b',
+            at: 100,
+            opacity: 1,
+            easing: { kind: 'preset', value: 'ease-out' },
+          },
+        ],
+      })
+    );
+    expect(css).toContain('animation-timing-function: ease-out;');
+  });
+
+  it('serializes steps() easing', () => {
+    const css = generateCss(
+      makeConfig({ easing: { kind: 'steps', n: 6, jump: 'end' } })
+    );
+    expect(css).toContain('steps(6, jump-end)');
+  });
+});
+
+describe('generateCss — offset-path motion', () => {
+  it('emits offset-path on the rule and offset-distance per keyframe', () => {
+    const css = generateCss(
+      makeConfig({
+        offsetPath: { d: 'M0,0 L100,0', rotate: 'auto' },
+        keyframes: [
+          { id: 'a', at: 0, offsetDistance: 0 },
+          { id: 'b', at: 100, offsetDistance: 100 },
+        ],
+      })
+    );
+    expect(css).toContain("offset-path: path('M0,0 L100,0');");
+    expect(css).toContain('offset-rotate: auto;');
+    expect(css).toContain('offset-distance: 0%;');
+    expect(css).toContain('offset-distance: 100%;');
+  });
+});
+
+describe('generateCss — gradient backgrounds', () => {
+  it('emits background: for gradient strings', () => {
+    const css = generateCss(
+      makeConfig({
+        keyframes: [
+          { id: 'a', at: 0, bg: 'linear-gradient(45deg, #ff0080, #7928ca)' },
+          { id: 'b', at: 100, bg: '#7c5cff' },
+        ],
+      })
+    );
+    expect(css).toContain('background: linear-gradient(45deg, #ff0080, #7928ca);');
+    expect(css).toContain('background-color: #7c5cff;');
+  });
+});
+
+describe('generateCss — gradient fill / text color', () => {
+  it('applies the background-clip: text trick on text targets', () => {
+    const css = generateCss(
+      makeConfig({
+        target: 'text',
+        keyframes: [
+          {
+            id: 'a',
+            at: 0,
+            color: 'linear-gradient(90deg, #ff8a00 0%, #e52e71 100%)',
+          },
+          { id: 'b', at: 100, color: '#7c5cff' },
+        ],
+      })
+    );
+    expect(css).toContain(
+      'background: linear-gradient(90deg, #ff8a00 0%, #e52e71 100%);'
+    );
+    expect(css).toContain('background-clip: text;');
+    expect(css).toContain('-webkit-background-clip: text;');
+    expect(css).toContain('color: transparent;');
+    expect(css).toContain('color: #7c5cff;');
+  });
+
+  it('falls back to the first colour stop on non-text targets', () => {
+    const css = generateCss(
+      makeConfig({
+        target: 'shape',
+        keyframes: [
+          {
+            id: 'a',
+            at: 0,
+            color: 'linear-gradient(90deg, #ff8a00 0%, #e52e71 100%)',
+          },
+          { id: 'b', at: 100, color: '#7c5cff' },
+        ],
+      })
+    );
+    expect(css).not.toContain('background-clip: text;');
+    expect(css).toContain('color: #ff8a00;');
+    expect(css).toContain('color: #7c5cff;');
+  });
+});
+
 describe('generateCss — bug regression snapshot', () => {
   it('matches the canonical snapshot for the headline example', () => {
     const css = generateCss(
@@ -190,16 +351,16 @@ describe('generateCss — bug regression snapshot', () => {
 
       @keyframes play {
         0% {
-          transform: translate3d(0px, 0px, 0) scale(1, 1);
+          transform: translate3d(0px, 0px, 0px) scale(1, 1);
           opacity: 0;
           filter: blur(8px);
         }
         50% {
-          transform: translate3d(40px, 0px, 0) scale(1.1, 1.1);
+          transform: translate3d(40px, 0px, 0px) scale(1.1, 1.1);
           opacity: 1;
         }
         100% {
-          transform: translate3d(80px, 0px, 0) scale(1, 1);
+          transform: translate3d(80px, 0px, 0px) scale(1, 1);
           opacity: 1;
         }
       }"

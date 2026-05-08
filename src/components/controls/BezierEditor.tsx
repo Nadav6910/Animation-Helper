@@ -124,5 +124,6 @@ export function BezierEditor({ value, onChange }: Props) {
 
 export function easingDescription(e: Easing): string {
   if (e.kind === 'preset') return e.value;
+  if (e.kind === 'steps') return `steps(${e.n}, jump-${e.jump})`;
   return `cubic-bezier(${e.v.map((n) => Number(n.toFixed(2))).join(', ')})`;
 }

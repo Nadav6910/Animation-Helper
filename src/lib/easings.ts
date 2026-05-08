@@ -30,6 +30,10 @@ export const EASING_PRESETS: { name: string; value: Easing }[] = [
 
 export function easingToCss(e: Easing): string {
   if (e.kind === 'preset') return e.value;
+  if (e.kind === 'steps') {
+    const n = Math.max(1, Math.round(e.n));
+    return `steps(${n}, jump-${e.jump})`;
+  }
   const [a, b, c, d] = e.v;
   return `cubic-bezier(${a}, ${b}, ${c}, ${d})`;
 }

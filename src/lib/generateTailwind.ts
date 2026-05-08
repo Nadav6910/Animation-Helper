@@ -1,21 +1,45 @@
 import type { AnimationConfig, Keyframe } from '@/types/animation';
 import { easingToCss } from './easings';
 import { transformToCss, filterToCss } from './generateCss';
+import {
+  GRADIENT_RE,
+  durationStr,
+  firstColorStop,
+  num,
+} from './css-helpers';
 
-const num = (n: number) =>
-  Number.isInteger(n) ? String(n) : Number(n.toFixed(3)).toString();
-
-function decls(k: Keyframe): Record<string, string> {
+function decls(k: Keyframe, target: AnimationConfig['target']): Record<string, string> {
   const out: Record<string, string> = {};
   const t = transformToCss(k.transform);
   if (t) out.transform = t;
   if (typeof k.opacity === 'number') out.opacity = num(k.opacity);
-  if (k.color) out.color = k.color;
-  if (k.bg) out.backgroundColor = k.bg;
+  if (k.color) {
+    if (GRADIENT_RE.test(k.color) && target === 'text') {
+      // Gradient text via background-clip: text trick.
+      out.background = k.color;
+      out.backgroundClip = 'text';
+      out.WebkitBackgroundClip = 'text';
+      out.color = 'transparent';
+    } else if (GRADIENT_RE.test(k.color)) {
+      out.color = firstColorStop(k.color);
+    } else {
+      out.color = k.color;
+    }
+  }
+  if (k.bg) {
+    if (GRADIENT_RE.test(k.bg)) out.background = k.bg;
+    else out.backgroundColor = k.bg;
+  }
   const f = filterToCss(k);
   if (f) out.filter = f;
   if (typeof k.strokeDashoffset === 'number') {
     out.strokeDashoffset = num(k.strokeDashoffset);
+  }
+  if (typeof k.offsetDistance === 'number') {
+    out.offsetDistance = `${num(k.offsetDistance)}%`;
+  }
+  if (k.easing) {
+    out.animationTimingFunction = easingToCss(k.easing);
   }
   return out;
 }
@@ -33,10 +57,6 @@ function stringifyDecls(d: Record<string, string>, indent: string): string {
   return `{\n${lines.join('\n')}\n${indent}}`;
 }
 
-function durationStr(ms: number): string {
-  return ms >= 1000 ? `${num(ms / 1000)}s` : `${num(ms)}ms`;
-}
-
 export type GenerateTailwindOptions = {
   name?: string;
   className?: string;
@@ -52,7 +72,7 @@ export function generateTailwind(
 
   const keyframeBody = sorted
     .map((k) => {
-      const d = decls(k);
+      const d = decls(k, c.target);
       if (Object.keys(d).length === 0) return null;
       return `      '${num(k.at)}%': ${stringifyDecls(d, '      ')},`;
     })
@@ -67,16 +87,33 @@ export function generateTailwind(
   const fill = c.fill !== 'none' ? ` ${c.fill}` : '';
   const animValue = `${name} ${dur} ${easing} ${delay} ${iter}${dir}${fill}`.trim();
 
-  const svgHint =
-    c.target === 'svg'
-      ? `
+  let usageHint: string;
+  if (c.target === 'svg') {
+    usageHint = `
 // SVG path-draw — apply alongside the animation class:
 // <svg viewBox="..."><path d="..." pathLength="100" className="${className} [stroke-dasharray:100]" stroke="currentColor" fill="none" /></svg>
-`
-      : `
+`;
+  } else if (c.stagger && c.target === 'text') {
+    usageHint = `
+// Per-letter stagger — Tailwind config can't express the descendant
+// selector + CSS variable, so add this rule to your global stylesheet:
+//   .${className} > span {
+//     animation: ${animValue};
+//     animation-delay: calc(var(--i) * ${num(c.stagger.step)}ms);
+//     display: inline-block;
+//   }
+// Then split the text:
+//   <p className="${className}">{[...'Animate'].map((ch, i) => (
+//     <span key={i} style={{ '--i': i }}>{ch}</span>
+//   ))}</p>
+`;
+  } else {
+    usageHint = `
 // Apply with:
 // <div className="${className}">...</div>
 `;
+  }
+  const svgHint = usageHint;
 
   return `// tailwind.config.{js,ts}
 module.exports = {

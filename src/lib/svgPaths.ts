@@ -42,6 +42,48 @@ export const SVG_PATHS: SvgPathDef[] = [
     viewBox: '0 0 24 24',
     d: 'M12 2 L13.5 10.5 L22 12 L13.5 13.5 L12 22 L10.5 13.5 L2 12 L10.5 10.5 Z',
   },
+  {
+    id: 'lightning',
+    label: 'Lightning',
+    viewBox: '0 0 24 24',
+    d: 'M13 2 L4 14 H11 L9 22 L20 10 H13 Z',
+  },
+  {
+    id: 'cloud',
+    label: 'Cloud',
+    viewBox: '0 0 32 24',
+    d: 'M9 19h17a5 5 0 1 0 -1.4 -9.8A8 8 0 1 0 9 19Z',
+  },
+  {
+    id: 'plus',
+    label: 'Plus',
+    viewBox: '0 0 24 24',
+    d: 'M12 5 V 19 M5 12 H 19',
+  },
+  {
+    id: 'circle',
+    label: 'Circle',
+    viewBox: '0 0 24 24',
+    d: 'M12 3 a 9 9 0 1 0 0 18 a 9 9 0 1 0 0 -18',
+  },
+  {
+    id: 'underline',
+    label: 'Underline',
+    viewBox: '0 0 48 12',
+    d: 'M2 8 Q 12 2, 24 6 T 46 8',
+  },
+  {
+    id: 'crown',
+    label: 'Crown',
+    viewBox: '0 0 24 24',
+    d: 'M3 8 L7 14 L12 6 L17 14 L21 8 L19 19 H5 Z',
+  },
+  {
+    id: 'play',
+    label: 'Play',
+    viewBox: '0 0 24 24',
+    d: 'M7 4 L20 12 L7 20 Z',
+  },
 ];
 
 export const SVG_PATH_BY_ID: Record<string, SvgPathDef> = Object.fromEntries(

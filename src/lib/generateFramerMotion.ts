@@ -1,12 +1,12 @@
-import type { AnimationConfig, Keyframe, Transform } from '@/types/animation';
+import type { AnimationConfig, Easing, Keyframe, Transform } from '@/types/animation';
 import { easingToCss } from './easings';
-
-const num = (n: number) =>
-  Number.isInteger(n) ? String(n) : Number(n.toFixed(3)).toString();
+import { sanitisePathD } from './svgPathSafety';
+import { firstColorStop, GRADIENT_RE, num } from './css-helpers';
 
 type ChannelKey =
   | 'x'
   | 'y'
+  | 'z'
   | 'rotateX'
   | 'rotateY'
   | 'skewX'
@@ -16,7 +16,9 @@ type ChannelKey =
   | 'opacity'
   | 'color'
   | 'backgroundColor'
-  | 'filter';
+  | 'background'
+  | 'filter'
+  | 'offsetDistance';
 
 function readChannel(k: Keyframe, ch: ChannelKey): string | number | undefined {
   const t: Transform | undefined = k.transform;
@@ -25,6 +27,8 @@ function readChannel(k: Keyframe, ch: ChannelKey): string | number | undefined {
       return t?.translate?.[0];
     case 'y':
       return t?.translate?.[1];
+    case 'z':
+      return t?.translateZ;
     case 'rotateX':
       return t?.rotate?.[0];
     case 'rotateY':
@@ -39,10 +43,22 @@ function readChannel(k: Keyframe, ch: ChannelKey): string | number | undefined {
       return t?.scale?.[1];
     case 'opacity':
       return k.opacity;
-    case 'color':
+    case 'color': {
+      if (!k.color) return undefined;
+      // Gradient text-fill needs background-clip + transparent color, which
+      // is a static style rather than an animatable channel — fall back to
+      // the gradient's first stop so Framer Motion's color interpolation
+      // still produces a meaningful tween.
+      if (GRADIENT_RE.test(k.color)) {
+        const stop = firstColorStop(k.color);
+        return stop === 'inherit' ? undefined : stop;
+      }
       return k.color;
+    }
     case 'backgroundColor':
-      return k.bg;
+      return k.bg && !GRADIENT_RE.test(k.bg) ? k.bg : undefined;
+    case 'background':
+      return k.bg && GRADIENT_RE.test(k.bg) ? k.bg : undefined;
     case 'filter': {
       const parts: string[] = [];
       if (typeof k.blur === 'number' && k.blur > 0)
@@ -52,11 +68,26 @@ function readChannel(k: Keyframe, ch: ChannelKey): string | number | undefined {
       if (k.dropShadow) parts.push(`drop-shadow(${k.dropShadow})`);
       return parts.length ? parts.join(' ') : undefined;
     }
+    case 'offsetDistance':
+      return typeof k.offsetDistance === 'number'
+        ? `${num(k.offsetDistance)}%`
+        : undefined;
   }
 }
 
 function fmtValue(v: string | number): string {
   return typeof v === 'string' ? `'${v.replace(/'/g, "\\'")}'` : num(v);
+}
+
+function easeToken(e: Easing): string {
+  if (e.kind === 'cubic') {
+    const [a, b, c, d] = e.v;
+    return `[${num(a)}, ${num(b)}, ${num(c)}, ${num(d)}]`;
+  }
+  if (e.kind === 'steps') {
+    return `'${easingToCss(e)}'`;
+  }
+  return `'${e.value}'`;
 }
 
 export type GenerateFramerMotionOptions = {
@@ -73,6 +104,7 @@ export function generateFramerMotion(
   const channels: ChannelKey[] = [
     'x',
     'y',
+    'z',
     'rotateX',
     'rotateY',
     'skewX',
@@ -82,8 +114,19 @@ export function generateFramerMotion(
     'opacity',
     'color',
     'backgroundColor',
+    'background',
     'filter',
+    'offsetDistance',
   ];
+
+  // Resting value for each channel — used to back-fill when a keyframe
+  // doesn't define the channel and we have no prior frame to inherit from.
+  // scaleX/scaleY rest at 1, opacity rests at 1, every other channel
+  // rests at 0 (no-op).
+  const restingValue = (ch: ChannelKey): string | number => {
+    if (ch === 'scaleX' || ch === 'scaleY' || ch === 'opacity') return 1;
+    return 0;
+  };
 
   const animate: Record<string, (string | number)[]> = {};
   for (const ch of channels) {
@@ -95,7 +138,7 @@ export function generateFramerMotion(
         any = true;
         arr.push(v);
       } else {
-        arr.push(arr.length ? arr[arr.length - 1] : 0);
+        arr.push(arr.length ? arr[arr.length - 1] : restingValue(ch));
       }
     }
     if (any) animate[ch] = arr;
@@ -103,8 +146,30 @@ export function generateFramerMotion(
 
   const times = sorted.map((k) => +(k.at / 100).toFixed(4));
   const durSec = c.duration / 1000;
-  const easing = easingToCss(c.easing);
-  const easingArr = `Array(${Math.max(times.length - 1, 1)}).fill('${easing}')`;
+
+  const segCount = Math.max(times.length - 1, 1);
+  const segmentEases: string[] = [];
+  for (let i = 0; i < segCount; i++) {
+    const seg = sorted[i + 1]?.easing ?? sorted[i]?.easing ?? c.easing;
+    segmentEases.push(easeToken(seg));
+  }
+  const easingArr = `[${segmentEases.join(', ')}]`;
+
+  // Framer Motion has no direct equivalent of CSS `direction: reverse` /
+  // `alternate-reverse`. Both play the animation back-to-front. Translate
+  // by reversing each value array — `times` stay the same — so the
+  // tween starts at the original end and ends at the original start.
+  // alternate becomes Motion's `repeatType: 'reverse'`; alternate-reverse
+  // is the reversed-array form of that.
+  if (c.direction === 'reverse' || c.direction === 'alternate-reverse') {
+    for (const k of Object.keys(animate)) {
+      animate[k] = [...animate[k]].reverse();
+    }
+  }
+  const repeatType =
+    c.direction === 'alternate' || c.direction === 'alternate-reverse'
+      ? 'reverse'
+      : 'loop';
 
   const animateLines = Object.entries(animate).map(
     ([k, arr]) =>
@@ -115,19 +180,22 @@ export function generateFramerMotion(
     `        duration: ${num(durSec)},`,
     `        delay: ${num(c.delay / 1000)},`,
     `        repeat: ${c.iterations === 'infinite' ? 'Infinity' : `${num(typeof c.iterations === 'number' ? c.iterations - 1 : 0)}`},`,
-    `        repeatType: '${
-      c.direction === 'alternate' || c.direction === 'alternate-reverse'
-        ? 'reverse'
-        : 'loop'
-    }',`,
+    `        repeatType: '${repeatType}',`,
     `        ease: ${easingArr},`,
     `        times: [${times.join(', ')}],`,
   ];
 
-  const note =
-    sorted.length > 2
-      ? `// Note: per-segment easings are approximated with a uniform ease.\n`
-      : '';
+  const offsetStyle = c.offsetPath
+    ? `      style={{ offsetPath: "path('${sanitisePathD(c.offsetPath.d)}')"${
+        c.offsetPath.rotate !== undefined
+          ? `, offsetRotate: '${
+              typeof c.offsetPath.rotate === 'number'
+                ? `${num(c.offsetPath.rotate)}deg`
+                : c.offsetPath.rotate
+            }'`
+          : ''
+      } }}\n`
+    : '';
 
   if (c.target === 'svg') {
     const hasDashoffset = sorted.some(
@@ -139,7 +207,7 @@ export function generateFramerMotion(
           .join(', ')}],`
       : '';
     const animateBody = [...animateLines, dashOffsetLine].filter(Boolean);
-    return `${note}import { motion } from 'framer-motion';
+    return `import { motion } from 'framer-motion';
 
 // pathLength={100} + strokeDasharray={100} normalise the path so
 // strokeDashoffset 100 → 0 maps to "invisible → fully drawn".
@@ -163,12 +231,46 @@ ${transitionLines.join('\n')}
 `;
   }
 
-  return `${note}import { motion } from 'framer-motion';
+  if (c.target === 'text' && c.stagger) {
+    // Per-letter stagger: split the text into motion.spans and offset each
+    // child's transition delay by `i * step`. The shared transition is
+    // declared once and we override `delay` per child.
+    const safeText = (c.text ?? 'Animate').replace(/`/g, '\\`');
+    const stepMs = num(c.stagger.step);
+    return `import { motion } from 'framer-motion';
+
+const TEXT = ${JSON.stringify(safeText)};
+
+export function ${name}() {
+  return (
+    <p style={{ display: 'inline-flex' }}>
+      {[...TEXT].map((ch, i) => (
+        <motion.span
+          key={i}
+          style={{ display: 'inline-block', whiteSpace: 'pre' }}
+          animate={{
+${animateLines.join('\n')}
+          }}
+          transition={{
+${transitionLines.join('\n')}
+            delay: ${num(c.delay / 1000)} + (i * ${stepMs}) / 1000,
+          }}
+        >
+          {ch}
+        </motion.span>
+      ))}
+    </p>
+  );
+}
+`;
+  }
+
+  return `import { motion } from 'framer-motion';
 
 export function ${name}() {
   return (
     <motion.div
-      animate={{
+${offsetStyle}      animate={{
 ${animateLines.join('\n')}
       }}
       transition={{

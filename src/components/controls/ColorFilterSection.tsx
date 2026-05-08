@@ -1,5 +1,6 @@
 import { useAnimationStore } from '@/store/animationStore';
 import { Slider } from '@/components/ui/Slider';
+import { GradientField } from './GradientField';
 
 export function ColorFilterSection() {
   const selectedId = useAnimationStore((s) => s.selectedKeyframeId);
@@ -45,61 +46,17 @@ export function ColorFilterSection() {
         max={360}
         step={1}
       />
-      <div className="grid grid-cols-2 gap-3">
-        <ColorField
+      <div className="flex flex-col gap-3">
+        <GradientField
           label="Fill / text color"
           value={color}
           onChange={(v) => update(keyframe.id, { color: v || undefined })}
         />
-        <ColorField
+        <GradientField
           label="Background"
           value={bg}
           onChange={(v) => update(keyframe.id, { bg: v || undefined })}
         />
-      </div>
-    </div>
-  );
-}
-
-function ColorField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] uppercase tracking-wider text-fg-subtle font-semibold">
-        {label}
-      </span>
-      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-bg-soft px-2 h-10 focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent/30">
-        <input
-          type="color"
-          value={value || '#7c5cff'}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-7 w-7 rounded-md border border-border/60 bg-transparent cursor-pointer"
-          aria-label={label}
-        />
-        <input
-          type="text"
-          value={value}
-          placeholder="—"
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full min-w-0 bg-transparent text-xs font-mono outline-none"
-        />
-        {value && (
-          <button
-            type="button"
-            onClick={() => onChange('')}
-            className="text-fg-subtle hover:text-fg text-xs"
-            aria-label={`Clear ${label}`}
-          >
-            ×
-          </button>
-        )}
       </div>
     </div>
   );
