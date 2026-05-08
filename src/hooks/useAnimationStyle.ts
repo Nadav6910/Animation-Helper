@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import type { AnimationConfig } from '@/types/animation';
 import { generateCss } from '@/lib/generateCss';
+import { useUiStore } from '@/store/uiStore';
 
 /**
  * Generates a scoped class + injects the CSS produced by `generateCss` for the
@@ -13,10 +14,18 @@ export function useAnimationStyle(config: AnimationConfig) {
   const className = `ah-${safeId}`;
   const animationName = `ah-anim-${safeId}`;
   const [tick, setTick] = useState(0);
+  const slowMo = useUiStore((s) => s.slowMo);
 
+  // Slow-mo affects only the preview (multiplies duration), never the
+  // generated code that the user copies.
   const localConfig = useMemo<AnimationConfig>(
-    () => ({ ...config, selector: `.${className}` }),
-    [config, className]
+    () => ({
+      ...config,
+      selector: `.${className}`,
+      duration: Math.round(config.duration / Math.max(slowMo, 0.01)),
+      delay: Math.round(config.delay / Math.max(slowMo, 0.01)),
+    }),
+    [config, className, slowMo]
   );
 
   const css = useMemo(
