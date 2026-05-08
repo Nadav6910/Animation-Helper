@@ -77,6 +77,18 @@
       animation: none !important;
     }
   }
+
+  /* iOS Safari zooms in on any focused form control whose font-size is
+     below 16px. Force 16px on small viewports so focusing a number /
+     text / color input never triggers the auto-zoom. Desktop typography
+     stays untouched at the lg breakpoint. */
+  @media (max-width: 1023px) {
+    input,
+    textarea,
+    select {
+      font-size: 16px;
+    }
+  }
 }
 
 @layer components {
