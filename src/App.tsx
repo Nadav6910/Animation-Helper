@@ -6,6 +6,7 @@ import { useUrlState } from '@/hooks/useUrlState';
 import { useAnimationStore } from '@/store/animationStore';
 import { CommandPalette } from '@/components/shortcuts/CommandPalette';
 import { ShortcutsOverlay } from '@/components/shortcuts/ShortcutsOverlay';
+import { OnboardingHint } from '@/components/onboarding/OnboardingHint';
 
 export function App() {
   useTheme();
@@ -49,6 +50,7 @@ export function App() {
       <Shell />
       <CommandPalette />
       <ShortcutsOverlay />
+      <OnboardingHint />
     </>
   );
 }

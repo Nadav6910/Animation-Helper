@@ -12,6 +12,20 @@ export default defineConfig({
       '@': path.resolve(__dirname, 'src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-motion': ['framer-motion'],
+          'vendor-state': ['zustand'],
+          'vendor-icons': ['lucide-react'],
+          'vendor-share': ['lz-string'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 700,
+  },
   server: { port: 5173, host: true },
   test: {
     globals: true,

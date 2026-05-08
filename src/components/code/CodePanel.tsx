@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, ExternalLink } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
 import { generateCss } from '@/lib/generateCss';
@@ -11,11 +11,14 @@ import { generateVue } from '@/lib/generateVue';
 import { generateSvelte } from '@/lib/generateSvelte';
 import { generateReactComponent } from '@/lib/generateReactComponent';
 import { generateHtml } from '@/lib/generateHtml';
-import { CodeBlock } from './CodeBlock';
 import { CopyButton } from './CopyButton';
 import { Toast } from '@/components/ui/Toast';
 import { useTheme } from '@/hooks/useTheme';
 import type { CodeLang } from '@/lib/highlight';
+
+const CodeBlock = lazy(() =>
+  import('./CodeBlock').then((m) => ({ default: m.CodeBlock }))
+);
 
 type Format =
   | 'css'
@@ -179,7 +182,15 @@ export function CodePanel() {
         </div>
       </div>
       <div className="flex-1 overflow-auto scrollbar-thin">
-        <CodeBlock code={code} lang={meta.lang} theme={theme} />
+        <Suspense
+          fallback={
+            <pre className="text-xs font-mono text-fg-muted whitespace-pre-wrap p-4">
+              {code}
+            </pre>
+          }
+        >
+          <CodeBlock code={code} lang={meta.lang} theme={theme} />
+        </Suspense>
       </div>
       <Toast visible={!!toast} message={toast ?? ''} />
     </div>
