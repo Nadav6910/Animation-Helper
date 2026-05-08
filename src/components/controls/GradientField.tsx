@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
-const GRADIENT_RE =
+const STRICT_2_STOP_RE =
   /^linear-gradient\(\s*([-\d.]+)deg\s*,\s*(#[0-9a-fA-F]{3,8})\s+([-\d.]+)%\s*,\s*(#[0-9a-fA-F]{3,8})\s+([-\d.]+)%\s*\)$/;
+const ANY_GRADIENT_RE = /gradient\s*\(/i;
 
 const PRESETS = [
   { name: 'Sunset', value: 'linear-gradient(45deg, #ff7e5f 0%, #feb47b 100%)' },
@@ -25,8 +26,8 @@ type Stops = {
 
 const DEFAULT: Stops = { angle: 90, c1: '#7c5cff', s1: 0, c2: '#06b6d4', s2: 100 };
 
-const parse = (raw: string): Stops | null => {
-  const m = raw.match(GRADIENT_RE);
+const parseStrict = (raw: string): Stops | null => {
+  const m = raw.match(STRICT_2_STOP_RE);
   if (!m) return null;
   return {
     angle: Number(m[1]),
@@ -36,6 +37,8 @@ const parse = (raw: string): Stops | null => {
     s2: Number(m[5]),
   };
 };
+
+const clampPct = (n: number) => Math.max(0, Math.min(100, n));
 
 const toCss = (s: Stops): string =>
   `linear-gradient(${s.angle}deg, ${s.c1} ${s.s1}%, ${s.c2} ${s.s2}%)`;
@@ -49,18 +52,29 @@ export function GradientField({
   value: string;
   onChange: (v: string) => void;
 }) {
-  const isGradient = /gradient\s*\(/i.test(value);
+  const isGradient = ANY_GRADIENT_RE.test(value);
+  // The visual stop editor only knows how to round-trip the strict
+  // 2-stop hex shape it emits. Anything else (3+ stops, named colours,
+  // rgb()/hsl() stops, radial-gradient, etc.) parses as null — in that
+  // case we keep the gradient but disable the stop editor so it can't
+  // silently overwrite the user's gradient on the next slider drag.
+  const parsed = parseStrict(value);
+  const editable = isGradient && parsed !== null;
   const [open, setOpen] = useState(isGradient);
-  const [stops, setStops] = useState<Stops>(parse(value) ?? DEFAULT);
+  const [stops, setStops] = useState<Stops>(parsed ?? DEFAULT);
 
   useEffect(() => {
-    const next = parse(value);
-    if (next) setStops(next);
-  }, [value]);
+    if (parsed) setStops(parsed);
+  }, [parsed]);
 
   const apply = (s: Stops) => {
-    setStops(s);
-    onChange(toCss(s));
+    const safe: Stops = {
+      ...s,
+      s1: clampPct(s.s1),
+      s2: clampPct(s.s2),
+    };
+    setStops(safe);
+    onChange(toCss(safe));
   };
 
   return (
@@ -164,37 +178,65 @@ export function GradientField({
                   </button>
                 ))}
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <StopEditor
-                  label="Stop 1"
-                  color={stops.c1}
-                  pos={stops.s1}
-                  onColor={(c) => apply({ ...stops, c1: c })}
-                  onPos={(p) => apply({ ...stops, s1: p })}
-                />
-                <StopEditor
-                  label="Stop 2"
-                  color={stops.c2}
-                  pos={stops.s2}
-                  onColor={(c) => apply({ ...stops, c2: c })}
-                  onPos={(p) => apply({ ...stops, s2: p })}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-fg-subtle">Angle</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={360}
-                  step={5}
-                  value={stops.angle}
-                  onChange={(e) => apply({ ...stops, angle: Number(e.target.value) })}
-                  className="flex-1 accent-accent"
-                />
-                <span className="text-[10px] tabular-nums text-fg-muted w-8 text-right">
-                  {stops.angle}°
-                </span>
-              </div>
+
+              {!editable && (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[10px] text-amber-300">
+                  This gradient has more stops or formats than the visual
+                  editor can round-trip. Pick a preset above to replace it,
+                  or edit the raw value below.
+                </div>
+              )}
+
+              <input
+                type="text"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full rounded-md border border-border/60 bg-bg-panel/60 px-2 py-1.5 font-mono text-[10px] text-fg-muted outline-none focus:border-accent/60"
+                placeholder="linear-gradient(...)"
+                spellCheck={false}
+              />
+
+              <fieldset
+                disabled={!editable}
+                className={cn(
+                  'flex flex-col gap-2 transition-opacity',
+                  editable ? 'opacity-100' : 'opacity-40 pointer-events-none'
+                )}
+              >
+                <div className="grid grid-cols-2 gap-2">
+                  <StopEditor
+                    label="Stop 1"
+                    color={stops.c1}
+                    pos={stops.s1}
+                    onColor={(c) => apply({ ...stops, c1: c })}
+                    onPos={(p) => apply({ ...stops, s1: p })}
+                  />
+                  <StopEditor
+                    label="Stop 2"
+                    color={stops.c2}
+                    pos={stops.s2}
+                    onColor={(c) => apply({ ...stops, c2: c })}
+                    onPos={(p) => apply({ ...stops, s2: p })}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-fg-subtle">Angle</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={360}
+                    step={5}
+                    value={stops.angle}
+                    onChange={(e) =>
+                      apply({ ...stops, angle: Number(e.target.value) })
+                    }
+                    className="flex-1 accent-accent"
+                  />
+                  <span className="text-[10px] tabular-nums text-fg-muted w-8 text-right">
+                    {stops.angle}°
+                  </span>
+                </div>
+              </fieldset>
             </div>
           </motion.div>
         )}

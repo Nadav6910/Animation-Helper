@@ -86,4 +86,14 @@ describe('generateTailwind', () => {
     expect(out).not.toContain("backgroundClip: 'text'");
     expect(out).toContain("color: '#ff0080'");
   });
+
+  it('emits a stagger usage hint for text + stagger', () => {
+    const out = generateTailwind({
+      ...cfg,
+      target: 'text',
+      stagger: { step: 80 },
+    });
+    expect(out).toContain('Per-letter stagger');
+    expect(out).toContain('var(--i) * 80ms');
+  });
 });

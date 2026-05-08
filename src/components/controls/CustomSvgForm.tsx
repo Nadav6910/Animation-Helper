@@ -3,8 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, X } from 'lucide-react';
 import { useCustomPathsStore } from '@/store/customPathsStore';
 import { useAnimationStore } from '@/store/animationStore';
-
-const PATH_REGEX = /^[\sMmLlHhVvCcSsQqTtAaZz0-9.,\-+e]+$/;
+import { isSafePathD } from '@/lib/svgPathSafety';
 
 export function CustomSvgForm({ open, onClose }: { open: boolean; onClose: () => void }) {
   const add = useCustomPathsStore((s) => s.add);
@@ -21,7 +20,7 @@ export function CustomSvgForm({ open, onClose }: { open: boolean; onClose: () =>
       setError('Path data is required');
       return;
     }
-    if (!PATH_REGEX.test(trimmed)) {
+    if (!isSafePathD(trimmed)) {
       setError('Path contains characters that are not valid SVG path commands');
       return;
     }

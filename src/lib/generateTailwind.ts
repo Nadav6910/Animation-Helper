@@ -92,16 +92,33 @@ export function generateTailwind(
   const fill = c.fill !== 'none' ? ` ${c.fill}` : '';
   const animValue = `${name} ${dur} ${easing} ${delay} ${iter}${dir}${fill}`.trim();
 
-  const svgHint =
-    c.target === 'svg'
-      ? `
+  let usageHint: string;
+  if (c.target === 'svg') {
+    usageHint = `
 // SVG path-draw — apply alongside the animation class:
 // <svg viewBox="..."><path d="..." pathLength="100" className="${className} [stroke-dasharray:100]" stroke="currentColor" fill="none" /></svg>
-`
-      : `
+`;
+  } else if (c.stagger && c.target === 'text') {
+    usageHint = `
+// Per-letter stagger — Tailwind config can't express the descendant
+// selector + CSS variable, so add this rule to your global stylesheet:
+//   .${className} > span {
+//     animation: ${animValue};
+//     animation-delay: calc(var(--i) * ${num(c.stagger.step)}ms);
+//     display: inline-block;
+//   }
+// Then split the text:
+//   <p className="${className}">{[...'Animate'].map((ch, i) => (
+//     <span key={i} style={{ '--i': i }}>{ch}</span>
+//   ))}</p>
+`;
+  } else {
+    usageHint = `
 // Apply with:
 // <div className="${className}">...</div>
 `;
+  }
+  const svgHint = usageHint;
 
   return `// tailwind.config.{js,ts}
 module.exports = {

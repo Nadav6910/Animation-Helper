@@ -179,6 +179,34 @@ describe('generateCss — 3D & perspective', () => {
     expect(out).toBe('rotate3d(1, 1, 0, 45deg)');
   });
 
+  it('prefers rotate3d over rotateX/Y when both are set', () => {
+    const out = transformToCss({
+      rotate: [30, 45],
+      rotate3d: { x: 1, y: 0, z: 0, deg: 90 },
+    });
+    expect(out).toContain('rotate3d(1, 0, 0, 90deg)');
+    expect(out).not.toContain('rotateX');
+    expect(out).not.toContain('rotateY');
+  });
+
+  it('skips a rotate3d with zero angle (no-op)', () => {
+    const out = transformToCss({
+      rotate: [10, 0],
+      rotate3d: { x: 1, y: 1, z: 0, deg: 0 },
+    });
+    expect(out).toContain('rotateX(10deg)');
+    expect(out).not.toContain('rotate3d');
+  });
+
+  it('skips a rotate3d with degenerate (all-zero) axis', () => {
+    const out = transformToCss({
+      rotate: [10, 0],
+      rotate3d: { x: 0, y: 0, z: 0, deg: 45 },
+    });
+    expect(out).toContain('rotateX(10deg)');
+    expect(out).not.toContain('rotate3d');
+  });
+
   it('emits Z-only translate when only translateZ is set', () => {
     const out = transformToCss({ translateZ: 50 });
     expect(out).toBe('translate3d(0px, 0px, 50px)');

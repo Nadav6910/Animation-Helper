@@ -1,5 +1,6 @@
 import type { AnimationConfig, Keyframe, Transform } from '@/types/animation';
 import { easingToCss } from './easings';
+import { sanitisePathD } from './svgPathSafety';
 
 const num = (n: number) => {
   if (Number.isInteger(n)) return String(n);
@@ -23,14 +24,21 @@ export function transformToCss(t: Transform | undefined): string | null {
   } else if (typeof t.translateZ === 'number' && t.translateZ !== 0) {
     parts.push(`translate3d(0px, 0px, ${px(t.translateZ)})`);
   }
-  if (t.rotate3d) {
-    const { x, y, z, deg: d } = t.rotate3d;
-    parts.push(`rotate3d(${num(x)}, ${num(y)}, ${num(z)}, ${deg(d)})`);
-  }
-  if (t.rotate) {
+  // CSS transforms are not commutative — emitting both rotate3d() AND
+  // rotateX/rotateY in the same `transform` produces order-dependent
+  // surprises. Prefer the more expressive form: if a rotate3d is set
+  // with a non-zero angle and a non-degenerate axis, use it alone and
+  // skip rotateX/Y. A rotate3d with all-zero axis is a CSS no-op so we
+  // skip it too.
+  const r3d = t.rotate3d;
+  const r3dActive =
+    !!r3d && r3d.deg !== 0 && (r3d.x !== 0 || r3d.y !== 0 || r3d.z !== 0);
+  if (r3dActive && r3d) {
+    parts.push(`rotate3d(${num(r3d.x)}, ${num(r3d.y)}, ${num(r3d.z)}, ${deg(r3d.deg)})`);
+  } else if (t.rotate) {
     if (t.rotate[0] !== 0) parts.push(`rotateX(${deg(t.rotate[0])})`);
     if (t.rotate[1] !== 0) parts.push(`rotateY(${deg(t.rotate[1])})`);
-    if (t.rotate[0] === 0 && t.rotate[1] === 0 && !t.rotate3d) {
+    if (t.rotate[0] === 0 && t.rotate[1] === 0) {
       parts.push('rotate(0deg)');
     }
   }
@@ -151,7 +159,9 @@ export function generateCss(
     lines.push(`${indent}stroke-dasharray: 100;`);
   }
   if (c.offsetPath) {
-    lines.push(`${indent}offset-path: path('${c.offsetPath.d}');`);
+    lines.push(
+      `${indent}offset-path: path('${sanitisePathD(c.offsetPath.d)}');`
+    );
     if (c.offsetPath.rotate !== undefined) {
       const r = c.offsetPath.rotate;
       const rotate = typeof r === 'number' ? `${num(r)}deg` : r;

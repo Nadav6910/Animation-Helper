@@ -1,5 +1,6 @@
 import type { AnimationConfig, Easing, Keyframe, Transform } from '@/types/animation';
 import { easingToCss } from './easings';
+import { sanitisePathD } from './svgPathSafety';
 
 const num = (n: number) =>
   Number.isInteger(n) ? String(n) : Number(n.toFixed(3)).toString();
@@ -123,6 +124,15 @@ export function generateFramerMotion(
     'offsetDistance',
   ];
 
+  // Resting value for each channel — used to back-fill when a keyframe
+  // doesn't define the channel and we have no prior frame to inherit from.
+  // scaleX/scaleY rest at 1, opacity rests at 1, every other channel
+  // rests at 0 (no-op).
+  const restingValue = (ch: ChannelKey): string | number => {
+    if (ch === 'scaleX' || ch === 'scaleY' || ch === 'opacity') return 1;
+    return 0;
+  };
+
   const animate: Record<string, (string | number)[]> = {};
   for (const ch of channels) {
     let any = false;
@@ -133,7 +143,7 @@ export function generateFramerMotion(
         any = true;
         arr.push(v);
       } else {
-        arr.push(arr.length ? arr[arr.length - 1] : 0);
+        arr.push(arr.length ? arr[arr.length - 1] : restingValue(ch));
       }
     }
     if (any) animate[ch] = arr;
@@ -150,6 +160,22 @@ export function generateFramerMotion(
   }
   const easingArr = `[${segmentEases.join(', ')}]`;
 
+  // Framer Motion has no direct equivalent of CSS `direction: reverse` /
+  // `alternate-reverse`. Both play the animation back-to-front. Translate
+  // by reversing each value array — `times` stay the same — so the
+  // tween starts at the original end and ends at the original start.
+  // alternate becomes Motion's `repeatType: 'reverse'`; alternate-reverse
+  // is the reversed-array form of that.
+  if (c.direction === 'reverse' || c.direction === 'alternate-reverse') {
+    for (const k of Object.keys(animate)) {
+      animate[k] = [...animate[k]].reverse();
+    }
+  }
+  const repeatType =
+    c.direction === 'alternate' || c.direction === 'alternate-reverse'
+      ? 'reverse'
+      : 'loop';
+
   const animateLines = Object.entries(animate).map(
     ([k, arr]) =>
       `        ${k}: [${arr.map(fmtValue).join(', ')}],`
@@ -159,17 +185,13 @@ export function generateFramerMotion(
     `        duration: ${num(durSec)},`,
     `        delay: ${num(c.delay / 1000)},`,
     `        repeat: ${c.iterations === 'infinite' ? 'Infinity' : `${num(typeof c.iterations === 'number' ? c.iterations - 1 : 0)}`},`,
-    `        repeatType: '${
-      c.direction === 'alternate' || c.direction === 'alternate-reverse'
-        ? 'reverse'
-        : 'loop'
-    }',`,
+    `        repeatType: '${repeatType}',`,
     `        ease: ${easingArr},`,
     `        times: [${times.join(', ')}],`,
   ];
 
   const offsetStyle = c.offsetPath
-    ? `      style={{ offsetPath: "path('${c.offsetPath.d.replace(/'/g, "\\'")}')"${
+    ? `      style={{ offsetPath: "path('${sanitisePathD(c.offsetPath.d)}')"${
         c.offsetPath.rotate !== undefined
           ? `, offsetRotate: '${
               typeof c.offsetPath.rotate === 'number'
@@ -209,6 +231,40 @@ ${transitionLines.join('\n')}
         }}
       />
     </motion.svg>
+  );
+}
+`;
+  }
+
+  if (c.target === 'text' && c.stagger) {
+    // Per-letter stagger: split the text into motion.spans and offset each
+    // child's transition delay by `i * step`. The shared transition is
+    // declared once and we override `delay` per child.
+    const safeText = (c.text ?? 'Animate').replace(/`/g, '\\`');
+    const stepMs = num(c.stagger.step);
+    return `import { motion } from 'framer-motion';
+
+const TEXT = ${JSON.stringify(safeText)};
+
+export function ${name}() {
+  return (
+    <p style={{ display: 'inline-flex' }}>
+      {[...TEXT].map((ch, i) => (
+        <motion.span
+          key={i}
+          style={{ display: 'inline-block', whiteSpace: 'pre' }}
+          animate={{
+${animateLines.join('\n')}
+          }}
+          transition={{
+${transitionLines.join('\n')}
+            delay: ${num(c.delay / 1000)} + (i * ${stepMs}) / 1000,
+          }}
+        >
+          {ch}
+        </motion.span>
+      ))}
+    </p>
   );
 }
 `;

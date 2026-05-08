@@ -1,5 +1,6 @@
 import { useAnimationStore } from '@/store/animationStore';
 import { NumberInput } from '@/components/ui/NumberInput';
+import { isSafePathD } from '@/lib/svgPathSafety';
 
 // Paths are intentionally small and centred near (0,0) because offset-path
 // is anchored to the element's own box origin — large numbers would push
@@ -94,8 +95,19 @@ export function OffsetPathSection() {
               rows={2}
               value={offsetPath.d}
               onChange={(e) => setOffsetPath({ ...offsetPath, d: e.target.value })}
-              className="w-full rounded-lg border border-border/70 bg-bg-soft p-2 font-mono text-[11px] focus-ring"
+              className={
+                'w-full rounded-lg border bg-bg-soft p-2 font-mono text-[11px] focus-ring ' +
+                (isSafePathD(offsetPath.d)
+                  ? 'border-border/70'
+                  : 'border-rose-500/60 focus:border-rose-500')
+              }
+              aria-invalid={!isSafePathD(offsetPath.d)}
             />
+            {!isSafePathD(offsetPath.d) && (
+              <div className="mt-1 text-[10px] text-rose-400">
+                Path contains characters that aren't valid SVG path commands.
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

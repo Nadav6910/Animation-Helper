@@ -6,6 +6,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useAccent } from '@/hooks/useAccent';
 import { useUrlState } from '@/hooks/useUrlState';
 import { useAnimationStore } from '@/store/animationStore';
+import { useUiStore } from '@/store/uiStore';
 import { CommandPalette } from '@/components/shortcuts/CommandPalette';
 import { ShortcutsOverlay } from '@/components/shortcuts/ShortcutsOverlay';
 import { OnboardingHint } from '@/components/onboarding/OnboardingHint';
@@ -26,16 +27,25 @@ export function App() {
         tag === 'INPUT' ||
         tag === 'TEXTAREA' ||
         (e.target as HTMLElement | null)?.isContentEditable;
+      const ui = useUiStore.getState();
+      const inOverlay = ui.paletteOpen || ui.shortcutsOpen;
 
-      // Cmd/Ctrl+Z / Cmd/Ctrl+Shift+Z work everywhere except inside text inputs
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !inField) {
+      // Cmd/Ctrl+Z / Cmd/Ctrl+Shift+Z work everywhere except inside text
+      // inputs and inside open overlays (the overlay's input has its own
+      // focus / undo expectations).
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.key.toLowerCase() === 'z' &&
+        !inField &&
+        !inOverlay
+      ) {
         e.preventDefault();
         if (e.shiftKey) redo();
         else undo();
         return;
       }
 
-      if (inField) return;
+      if (inField || inOverlay) return;
 
       if (e.code === 'Space') {
         e.preventDefault();

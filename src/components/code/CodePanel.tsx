@@ -76,8 +76,13 @@ function download(filename: string, contents: string, mime: string) {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  // a.click() schedules the download asynchronously in Firefox / Safari;
+  // revoking the URL on the same tick can abort it. Defer to the next
+  // task so the browser has a chance to start streaming.
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 function openCodePen(html: string, css: string) {
@@ -92,6 +97,9 @@ function openCodePen(html: string, css: string) {
   form.method = 'POST';
   form.action = 'https://codepen.io/pen/define';
   form.target = '_blank';
+  // Block the new tab from accessing window.opener (otherwise CodePen
+  // could navigate this tab via window.opener.location).
+  form.rel = 'noopener noreferrer';
   const input = document.createElement('input');
   input.type = 'hidden';
   input.name = 'data';

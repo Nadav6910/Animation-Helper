@@ -40,7 +40,33 @@ describe('generateWaapi', () => {
     const out = generateWaapi(cfg);
     expect(out).toContain('el.animate(');
     expect(out).toContain('iterations: Infinity');
-    expect(out).toContain("easing: 'ease'");
+    // We JSON.stringify string literals to keep selectors safe — quotes
+    // are " not ' in the output.
+    expect(out).toContain('easing: "ease"');
+  });
+
+  it('emits offsetPath as element style when set', () => {
+    const out = generateWaapi({
+      ...cfg,
+      offsetPath: { d: 'M0,0 L100,0', rotate: 'auto' },
+    });
+    expect(out).toContain('el.style.offsetPath = "path(\'M0,0 L100,0\')"');
+    expect(out).toContain('el.style.offsetRotate = "auto"');
+  });
+
+  it('emits stroke-dasharray normalisation for SVG targets', () => {
+    const out = generateWaapi({ ...cfg, target: 'svg' });
+    expect(out).toContain("el.setAttribute('stroke-dasharray', '100')");
+  });
+
+  it('emits per-letter stagger loop when text + stagger', () => {
+    const out = generateWaapi({
+      ...cfg,
+      target: 'text',
+      stagger: { step: 80 },
+    });
+    expect(out).toContain('querySelectorAll');
+    expect(out).toContain('i * 80');
   });
 
   it('serializes per-keyframe offsets', () => {
@@ -104,5 +130,35 @@ describe('generateHtml', () => {
   it('renders text targets with the chosen text', () => {
     const out = generateHtml({ ...cfg, target: 'text', text: 'Hello' });
     expect(out).toContain('Hello');
+  });
+
+  it('neutralises </style> inside CSS values to prevent breakout', () => {
+    // Imagine a tampered share URL that injected </style><script>alert(1)
+    // into the bg gradient string.
+    const out = generateHtml({
+      ...cfg,
+      keyframes: [
+        {
+          id: 'a',
+          at: 0,
+          bg: 'linear-gradient(45deg, red 0%, </style><script>alert(1)</script> 100%)',
+        },
+        { id: 'b', at: 100, bg: '#7c5cff' },
+      ],
+    });
+    // The output's CSS block sits between the opening <style> and the
+    // single legitimate </style>. Anything inside that block must not
+    // contain a literal </style.
+    const cssBlock = out.slice(out.indexOf('<style>'), out.lastIndexOf('</style>'));
+    expect(cssBlock).not.toMatch(/<\/style/i);
+    // The neutralised marker is present so we know the input reached the
+    // generator and was rewritten rather than dropped.
+    expect(cssBlock).toContain('<\\/style');
+  });
+
+  it('strips invalid characters from custom selector / className', () => {
+    const out = generateHtml(cfg, { className: '"><img src=x onerror=alert(1)' });
+    expect(out).toContain('class="animated"');
+    expect(out).not.toContain('onerror=');
   });
 });

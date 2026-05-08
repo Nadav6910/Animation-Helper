@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAnimationStore } from '@/store/animationStore';
+import { useUiStore } from '@/store/uiStore';
 import { TopBar } from './TopBar';
 import { DesktopGrid } from './DesktopGrid';
 import { MobileSheet } from './MobileSheet';
@@ -12,7 +13,9 @@ export function Shell({ ready }: Props) {
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const resetAll = useAnimationStore((s) => s.resetAll);
 
-  // Keyboard shortcut: R = reset (no other modifiers)
+  // Keyboard shortcut: R = reset (no other modifiers). Skip when a
+  // modal-style overlay is open so the user's intent goes to that
+  // overlay (the palette/shortcuts overlays handle their own keys).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName ?? '';
@@ -23,6 +26,8 @@ export function Shell({ ready }: Props) {
       ) {
         return;
       }
+      const ui = useUiStore.getState();
+      if (ui.paletteOpen || ui.shortcutsOpen) return;
       if (e.key === 'r' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         resetAll();
