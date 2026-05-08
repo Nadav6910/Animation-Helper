@@ -6,7 +6,13 @@ export type ShapeKind =
   | 'circle'
   | 'star'
   | 'arrow'
-  | 'message';
+  | 'message'
+  | 'hexagon'
+  | 'diamond'
+  | 'pill'
+  | 'heart'
+  | 'cross'
+  | 'pentagon';
 
 export type TargetKind = 'text' | 'shape' | 'svg';
 

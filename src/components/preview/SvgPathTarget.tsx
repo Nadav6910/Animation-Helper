@@ -25,7 +25,7 @@ export function SvgPathTarget({ pathId, className }: Props) {
       // the box would otherwise be clipped by the SVG element's default
       // overflow:hidden.
       style={{ overflow: 'visible' }}
-      className="h-44 w-44 sm:h-56 sm:w-56 text-accent drop-shadow-[0_0_24px_rgb(var(--accent)/0.4)]"
+      className="h-44 w-44 sm:h-56 sm:w-56 text-accent"
       fill="none"
       strokeWidth={2}
       stroke="currentColor"
@@ -38,7 +38,15 @@ export function SvgPathTarget({ pathId, className }: Props) {
         d={def.d}
         pathLength={100}
         className={className}
-        style={{ strokeDasharray: 100 }}
+        // The shadow lives on the path, not on the parent <svg>. Putting
+        // it on the SVG element computes the filter over the whole SVG
+        // box so a partially-drawn or translated path leaves a faint
+        // box-sized halo behind. Path-level drop-shadow only traces the
+        // visible stroke so the box bounds disappear.
+        style={{
+          strokeDasharray: 100,
+          filter: 'drop-shadow(0 0 14px rgb(var(--accent) / 0.5))',
+        }}
       />
     </svg>
   );

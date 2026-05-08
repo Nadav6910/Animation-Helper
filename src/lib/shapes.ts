@@ -68,6 +68,64 @@ export const SHAPES: ShapeDef[] = [
       d: 'M0 0 L100 0 L100 75 L75 75 L65 100 L60 75 L0 75 Z',
     },
   },
+  {
+    kind: 'hexagon',
+    label: 'Hexagon',
+    clipPath:
+      'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)',
+    preview: {
+      kind: 'path',
+      d: 'M25 0 L75 0 L100 50 L75 100 L25 100 L0 50 Z',
+    },
+  },
+  {
+    kind: 'diamond',
+    label: 'Diamond',
+    clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+    preview: {
+      kind: 'path',
+      d: 'M50 0 L100 50 L50 100 L0 50 Z',
+    },
+  },
+  {
+    kind: 'pill',
+    label: 'Pill',
+    clipPath: null,
+    borderRadius: '9999px',
+    preview: { kind: 'rect', rx: 50 },
+  },
+  {
+    kind: 'heart',
+    label: 'Heart',
+    // Two stacked semicircles + a triangle bottom — sized for the 0–100
+    // viewBox the picker uses, mapped to clip-path's percent-space.
+    clipPath:
+      'path("M50 90 C 18 70, 0 45, 14 24 C 26 6, 44 8, 50 26 C 56 8, 74 6, 86 24 C 100 45, 82 70, 50 90 Z")',
+    preview: {
+      kind: 'path',
+      d: 'M50 90 C 18 70, 0 45, 14 24 C 26 6, 44 8, 50 26 C 56 8, 74 6, 86 24 C 100 45, 82 70, 50 90 Z',
+    },
+  },
+  {
+    kind: 'cross',
+    label: 'Cross',
+    clipPath:
+      'polygon(35% 0%, 65% 0%, 65% 35%, 100% 35%, 100% 65%, 65% 65%, 65% 100%, 35% 100%, 35% 65%, 0% 65%, 0% 35%, 35% 35%)',
+    preview: {
+      kind: 'path',
+      d: 'M35 0 L65 0 L65 35 L100 35 L100 65 L65 65 L65 100 L35 100 L35 65 L0 65 L0 35 L35 35 Z',
+    },
+  },
+  {
+    kind: 'pentagon',
+    label: 'Pentagon',
+    clipPath:
+      'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)',
+    preview: {
+      kind: 'path',
+      d: 'M50 0 L100 38 L82 100 L18 100 L0 38 Z',
+    },
+  },
 ];
 
 export const SHAPE_BY_KIND: Record<ShapeKind, ShapeDef> = Object.fromEntries(
