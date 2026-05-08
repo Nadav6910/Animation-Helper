@@ -20,6 +20,11 @@ export function SvgPathTarget({ pathId, className }: Props) {
   return (
     <svg
       viewBox={def.viewBox}
+      // overflow: visible lets the path leave its viewBox under animation
+      // — translate / scale / offset-path that pushes the geometry past
+      // the box would otherwise be clipped by the SVG element's default
+      // overflow:hidden.
+      style={{ overflow: 'visible' }}
       className="h-44 w-44 sm:h-56 sm:w-56 text-accent drop-shadow-[0_0_24px_rgb(var(--accent)/0.4)]"
       fill="none"
       strokeWidth={2}

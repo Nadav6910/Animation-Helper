@@ -1,17 +1,10 @@
 import { create } from 'zustand';
 
-const SLOW_KEY = 'ah:slowmo';
-
-const loadSlow = (): number => {
-  if (typeof window === 'undefined') return 1;
-  try {
-    const raw = window.localStorage.getItem(SLOW_KEY);
-    const n = raw ? Number(raw) : 1;
-    return [1, 0.5, 0.25].includes(n) ? n : 1;
-  } catch {
-    return 1;
-  }
-};
+// Slow-mo is intentionally NOT persisted. It's a debugging/preview tool,
+// not a long-term setting — having it stick across reloads led to users
+// thinking the default duration "felt slower" because a stray ½× from a
+// previous session followed them back. Reset to full speed on every
+// load; a single click brings ½× back when needed.
 
 export type ToastTone = 'info' | 'error';
 
@@ -37,17 +30,8 @@ let toastCounter = 0;
 let toastTimer: number | null = null;
 
 export const useUiStore = create<State>((set) => ({
-  slowMo: loadSlow(),
-  setSlowMo: (n) => {
-    set({ slowMo: n });
-    if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.setItem(SLOW_KEY, String(n));
-      } catch {
-        /* ignore quota / privacy-mode write failures */
-      }
-    }
-  },
+  slowMo: 1,
+  setSlowMo: (n) => set({ slowMo: n }),
   paletteOpen: false,
   setPaletteOpen: (v) => set({ paletteOpen: v }),
   shortcutsOpen: false,
@@ -69,3 +53,4 @@ export const useUiStore = create<State>((set) => ({
   },
   dismissToast: () => set({ toast: null }),
 }));
+

@@ -21,6 +21,19 @@ export function App() {
 
   const [loading, setLoading] = useState(true);
 
+  // One-time migration: a previous build persisted slow-mo in localStorage,
+  // which meant a stray ½× from a debugging session followed users back on
+  // every reload and made the default duration feel slower. Slow-mo is now
+  // session-only, so clear the legacy key so it can't keep haunting them.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.removeItem('ah:slowmo');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName ?? '';
