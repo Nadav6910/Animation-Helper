@@ -38,6 +38,7 @@ export function TimingControls() {
           onChange={(v) => setDelay(Math.max(0, v))}
           step={100}
           min={0}
+          max={60000}
           suffix="ms"
         />
         <NumberInput
