@@ -76,6 +76,17 @@ export function generateTailwind(
   const fill = c.fill !== 'none' ? ` ${c.fill}` : '';
   const animValue = `${name} ${dur} ${easing} ${delay} ${iter}${dir}${fill}`.trim();
 
+  const svgHint =
+    c.target === 'svg'
+      ? `
+// SVG path-draw — apply alongside the animation class:
+// <svg viewBox="..."><path d="..." pathLength="100" className="${className} [stroke-dasharray:100]" stroke="currentColor" fill="none" /></svg>
+`
+      : `
+// Apply with:
+// <div className="${className}">...</div>
+`;
+
   return `// tailwind.config.{js,ts}
 module.exports = {
   theme: {
@@ -91,8 +102,5 @@ ${keyframeBody}
     },
   },
 };
-
-// Apply with:
-// <div className="${className}">...</div>
-`;
+${svgHint}`;
 }

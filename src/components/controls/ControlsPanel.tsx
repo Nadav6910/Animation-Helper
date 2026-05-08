@@ -11,6 +11,7 @@ import {
   Sparkles,
   Box,
   Route,
+  PenLine,
 } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
 import { Section } from './Section';
@@ -25,6 +26,7 @@ import { TextEffectsPicker } from './TextEffectsPicker';
 import { KeyframeTimeline } from './KeyframeTimeline';
 import { PresetGallery } from './PresetGallery';
 import { OffsetPathSection } from './OffsetPathSection';
+import { PathDrawControls } from './PathDrawControls';
 
 export function ControlsPanel() {
   const target = useAnimationStore((s) => s.config.target);
@@ -111,6 +113,16 @@ export function ControlsPanel() {
             <TextEffectsPicker />
             <StaggerControls />
           </div>
+        </Section>
+      )}
+
+      {target === 'svg' && (
+        <Section
+          title="Path draw"
+          description="Layer stroke draw on top of transforms & filters"
+          icon={<PenLine size={16} />}
+        >
+          <PathDrawControls />
         </Section>
       )}
 

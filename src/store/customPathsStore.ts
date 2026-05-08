@@ -7,7 +7,6 @@ export type CustomPath = {
   label: string;
   viewBox: string;
   d: string;
-  approxLength: number;
 };
 
 const loadInitial = (): CustomPath[] => {

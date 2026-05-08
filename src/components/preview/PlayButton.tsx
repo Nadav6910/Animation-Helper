@@ -1,21 +1,46 @@
-import { motion } from 'framer-motion';
-import { Play } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Play, Pause, RotateCw } from 'lucide-react';
 
-type Props = { onClick: () => void };
+export type PlayButtonState = 'playing' | 'paused' | 'finished';
 
-export function PlayButton({ onClick }: Props) {
+type Props = {
+  state: PlayButtonState;
+  onClick: () => void;
+};
+
+const COPY: Record<PlayButtonState, { aria: string; title: string }> = {
+  playing: { aria: 'Pause animation', title: 'Pause' },
+  paused: { aria: 'Resume animation', title: 'Resume' },
+  finished: { aria: 'Replay animation', title: 'Replay (Space)' },
+};
+
+export function PlayButton({ state, onClick }: Props) {
+  const { aria, title } = COPY[state];
   return (
     <motion.button
       onClick={onClick}
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.92 }}
       transition={{ type: 'spring', stiffness: 400, damping: 26 }}
-      className="group relative grid h-14 w-14 place-items-center rounded-full bg-accent text-accent-contrast shadow-glow focus-ring"
-      aria-label="Replay animation"
-      title="Replay (Space)"
+      className="group relative grid h-12 w-12 place-items-center rounded-full bg-accent text-accent-contrast shadow-glow focus-ring lg:h-14 lg:w-14"
+      aria-label={aria}
+      title={title}
     >
       <span className="absolute inset-0 rounded-full bg-accent/40 blur-xl group-hover:bg-accent/60 transition-colors" />
-      <Play size={20} className="relative" fill="currentColor" />
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.span
+          key={state}
+          initial={{ opacity: 0, scale: 0.7 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.7 }}
+          transition={{ duration: 0.15 }}
+          className="relative grid place-items-center"
+        >
+          {state === 'playing' && <Pause size={20} fill="currentColor" />}
+          {state === 'paused' && <Play size={20} fill="currentColor" />}
+          {state === 'finished' && <RotateCw size={20} strokeWidth={2.5} />}
+        </motion.span>
+      </AnimatePresence>
     </motion.button>
   );
 }

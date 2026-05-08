@@ -6,21 +6,6 @@ import { useAnimationStore } from '@/store/animationStore';
 
 const PATH_REGEX = /^[\sMmLlHhVvCcSsQqTtAaZz0-9.,\-+e]+$/;
 
-function estimateLength(d: string): number {
-  if (typeof window === 'undefined' || typeof document === 'undefined') {
-    return Math.max(50, d.length * 1.5);
-  }
-  try {
-    const ns = 'http://www.w3.org/2000/svg';
-    const el = document.createElementNS(ns, 'path');
-    el.setAttribute('d', d);
-    const len = (el as SVGPathElement).getTotalLength();
-    return Number.isFinite(len) && len > 0 ? Math.round(len) : 100;
-  } catch {
-    return 100;
-  }
-}
-
 export function CustomSvgForm({ open, onClose }: { open: boolean; onClose: () => void }) {
   const add = useCustomPathsStore((s) => s.add);
   const setSvgPath = useAnimationStore((s) => s.setSvgPath);
@@ -44,7 +29,6 @@ export function CustomSvgForm({ open, onClose }: { open: boolean; onClose: () =>
       label: label.trim() || 'Custom path',
       d: trimmed,
       viewBox: viewBox.trim() || '0 0 24 24',
-      approxLength: estimateLength(trimmed),
     });
     setSvgPath(entry.id);
     setLabel('');

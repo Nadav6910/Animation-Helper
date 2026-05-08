@@ -167,6 +167,40 @@ export function generateFramerMotion(
       } }}\n`
     : '';
 
+  if (c.target === 'svg') {
+    const hasDashoffset = sorted.some(
+      (k) => typeof k.strokeDashoffset === 'number',
+    );
+    const dashOffsetLine = hasDashoffset
+      ? `        strokeDashoffset: [${sorted
+          .map((k) => num(k.strokeDashoffset ?? 100))
+          .join(', ')}],`
+      : '';
+    const animateBody = [...animateLines, dashOffsetLine].filter(Boolean);
+    return `import { motion } from 'framer-motion';
+
+// pathLength={100} + strokeDasharray={100} normalise the path so
+// strokeDashoffset 100 → 0 maps to "invisible → fully drawn".
+export function ${name}() {
+  return (
+    <motion.svg viewBox="0 0 24 24" className="h-40 w-40" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <motion.path
+        d="M5 12.5 L10 17.5 L19 7"
+        pathLength={100}
+        strokeDasharray={100}
+        animate={{
+${animateBody.join('\n')}
+        }}
+        transition={{
+${transitionLines.join('\n')}
+        }}
+      />
+    </motion.svg>
+  );
+}
+`;
+  }
+
   return `import { motion } from 'framer-motion';
 
 export function ${name}() {

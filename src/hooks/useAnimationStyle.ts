@@ -36,7 +36,9 @@ export function useAnimationStyle(config: AnimationConfig) {
   useEffect(() => {
     const styleEl = document.createElement('style');
     styleEl.setAttribute('data-ah-style', className);
-    styleEl.textContent = css;
+    // Append the pause rule so toggling `ah-paused` on the animated element
+    // freezes it at its current frame without rewriting the @keyframes.
+    styleEl.textContent = `${css}\n.${className}.ah-paused { animation-play-state: paused; }`;
     document.head.appendChild(styleEl);
     return () => {
       styleEl.remove();

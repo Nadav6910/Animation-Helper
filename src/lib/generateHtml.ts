@@ -24,7 +24,7 @@ function targetMarkup(c: AnimationConfig, className: string): string {
     const def = SVG_PATH_BY_ID[c.svgPath ?? 'check'];
     if (!def) return `<div class="${className}"></div>`;
     return `<svg class="${className}" viewBox="${def.viewBox}" width="240" height="240" fill="none" stroke="#7c5cff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="--accent: #7c5cff">
-  <path d="${def.d}" style="stroke-dasharray:${def.approxLength}" />
+  <path d="${def.d}" pathLength="100" style="stroke-dasharray:100" />
 </svg>`;
   }
   const shape = SHAPE_BY_KIND[c.shape ?? 'square'];

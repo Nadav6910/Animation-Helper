@@ -76,6 +76,7 @@ export type AnimationState = {
   setEasing: (e: Easing) => void;
   setStagger: (step: number | null) => void;
   setOffsetPath: (op: OffsetPath | undefined) => void;
+  setPathDraw: (enabled: boolean) => void;
   // keyframes
   selectKeyframe: (id: string) => void;
   addKeyframe: (at?: number) => void;
@@ -114,7 +115,53 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
     canRedo: false,
     isDirty: false,
 
-    setTarget: (target) => update((c) => ({ ...c, target })),
+    setTarget: (target) => {
+      const c = get().config;
+      // Seed path-draw keyframes the first time the user switches to SVG.
+      // The shape default's translate of 120px is interpreted in SVG
+      // user-space and pushes the path far off the viewBox; replace with
+      // a clean draw pair (strokeDashoffset 100 → 0) with identity
+      // transforms. If the user has already touched strokeDashoffset
+      // anywhere, leave their keyframes alone.
+      if (target !== 'svg') {
+        commit({ ...c, target });
+        return;
+      }
+      const hasDashoffset = c.keyframes.some(
+        (k) => typeof k.strokeDashoffset === 'number'
+      );
+      if (hasDashoffset) {
+        commit({ ...c, target });
+        return;
+      }
+      const draw: Keyframe[] = [
+        {
+          id: uid(),
+          at: 0,
+          transform: { ...blankTransform },
+          opacity: 1,
+          strokeDashoffset: 100,
+        },
+        {
+          id: uid(),
+          at: 100,
+          transform: { ...blankTransform },
+          opacity: 1,
+          strokeDashoffset: 0,
+        },
+      ];
+      const updated: AnimationConfig = {
+        ...c,
+        target,
+        keyframes: draw,
+      };
+      history.record(updated);
+      set({
+        config: updated,
+        selectedKeyframeId: draw[0].id,
+        ...refreshHistoryFlags(),
+      });
+    },
     setShape: (shape) => update((c) => ({ ...c, shape })),
     setText: (text) => update((c) => ({ ...c, text })),
     setSvgPath: (id) => update((c) => ({ ...c, svgPath: id })),
@@ -134,6 +181,29 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
         ...c,
         offsetPath: op,
       })),
+    setPathDraw: (enabled) =>
+      update((c) => {
+        if (!enabled) {
+          // Strip strokeDashoffset from every keyframe; preserve all other props.
+          const stripped = c.keyframes.map((k) => {
+            if (typeof k.strokeDashoffset !== 'number') return k;
+            const { strokeDashoffset: _drop, ...rest } = k;
+            return rest as Keyframe;
+          });
+          return { ...c, keyframes: stripped };
+        }
+        // Enable: 100 on the first keyframe (sorted by `at`), 0 on the last,
+        // intermediates left alone so CSS interpolates between the endpoints.
+        const sorted = [...c.keyframes].sort((a, b) => a.at - b.at);
+        const firstId = sorted[0]?.id;
+        const lastId = sorted[sorted.length - 1]?.id;
+        const next = c.keyframes.map((k) => {
+          if (k.id === firstId) return { ...k, strokeDashoffset: 100 };
+          if (k.id === lastId) return { ...k, strokeDashoffset: 0 };
+          return k;
+        });
+        return { ...c, keyframes: next };
+      }),
 
     selectKeyframe: (id) => set({ selectedKeyframeId: id }),
 

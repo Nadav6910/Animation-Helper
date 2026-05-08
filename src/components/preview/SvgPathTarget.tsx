@@ -6,6 +6,11 @@ type Props = {
   className: string;
 };
 
+/**
+ * `pathLength={100}` normalises the path's logical length to 100 units
+ * regardless of actual geometry, so `stroke-dashoffset: 0 → 100` always
+ * corresponds to "fully drawn → invisible" without per-path measurement.
+ */
 export function SvgPathTarget({ pathId, className }: Props) {
   const customPaths = useCustomPathsStore((s) => s.paths);
   const builtin = SVG_PATH_BY_ID[pathId];
@@ -26,10 +31,9 @@ export function SvgPathTarget({ pathId, className }: Props) {
     >
       <path
         d={def.d}
+        pathLength={100}
         className={className}
-        style={{
-          strokeDasharray: def.approxLength,
-        }}
+        style={{ strokeDasharray: 100 }}
       />
     </svg>
   );

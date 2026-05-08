@@ -8,9 +8,13 @@ const AXIS_CONFIG: Record<
   Axis,
   { label: string; suffix?: string; step: number; min?: number; max?: number; defaultVal: Vec2 }
 > = {
-  translate: { label: 'Translate', suffix: 'px', step: 1, defaultVal: [0, 0] },
-  rotate: { label: 'Rotate', suffix: 'deg', step: 5, defaultVal: [0, 0] },
+  // Translate: ±2000px is generous — bigger than any realistic viewport-scale move.
+  translate: { label: 'Translate', suffix: 'px', step: 1, min: -2000, max: 2000, defaultVal: [0, 0] },
+  // Rotate: ±1440deg = up to four full revolutions each direction.
+  rotate: { label: 'Rotate', suffix: 'deg', step: 5, min: -1440, max: 1440, defaultVal: [0, 0] },
+  // Skew clamps to ±90deg (anything beyond that flips/inverts the element).
   skew: { label: 'Skew', suffix: 'deg', step: 1, min: -90, max: 90, defaultVal: [0, 0] },
+  // Scale: 0 → 5x. Negative scale would mirror; we leave that to the rotate axis.
   scale: { label: 'Scale', step: 0.05, min: 0, max: 5, defaultVal: [1, 1] },
 };
 
@@ -46,6 +50,7 @@ export function TransformSection({ axis }: Props) {
         min={cfg.min}
         max={cfg.max}
         suffix={cfg.suffix}
+        defaultValue={cfg.defaultVal[0]}
       />
       <NumberInput
         size="sm"
@@ -56,6 +61,7 @@ export function TransformSection({ axis }: Props) {
         min={cfg.min}
         max={cfg.max}
         suffix={cfg.suffix}
+        defaultValue={cfg.defaultVal[1]}
       />
     </div>
   );

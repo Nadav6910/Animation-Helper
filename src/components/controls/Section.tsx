@@ -27,7 +27,7 @@ export function Section({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-3 px-4 py-3 hover:bg-bg-soft/40 focus-ring transition-colors"
+        className="flex w-full items-center gap-3 px-3 py-3 sm:px-4 hover:bg-bg-soft/40 focus-ring transition-colors min-h-11"
         aria-expanded={open}
       >
         {icon && (
@@ -58,7 +58,7 @@ export function Section({
             transition={{ type: 'spring', stiffness: 280, damping: 30 }}
             className="overflow-hidden"
           >
-            <div className="px-4 pb-4 pt-0">{children}</div>
+            <div className="px-3 pb-4 pt-0 sm:px-4">{children}</div>
           </motion.div>
         )}
       </AnimatePresence>
