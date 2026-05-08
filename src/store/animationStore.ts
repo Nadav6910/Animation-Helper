@@ -9,6 +9,7 @@ import type {
   TargetKind,
   Transform,
 } from '@/types/animation';
+import { createHistoryRecorder } from './middleware/history';
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -53,9 +54,14 @@ const initialConfig: AnimationConfig = {
   easing: { kind: 'cubic', v: [0.2, 0.8, 0.2, 1] },
 };
 
+const history = createHistoryRecorder(initialConfig, { debounceMs: 350 });
+
 export type AnimationState = {
   config: AnimationConfig;
   selectedKeyframeId: string;
+  canUndo: boolean;
+  canRedo: boolean;
+  isDirty: boolean;
   // setters
   setTarget: (t: TargetKind) => void;
   setShape: (s: ShapeKind) => void;
@@ -75,45 +81,58 @@ export type AnimationState = {
   updateKeyframe: (id: string, patch: Partial<Keyframe>) => void;
   updateKeyframeTransform: (id: string, patch: Partial<Transform>) => void;
   resetAll: () => void;
+  // bulk replace (presets, undo/redo)
+  applyConfig: (next: AnimationConfig, opts?: { record?: boolean }) => void;
+  // history
+  undo: () => void;
+  redo: () => void;
+  markPristine: () => void;
 };
 
-export const useAnimationStore = create<AnimationState>((set) => ({
-  config: initialConfig,
-  selectedKeyframeId: initialConfig.keyframes[0].id,
+const refreshHistoryFlags = () => ({
+  canUndo: history.canUndo(),
+  canRedo: history.canRedo(),
+  isDirty: history.isDirty(),
+});
 
-  setTarget: (target) =>
-    set((s) => ({ config: { ...s.config, target } })),
-  setShape: (shape) =>
-    set((s) => ({ config: { ...s.config, shape } })),
-  setText: (text) =>
-    set((s) => ({ config: { ...s.config, text } })),
-  setSvgPath: (id) =>
-    set((s) => ({ config: { ...s.config, svgPath: id } })),
-  setDuration: (duration) =>
-    set((s) => ({ config: { ...s.config, duration } })),
-  setDelay: (delay) =>
-    set((s) => ({ config: { ...s.config, delay } })),
-  setIterations: (iterations) =>
-    set((s) => ({ config: { ...s.config, iterations } })),
-  setDirection: (direction) =>
-    set((s) => ({ config: { ...s.config, direction } })),
-  setFill: (fill) =>
-    set((s) => ({ config: { ...s.config, fill } })),
-  setEasing: (easing) =>
-    set((s) => ({ config: { ...s.config, easing } })),
-  setStagger: (step) =>
-    set((s) => ({
-      config: {
-        ...s.config,
+export const useAnimationStore = create<AnimationState>((set, get) => {
+  const commit = (next: AnimationConfig) => {
+    history.record(next);
+    set({ config: next, ...refreshHistoryFlags() });
+  };
+  const update = (mutator: (c: AnimationConfig) => AnimationConfig) => {
+    const next = mutator(get().config);
+    commit(next);
+  };
+
+  return {
+    config: initialConfig,
+    selectedKeyframeId: initialConfig.keyframes[0].id,
+    canUndo: false,
+    canRedo: false,
+    isDirty: false,
+
+    setTarget: (target) => update((c) => ({ ...c, target })),
+    setShape: (shape) => update((c) => ({ ...c, shape })),
+    setText: (text) => update((c) => ({ ...c, text })),
+    setSvgPath: (id) => update((c) => ({ ...c, svgPath: id })),
+    setDuration: (duration) => update((c) => ({ ...c, duration })),
+    setDelay: (delay) => update((c) => ({ ...c, delay })),
+    setIterations: (iterations) => update((c) => ({ ...c, iterations })),
+    setDirection: (direction) => update((c) => ({ ...c, direction })),
+    setFill: (fill) => update((c) => ({ ...c, fill })),
+    setEasing: (easing) => update((c) => ({ ...c, easing })),
+    setStagger: (step) =>
+      update((c) => ({
+        ...c,
         stagger: step === null ? undefined : { step },
-      },
-    })),
+      })),
 
-  selectKeyframe: (id) => set({ selectedKeyframeId: id }),
+    selectKeyframe: (id) => set({ selectedKeyframeId: id }),
 
-  addKeyframe: (at) =>
-    set((s) => {
-      const sorted = [...s.config.keyframes].sort((a, b) => a.at - b.at);
+    addKeyframe: (at) => {
+      const c = get().config;
+      const sorted = [...c.keyframes].sort((a, b) => a.at - b.at);
       let position = at;
       if (position == null) {
         const gaps = sorted.map((k, i) =>
@@ -127,38 +146,39 @@ export const useAnimationStore = create<AnimationState>((set) => ({
         transform: { ...blankTransform },
         opacity: 1,
       };
-      return {
-        config: { ...s.config, keyframes: [...s.config.keyframes, next] },
+      const updated = { ...c, keyframes: [...c.keyframes, next] };
+      history.record(updated);
+      set({
+        config: updated,
         selectedKeyframeId: next.id,
-      };
-    }),
+        ...refreshHistoryFlags(),
+      });
+    },
 
-  removeKeyframe: (id) =>
-    set((s) => {
-      if (s.config.keyframes.length <= 2) return s;
+    removeKeyframe: (id) => {
+      const s = get();
+      if (s.config.keyframes.length <= 2) return;
       const remaining = s.config.keyframes.filter((k) => k.id !== id);
-      return {
-        config: { ...s.config, keyframes: remaining },
+      const updated = { ...s.config, keyframes: remaining };
+      history.record(updated);
+      set({
+        config: updated,
         selectedKeyframeId:
           s.selectedKeyframeId === id ? remaining[0].id : s.selectedKeyframeId,
-      };
-    }),
+        ...refreshHistoryFlags(),
+      });
+    },
 
-  updateKeyframe: (id, patch) =>
-    set((s) => ({
-      config: {
-        ...s.config,
-        keyframes: s.config.keyframes.map((k) =>
-          k.id === id ? { ...k, ...patch } : k
-        ),
-      },
-    })),
+    updateKeyframe: (id, patch) =>
+      update((c) => ({
+        ...c,
+        keyframes: c.keyframes.map((k) => (k.id === id ? { ...k, ...patch } : k)),
+      })),
 
-  updateKeyframeTransform: (id, patch) =>
-    set((s) => ({
-      config: {
-        ...s.config,
-        keyframes: s.config.keyframes.map((k) =>
+    updateKeyframeTransform: (id, patch) =>
+      update((c) => ({
+        ...c,
+        keyframes: c.keyframes.map((k) =>
           k.id === id
             ? {
                 ...k,
@@ -166,14 +186,58 @@ export const useAnimationStore = create<AnimationState>((set) => ({
               }
             : k
         ),
-      },
-    })),
+      })),
 
-  resetAll: () =>
-    set({
-      config: {
+    resetAll: () => {
+      const fresh: AnimationConfig = {
         ...initialConfig,
         keyframes: [startKeyframe(), endKeyframe()],
-      },
-    }),
-}));
+      };
+      history.reset(fresh);
+      set({
+        config: fresh,
+        selectedKeyframeId: fresh.keyframes[0].id,
+        ...refreshHistoryFlags(),
+      });
+    },
+
+    applyConfig: (next, opts) => {
+      const cloned: AnimationConfig = JSON.parse(JSON.stringify(next));
+      if (opts?.record === false) {
+        history.reset(cloned);
+      } else {
+        history.record(cloned);
+      }
+      set({
+        config: cloned,
+        selectedKeyframeId: cloned.keyframes[0]?.id ?? get().selectedKeyframeId,
+        ...refreshHistoryFlags(),
+      });
+    },
+
+    undo: () => {
+      const prev = history.undo();
+      if (!prev) return;
+      set({
+        config: prev,
+        selectedKeyframeId: prev.keyframes[0]?.id ?? get().selectedKeyframeId,
+        ...refreshHistoryFlags(),
+      });
+    },
+
+    redo: () => {
+      const next = history.redo();
+      if (!next) return;
+      set({
+        config: next,
+        selectedKeyframeId: next.keyframes[0]?.id ?? get().selectedKeyframeId,
+        ...refreshHistoryFlags(),
+      });
+    },
+
+    markPristine: () => {
+      history.markPristine();
+      set(refreshHistoryFlags());
+    },
+  };
+});

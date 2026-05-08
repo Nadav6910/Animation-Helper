@@ -1,4 +1,4 @@
-import type { AnimationConfig, Keyframe, Transform } from '@/types/animation';
+import type { AnimationConfig, Easing, Keyframe, Transform } from '@/types/animation';
 import { easingToCss } from './easings';
 
 const num = (n: number) =>
@@ -7,6 +7,7 @@ const num = (n: number) =>
 type ChannelKey =
   | 'x'
   | 'y'
+  | 'z'
   | 'rotateX'
   | 'rotateY'
   | 'skewX'
@@ -16,7 +17,8 @@ type ChannelKey =
   | 'opacity'
   | 'color'
   | 'backgroundColor'
-  | 'filter';
+  | 'filter'
+  | 'offsetDistance';
 
 function readChannel(k: Keyframe, ch: ChannelKey): string | number | undefined {
   const t: Transform | undefined = k.transform;
@@ -25,6 +27,8 @@ function readChannel(k: Keyframe, ch: ChannelKey): string | number | undefined {
       return t?.translate?.[0];
     case 'y':
       return t?.translate?.[1];
+    case 'z':
+      return t?.translateZ;
     case 'rotateX':
       return t?.rotate?.[0];
     case 'rotateY':
@@ -52,11 +56,26 @@ function readChannel(k: Keyframe, ch: ChannelKey): string | number | undefined {
       if (k.dropShadow) parts.push(`drop-shadow(${k.dropShadow})`);
       return parts.length ? parts.join(' ') : undefined;
     }
+    case 'offsetDistance':
+      return typeof k.offsetDistance === 'number'
+        ? `${num(k.offsetDistance)}%`
+        : undefined;
   }
 }
 
 function fmtValue(v: string | number): string {
   return typeof v === 'string' ? `'${v.replace(/'/g, "\\'")}'` : num(v);
+}
+
+function easeToken(e: Easing): string {
+  if (e.kind === 'cubic') {
+    const [a, b, c, d] = e.v;
+    return `[${num(a)}, ${num(b)}, ${num(c)}, ${num(d)}]`;
+  }
+  if (e.kind === 'steps') {
+    return `'${easingToCss(e)}'`;
+  }
+  return `'${e.value}'`;
 }
 
 export type GenerateFramerMotionOptions = {
@@ -73,6 +92,7 @@ export function generateFramerMotion(
   const channels: ChannelKey[] = [
     'x',
     'y',
+    'z',
     'rotateX',
     'rotateY',
     'skewX',
@@ -83,6 +103,7 @@ export function generateFramerMotion(
     'color',
     'backgroundColor',
     'filter',
+    'offsetDistance',
   ];
 
   const animate: Record<string, (string | number)[]> = {};
@@ -103,8 +124,14 @@ export function generateFramerMotion(
 
   const times = sorted.map((k) => +(k.at / 100).toFixed(4));
   const durSec = c.duration / 1000;
-  const easing = easingToCss(c.easing);
-  const easingArr = `Array(${Math.max(times.length - 1, 1)}).fill('${easing}')`;
+
+  const segCount = Math.max(times.length - 1, 1);
+  const segmentEases: string[] = [];
+  for (let i = 0; i < segCount; i++) {
+    const seg = sorted[i + 1]?.easing ?? sorted[i]?.easing ?? c.easing;
+    segmentEases.push(easeToken(seg));
+  }
+  const easingArr = `[${segmentEases.join(', ')}]`;
 
   const animateLines = Object.entries(animate).map(
     ([k, arr]) =>
@@ -124,17 +151,24 @@ export function generateFramerMotion(
     `        times: [${times.join(', ')}],`,
   ];
 
-  const note =
-    sorted.length > 2
-      ? `// Note: per-segment easings are approximated with a uniform ease.\n`
-      : '';
+  const offsetStyle = c.offsetPath
+    ? `      style={{ offsetPath: "path('${c.offsetPath.d.replace(/'/g, "\\'")}')"${
+        c.offsetPath.rotate !== undefined
+          ? `, offsetRotate: '${
+              typeof c.offsetPath.rotate === 'number'
+                ? `${num(c.offsetPath.rotate)}deg`
+                : c.offsetPath.rotate
+            }'`
+          : ''
+      } }}\n`
+    : '';
 
-  return `${note}import { motion } from 'framer-motion';
+  return `import { motion } from 'framer-motion';
 
 export function ${name}() {
   return (
     <motion.div
-      animate={{
+${offsetStyle}      animate={{
 ${animateLines.join('\n')}
       }}
       transition={{

@@ -12,13 +12,27 @@ const deg = (n: number) => `${num(n)}deg`;
 export function transformToCss(t: Transform | undefined): string | null {
   if (!t) return null;
   const parts: string[] = [];
+  if (typeof t.perspective === 'number' && t.perspective > 0) {
+    parts.push(`perspective(${px(t.perspective)})`);
+  }
   if (t.translate) {
-    parts.push(`translate3d(${px(t.translate[0])}, ${px(t.translate[1])}, 0)`);
+    const z = typeof t.translateZ === 'number' ? t.translateZ : 0;
+    parts.push(
+      `translate3d(${px(t.translate[0])}, ${px(t.translate[1])}, ${px(z)})`
+    );
+  } else if (typeof t.translateZ === 'number' && t.translateZ !== 0) {
+    parts.push(`translate3d(0px, 0px, ${px(t.translateZ)})`);
+  }
+  if (t.rotate3d) {
+    const { x, y, z, deg: d } = t.rotate3d;
+    parts.push(`rotate3d(${num(x)}, ${num(y)}, ${num(z)}, ${deg(d)})`);
   }
   if (t.rotate) {
     if (t.rotate[0] !== 0) parts.push(`rotateX(${deg(t.rotate[0])})`);
     if (t.rotate[1] !== 0) parts.push(`rotateY(${deg(t.rotate[1])})`);
-    if (t.rotate[0] === 0 && t.rotate[1] === 0) parts.push('rotate(0deg)');
+    if (t.rotate[0] === 0 && t.rotate[1] === 0 && !t.rotate3d) {
+      parts.push('rotate(0deg)');
+    }
   }
   if (t.skew) {
     if (t.skew[0] !== 0 || t.skew[1] !== 0) {
@@ -52,6 +66,12 @@ function declarationsForKeyframe(k: Keyframe): string[] {
   if (filter) decls.push(`filter: ${filter};`);
   if (typeof k.strokeDashoffset === 'number') {
     decls.push(`stroke-dashoffset: ${num(k.strokeDashoffset)};`);
+  }
+  if (typeof k.offsetDistance === 'number') {
+    decls.push(`offset-distance: ${num(k.offsetDistance)}%;`);
+  }
+  if (k.easing) {
+    decls.push(`animation-timing-function: ${easingToCss(k.easing)};`);
   }
   return decls;
 }
@@ -92,6 +112,14 @@ export function generateCss(
   const lines: string[] = [];
   lines.push(`${ruleSelector} {`);
   lines.push(`${indent}animation: ${animationValue};`);
+  if (c.offsetPath) {
+    lines.push(`${indent}offset-path: path('${c.offsetPath.d}');`);
+    if (c.offsetPath.rotate !== undefined) {
+      const r = c.offsetPath.rotate;
+      const rotate = typeof r === 'number' ? `${num(r)}deg` : r;
+      lines.push(`${indent}offset-rotate: ${rotate};`);
+    }
+  }
   lines.push('}');
   lines.push('');
 

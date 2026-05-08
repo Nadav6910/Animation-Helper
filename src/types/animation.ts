@@ -10,11 +10,21 @@ export type ShapeKind =
 
 export type TargetKind = 'text' | 'shape' | 'svg';
 
+export type Rotate3d = {
+  x: number;
+  y: number;
+  z: number;
+  deg: number;
+};
+
 export type Transform = {
   translate?: Vec2;
+  translateZ?: number;
   rotate?: Vec2;
+  rotate3d?: Rotate3d;
   skew?: Vec2;
   scale?: Vec2;
+  perspective?: number;
 };
 
 export type Keyframe = {
@@ -28,6 +38,8 @@ export type Keyframe = {
   hueRotate?: number;
   dropShadow?: string;
   strokeDashoffset?: number;
+  easing?: Easing;
+  offsetDistance?: number;
 };
 
 export type EasingPreset =
@@ -37,9 +49,12 @@ export type EasingPreset =
   | 'ease-out'
   | 'ease-in-out';
 
+export type StepsJump = 'start' | 'end' | 'none' | 'both';
+
 export type Easing =
   | { kind: 'preset'; value: EasingPreset }
-  | { kind: 'cubic'; v: [number, number, number, number] };
+  | { kind: 'cubic'; v: [number, number, number, number] }
+  | { kind: 'steps'; n: number; jump: StepsJump };
 
 export type Direction =
   | 'normal'
@@ -48,6 +63,11 @@ export type Direction =
   | 'alternate-reverse';
 
 export type FillMode = 'none' | 'forwards' | 'backwards' | 'both';
+
+export type OffsetPath = {
+  d: string;
+  rotate?: 'auto' | 'reverse' | number;
+};
 
 export type AnimationConfig = {
   target: TargetKind;
@@ -63,4 +83,5 @@ export type AnimationConfig = {
   fill: FillMode;
   easing: Easing;
   stagger?: { step: number };
+  offsetPath?: OffsetPath;
 };

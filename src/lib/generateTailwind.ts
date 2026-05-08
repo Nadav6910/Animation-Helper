@@ -17,6 +17,12 @@ function decls(k: Keyframe): Record<string, string> {
   if (typeof k.strokeDashoffset === 'number') {
     out.strokeDashoffset = num(k.strokeDashoffset);
   }
+  if (typeof k.offsetDistance === 'number') {
+    out.offsetDistance = `${num(k.offsetDistance)}%`;
+  }
+  if (k.easing) {
+    out.animationTimingFunction = easingToCss(k.easing);
+  }
   return out;
 }
 

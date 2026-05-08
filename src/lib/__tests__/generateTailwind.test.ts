@@ -22,7 +22,7 @@ describe('generateTailwind', () => {
     const out = generateTailwind(cfg, { name: 'play' });
     expect(out).toContain("'0%':");
     expect(out).toContain("'100%':");
-    expect(out).toContain("transform: 'translate3d(0px, 0px, 0) scale(1, 1)'");
+    expect(out).toContain("transform: 'translate3d(0px, 0px, 0px) scale(1, 1)'");
     expect(out).toContain("'play': 'play 2s ease-in-out 0ms infinite'");
   });
 
@@ -35,5 +35,28 @@ describe('generateTailwind', () => {
   it('emits a usage hint with the className', () => {
     const out = generateTailwind(cfg, { className: 'animate-play' });
     expect(out).toContain('className="animate-play"');
+  });
+
+  it('emits per-keyframe animation-timing-function', () => {
+    const out = generateTailwind({
+      ...cfg,
+      keyframes: [
+        { id: 'a', at: 0, opacity: 0, easing: { kind: 'preset', value: 'ease-in' } },
+        { id: 'b', at: 100, opacity: 1 },
+      ],
+    });
+    expect(out).toContain("animationTimingFunction: 'ease-in'");
+  });
+
+  it('emits offsetDistance per keyframe', () => {
+    const out = generateTailwind({
+      ...cfg,
+      keyframes: [
+        { id: 'a', at: 0, offsetDistance: 0 },
+        { id: 'b', at: 100, offsetDistance: 100 },
+      ],
+    });
+    expect(out).toContain("offsetDistance: '0%'");
+    expect(out).toContain("offsetDistance: '100%'");
   });
 });

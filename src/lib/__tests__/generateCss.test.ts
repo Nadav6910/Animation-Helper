@@ -45,7 +45,7 @@ describe('generateCss — single transform declaration (bug fix)', () => {
       rotate: [0, 45],
       scale: [1.2, 1.2],
     });
-    expect(out).toBe('translate3d(10px, 20px, 0) rotateY(45deg) scale(1.2, 1.2)');
+    expect(out).toBe('translate3d(10px, 20px, 0px) rotateY(45deg) scale(1.2, 1.2)');
   });
 
   it('returns null when transform has no axes', () => {
@@ -133,6 +133,80 @@ describe('generateCss — keyframes & filters', () => {
   });
 });
 
+describe('generateCss — 3D & perspective', () => {
+  it('emits translate3d Z axis', () => {
+    const out = transformToCss({
+      translate: [10, 20],
+      translateZ: 30,
+    });
+    expect(out).toBe('translate3d(10px, 20px, 30px)');
+  });
+
+  it('emits perspective() before transforms', () => {
+    const out = transformToCss({
+      translate: [0, 0],
+      perspective: 600,
+    });
+    expect(out?.startsWith('perspective(600px)')).toBe(true);
+  });
+
+  it('emits rotate3d when supplied', () => {
+    const out = transformToCss({
+      rotate3d: { x: 1, y: 1, z: 0, deg: 45 },
+    });
+    expect(out).toBe('rotate3d(1, 1, 0, 45deg)');
+  });
+
+  it('emits Z-only translate when only translateZ is set', () => {
+    const out = transformToCss({ translateZ: 50 });
+    expect(out).toBe('translate3d(0px, 0px, 50px)');
+  });
+});
+
+describe('generateCss — per-keyframe easing & steps', () => {
+  it('emits animation-timing-function for keyframes with easing', () => {
+    const css = generateCss(
+      makeConfig({
+        keyframes: [
+          { id: 'a', at: 0, opacity: 0 },
+          {
+            id: 'b',
+            at: 100,
+            opacity: 1,
+            easing: { kind: 'preset', value: 'ease-out' },
+          },
+        ],
+      })
+    );
+    expect(css).toContain('animation-timing-function: ease-out;');
+  });
+
+  it('serializes steps() easing', () => {
+    const css = generateCss(
+      makeConfig({ easing: { kind: 'steps', n: 6, jump: 'end' } })
+    );
+    expect(css).toContain('steps(6, jump-end)');
+  });
+});
+
+describe('generateCss — offset-path motion', () => {
+  it('emits offset-path on the rule and offset-distance per keyframe', () => {
+    const css = generateCss(
+      makeConfig({
+        offsetPath: { d: 'M0,0 L100,0', rotate: 'auto' },
+        keyframes: [
+          { id: 'a', at: 0, offsetDistance: 0 },
+          { id: 'b', at: 100, offsetDistance: 100 },
+        ],
+      })
+    );
+    expect(css).toContain("offset-path: path('M0,0 L100,0');");
+    expect(css).toContain('offset-rotate: auto;');
+    expect(css).toContain('offset-distance: 0%;');
+    expect(css).toContain('offset-distance: 100%;');
+  });
+});
+
 describe('generateCss — bug regression snapshot', () => {
   it('matches the canonical snapshot for the headline example', () => {
     const css = generateCss(
@@ -168,16 +242,16 @@ describe('generateCss — bug regression snapshot', () => {
 
       @keyframes play {
         0% {
-          transform: translate3d(0px, 0px, 0) scale(1, 1);
+          transform: translate3d(0px, 0px, 0px) scale(1, 1);
           opacity: 0;
           filter: blur(8px);
         }
         50% {
-          transform: translate3d(40px, 0px, 0) scale(1.1, 1.1);
+          transform: translate3d(40px, 0px, 0px) scale(1.1, 1.1);
           opacity: 1;
         }
         100% {
-          transform: translate3d(80px, 0px, 0) scale(1, 1);
+          transform: translate3d(80px, 0px, 0px) scale(1, 1);
           opacity: 1;
         }
       }"

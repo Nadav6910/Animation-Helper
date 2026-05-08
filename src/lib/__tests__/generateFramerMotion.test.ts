@@ -51,4 +51,41 @@ describe('generateFramerMotion', () => {
     });
     expect(out).toContain('times: [0, 0.5, 1]');
   });
+
+  it('emits z channel when translateZ is set', () => {
+    const out = generateFramerMotion({
+      ...cfg,
+      keyframes: [
+        { id: 'a', at: 0, transform: { translate: [0, 0], translateZ: 0 } },
+        { id: 'b', at: 100, transform: { translate: [0, 0], translateZ: 100 } },
+      ],
+    });
+    expect(out).toMatch(/z: \[0, 100\]/);
+  });
+
+  it('emits per-segment ease arrays when keyframes have their own easing', () => {
+    const out = generateFramerMotion({
+      ...cfg,
+      keyframes: [
+        { id: 'a', at: 0, transform: { translate: [0, 0] } },
+        {
+          id: 'b',
+          at: 50,
+          transform: { translate: [40, 0] },
+          easing: { kind: 'cubic', v: [0.1, 0.2, 0.3, 0.4] },
+        },
+        { id: 'c', at: 100, transform: { translate: [80, 0] } },
+      ],
+    });
+    expect(out).toContain('[0.1, 0.2, 0.3, 0.4]');
+  });
+
+  it('emits offsetPath style when set', () => {
+    const out = generateFramerMotion({
+      ...cfg,
+      offsetPath: { d: 'M0,0 L100,0', rotate: 'auto' },
+    });
+    expect(out).toContain("offsetPath: \"path('M0,0 L100,0')\"");
+    expect(out).toContain("offsetRotate: 'auto'");
+  });
 });
