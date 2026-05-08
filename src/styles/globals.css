@@ -78,15 +78,18 @@
     }
   }
 
-  /* iOS Safari zooms in on any focused form control whose font-size is
-     below 16px. Force 16px on small viewports so focusing a number /
-     text / color input never triggers the auto-zoom. Desktop typography
-     stays untouched at the lg breakpoint. */
+  /* iOS Safari and mobile Chrome auto-zoom whenever a focused form
+     control's font-size is below 16px. Force 16px on small viewports
+     so no form control ever triggers the zoom. !important is used
+     deliberately because Tailwind utility classes (.text-sm = 14px,
+     .text-xs = 12px) on the input elements have higher specificity
+     than bare element selectors and would otherwise win. Desktop
+     typography stays untouched at the lg breakpoint. */
   @media (max-width: 1023px) {
     input,
     textarea,
     select {
-      font-size: 16px;
+      font-size: 16px !important;
     }
   }
 }
