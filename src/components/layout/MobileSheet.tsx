@@ -7,23 +7,21 @@ import { Tabs } from '@/components/ui/Tabs';
 import { Code2, Sliders, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
-type SheetSnap = 'closed' | 'peek' | 'half' | 'full';
+type SheetSnap = 'closed' | 'half' | 'full';
 
 const SHEET_HEIGHT: Record<SheetSnap, string> = {
   closed: '64px',
-  peek: '24vh',
-  half: '58vh',
-  full: '92vh',
+  half: '58dvh',
+  full: '92dvh',
 };
 
 const PREVIEW_BOTTOM: Record<SheetSnap, string> = {
   closed: '72px',
-  peek: 'calc(24vh + 8px)',
-  half: 'calc(58vh + 8px)',
-  full: 'calc(92vh + 8px)',
+  half: 'calc(58dvh + 8px)',
+  full: 'calc(92dvh + 8px)',
 };
 
-const ORDER: SheetSnap[] = ['closed', 'peek', 'half', 'full'];
+const ORDER: SheetSnap[] = ['closed', 'half', 'full'];
 
 function nextSnap(s: SheetSnap, dir: 1 | -1): SheetSnap {
   const i = ORDER.indexOf(s);

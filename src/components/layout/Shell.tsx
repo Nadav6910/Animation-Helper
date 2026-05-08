@@ -46,7 +46,7 @@ export function Shell({ ready }: Props) {
           },
         },
       }}
-      className="relative h-full min-h-screen overflow-hidden flex flex-col"
+      className="relative h-dvh overflow-hidden flex flex-col"
     >
       <div
         aria-hidden

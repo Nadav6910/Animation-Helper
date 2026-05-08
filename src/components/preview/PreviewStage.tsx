@@ -91,7 +91,7 @@ export function PreviewStage() {
   }, [config, elementClassName, tick]);
 
   return (
-    <div className="card relative h-full min-h-[360px] overflow-hidden p-0">
+    <div className="card relative h-full lg:min-h-[360px] overflow-hidden p-0">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-radial-spotlight"
@@ -111,7 +111,7 @@ export function PreviewStage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
         onAnimationEnd={onAnimationEnd}
-        className="relative z-10 flex h-full min-h-[360px] items-center justify-center px-6 py-8"
+        className="relative z-10 flex h-full lg:min-h-[360px] items-center justify-center px-6 py-8"
       >
         {targetEl}
       </motion.div>
