@@ -299,16 +299,17 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
     applyPreset: (next) => {
       const current = get().config;
       const presetCloned: AnimationConfig = JSON.parse(JSON.stringify(next));
-      // Take the animation from the preset, keep what the user is looking at
-      // (target / shape / text / svgPath / selector / offsetPath).
+      // Take only the animation itself from the preset (keyframes, easing,
+      // stagger). Keep everything the user has dialed in: target, shape,
+      // text, svgPath, selector, offset-path, duration, delay, iterations,
+      // direction, fill. So picking "Pulse" applies the pulse motion to
+      // whatever shape they're staring at, at their preferred speed and
+      // loop setting.
       const merged: AnimationConfig = {
-        ...presetCloned,
-        target: current.target,
-        shape: current.shape,
-        text: current.text,
-        svgPath: current.svgPath,
-        selector: current.selector,
-        offsetPath: current.offsetPath ?? presetCloned.offsetPath,
+        ...current,
+        keyframes: presetCloned.keyframes,
+        easing: presetCloned.easing,
+        stagger: presetCloned.stagger,
       };
       history.record(merged);
       set({
