@@ -1,30 +1,47 @@
 import { useEffect, useRef } from 'react';
+import LZString from 'lz-string';
 import { useAnimationStore } from '@/store/animationStore';
 import type { AnimationConfig } from '@/types/animation';
 
-const HASH_PREFIX = '#cfg=';
+const NEW_PREFIX = '#c=';
+const LEGACY_PREFIX = '#cfg=';
 
 function encode(config: AnimationConfig): string {
   try {
     const json = JSON.stringify(config);
-    return HASH_PREFIX + btoa(unescape(encodeURIComponent(json)));
+    return NEW_PREFIX + LZString.compressToEncodedURIComponent(json);
   } catch {
     return '';
   }
 }
 
 function decode(hash: string): AnimationConfig | null {
-  if (!hash.startsWith(HASH_PREFIX)) return null;
-  try {
-    const json = decodeURIComponent(escape(atob(hash.slice(HASH_PREFIX.length))));
-    return JSON.parse(json) as AnimationConfig;
-  } catch {
-    return null;
+  if (hash.startsWith(NEW_PREFIX)) {
+    try {
+      const json = LZString.decompressFromEncodedURIComponent(
+        hash.slice(NEW_PREFIX.length)
+      );
+      if (!json) return null;
+      return JSON.parse(json) as AnimationConfig;
+    } catch {
+      return null;
+    }
   }
+  if (hash.startsWith(LEGACY_PREFIX)) {
+    try {
+      const json = decodeURIComponent(
+        escape(atob(hash.slice(LEGACY_PREFIX.length)))
+      );
+      return JSON.parse(json) as AnimationConfig;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 /**
- * Loads config from #cfg= on mount and writes back on change (debounced via rAF).
+ * Loads config from #c= (or legacy #cfg=) on mount and writes back on change.
  */
 export function useUrlState() {
   const config = useAnimationStore((s) => s.config);
@@ -49,7 +66,11 @@ export function useUrlState() {
     const write = () => {
       const next = encode(config);
       if (next && window.location.hash !== next) {
-        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${next}`);
+        window.history.replaceState(
+          null,
+          '',
+          `${window.location.pathname}${window.location.search}${next}`
+        );
       }
     };
     raf = window.requestAnimationFrame(write);

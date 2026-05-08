@@ -14,6 +14,8 @@ export function getHighlighter(): Promise<HighlighterCore> {
         import('@shikijs/langs/css'),
         import('@shikijs/langs/javascript'),
         import('@shikijs/langs/tsx'),
+        import('@shikijs/langs/scss'),
+        import('@shikijs/langs/html'),
       ],
       engine: createOnigurumaEngine(() => import('shiki/wasm')),
     });
@@ -21,7 +23,7 @@ export function getHighlighter(): Promise<HighlighterCore> {
   return _hl;
 }
 
-export type CodeLang = 'css' | 'javascript' | 'tsx';
+export type CodeLang = 'css' | 'javascript' | 'tsx' | 'scss' | 'html';
 
 export async function highlight(
   code: string,
