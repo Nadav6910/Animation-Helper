@@ -5,14 +5,30 @@ import { transformToCss, filterToCss } from './generateCss';
 const num = (n: number) =>
   Number.isInteger(n) ? String(n) : Number(n.toFixed(3)).toString();
 
-function decls(k: Keyframe): Record<string, string> {
+const GRADIENT_RE = /gradient\s*\(/i;
+const FIRST_COLOR_RE =
+  /#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)|hsla?\([^)]+\)|hwb\([^)]+\)/;
+
+function decls(k: Keyframe, target: AnimationConfig['target']): Record<string, string> {
   const out: Record<string, string> = {};
   const t = transformToCss(k.transform);
   if (t) out.transform = t;
   if (typeof k.opacity === 'number') out.opacity = num(k.opacity);
-  if (k.color) out.color = k.color;
+  if (k.color) {
+    if (GRADIENT_RE.test(k.color) && target === 'text') {
+      // Gradient text via background-clip: text trick.
+      out.background = k.color;
+      out.backgroundClip = 'text';
+      out.WebkitBackgroundClip = 'text';
+      out.color = 'transparent';
+    } else if (GRADIENT_RE.test(k.color)) {
+      out.color = k.color.match(FIRST_COLOR_RE)?.[0] ?? 'inherit';
+    } else {
+      out.color = k.color;
+    }
+  }
   if (k.bg) {
-    if (/gradient\s*\(/i.test(k.bg)) out.background = k.bg;
+    if (GRADIENT_RE.test(k.bg)) out.background = k.bg;
     else out.backgroundColor = k.bg;
   }
   const f = filterToCss(k);
@@ -61,7 +77,7 @@ export function generateTailwind(
 
   const keyframeBody = sorted
     .map((k) => {
-      const d = decls(k);
+      const d = decls(k, c.target);
       if (Object.keys(d).length === 0) return null;
       return `      '${num(k.at)}%': ${stringifyDecls(d, '      ')},`;
     })

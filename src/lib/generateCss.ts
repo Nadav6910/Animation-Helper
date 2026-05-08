@@ -55,14 +55,41 @@ export function filterToCss(k: Keyframe): string | null {
   return parts.length ? parts.join(' ') : null;
 }
 
-function declarationsForKeyframe(k: Keyframe): string[] {
+const GRADIENT_RE = /gradient\s*\(/i;
+const FIRST_COLOR_RE =
+  /#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)|hsla?\([^)]+\)|hwb\([^)]+\)/;
+
+function firstColorStop(value: string): string {
+  return value.match(FIRST_COLOR_RE)?.[0] ?? 'inherit';
+}
+
+function declarationsForKeyframe(
+  k: Keyframe,
+  target: AnimationConfig['target']
+): string[] {
   const decls: string[] = [];
   const transform = transformToCss(k.transform);
   if (transform) decls.push(`transform: ${transform};`);
   if (typeof k.opacity === 'number') decls.push(`opacity: ${num(k.opacity)};`);
-  if (k.color) decls.push(`color: ${k.color};`);
+  if (k.color) {
+    if (GRADIENT_RE.test(k.color) && target === 'text') {
+      // CSS doesn't allow gradients on `color` directly; the
+      // background-clip: text trick clips a gradient background to the
+      // text glyphs while making the actual color transparent.
+      decls.push(`background: ${k.color};`);
+      decls.push(`background-clip: text;`);
+      decls.push(`-webkit-background-clip: text;`);
+      decls.push(`color: transparent;`);
+    } else if (GRADIENT_RE.test(k.color)) {
+      // Gradient fill is text-only; for shapes / SVG fall back to the
+      // first stop so the element still renders.
+      decls.push(`color: ${firstColorStop(k.color)};`);
+    } else {
+      decls.push(`color: ${k.color};`);
+    }
+  }
   if (k.bg) {
-    const prop = /gradient\s*\(/i.test(k.bg) ? 'background' : 'background-color';
+    const prop = GRADIENT_RE.test(k.bg) ? 'background' : 'background-color';
     decls.push(`${prop}: ${k.bg};`);
   }
   const filter = filterToCss(k);
@@ -151,7 +178,7 @@ export function generateCss(
 
   lines.push(`@keyframes ${name} {`);
   for (const k of sortedKeyframes(c.keyframes)) {
-    const decls = declarationsForKeyframe(k);
+    const decls = declarationsForKeyframe(k, c.target);
     if (decls.length === 0) continue;
     lines.push(`${indent}${num(k.at)}% {`);
     for (const d of decls) lines.push(`${indent}${indent}${d}`);

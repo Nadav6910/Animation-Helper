@@ -88,4 +88,15 @@ describe('generateFramerMotion', () => {
     expect(out).toContain("offsetPath: \"path('M0,0 L100,0')\"");
     expect(out).toContain("offsetRotate: 'auto'");
   });
+
+  it('falls back to the first stop for gradient color', () => {
+    const out = generateFramerMotion({
+      ...cfg,
+      keyframes: [
+        { id: 'a', at: 0, color: 'linear-gradient(90deg, #ff0080, #7928ca)' },
+        { id: 'b', at: 100, color: '#ffffff' },
+      ],
+    });
+    expect(out).toMatch(/color: \['#ff0080', '#ffffff'\]/);
+  });
 });

@@ -64,7 +64,7 @@ export function GradientField({
   };
 
   return (
-    <div className="flex flex-col gap-1.5 col-span-2">
+    <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
         <span className="text-[11px] uppercase tracking-wider text-fg-subtle font-semibold">
           {label}

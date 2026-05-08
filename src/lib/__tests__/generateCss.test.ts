@@ -244,6 +244,50 @@ describe('generateCss — gradient backgrounds', () => {
   });
 });
 
+describe('generateCss — gradient fill / text color', () => {
+  it('applies the background-clip: text trick on text targets', () => {
+    const css = generateCss(
+      makeConfig({
+        target: 'text',
+        keyframes: [
+          {
+            id: 'a',
+            at: 0,
+            color: 'linear-gradient(90deg, #ff8a00 0%, #e52e71 100%)',
+          },
+          { id: 'b', at: 100, color: '#7c5cff' },
+        ],
+      })
+    );
+    expect(css).toContain(
+      'background: linear-gradient(90deg, #ff8a00 0%, #e52e71 100%);'
+    );
+    expect(css).toContain('background-clip: text;');
+    expect(css).toContain('-webkit-background-clip: text;');
+    expect(css).toContain('color: transparent;');
+    expect(css).toContain('color: #7c5cff;');
+  });
+
+  it('falls back to the first colour stop on non-text targets', () => {
+    const css = generateCss(
+      makeConfig({
+        target: 'shape',
+        keyframes: [
+          {
+            id: 'a',
+            at: 0,
+            color: 'linear-gradient(90deg, #ff8a00 0%, #e52e71 100%)',
+          },
+          { id: 'b', at: 100, color: '#7c5cff' },
+        ],
+      })
+    );
+    expect(css).not.toContain('background-clip: text;');
+    expect(css).toContain('color: #ff8a00;');
+    expect(css).toContain('color: #7c5cff;');
+  });
+});
+
 describe('generateCss — bug regression snapshot', () => {
   it('matches the canonical snapshot for the headline example', () => {
     const css = generateCss(

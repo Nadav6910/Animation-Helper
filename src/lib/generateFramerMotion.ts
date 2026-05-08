@@ -44,8 +44,21 @@ function readChannel(k: Keyframe, ch: ChannelKey): string | number | undefined {
       return t?.scale?.[1];
     case 'opacity':
       return k.opacity;
-    case 'color':
+    case 'color': {
+      if (!k.color) return undefined;
+      // Gradient text-fill needs background-clip + transparent color, which
+      // is a static style rather than an animatable channel — fall back to
+      // the gradient's first stop so Framer Motion's color interpolation
+      // still produces a meaningful tween.
+      if (/gradient\s*\(/i.test(k.color)) {
+        return (
+          k.color.match(
+            /#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)|hsla?\([^)]+\)|hwb\([^)]+\)/
+          )?.[0] ?? undefined
+        );
+      }
       return k.color;
+    }
     case 'backgroundColor':
       return k.bg && !/gradient\s*\(/i.test(k.bg) ? k.bg : undefined;
     case 'background':

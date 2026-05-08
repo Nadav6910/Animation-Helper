@@ -59,4 +59,31 @@ describe('generateTailwind', () => {
     expect(out).toContain("offsetDistance: '0%'");
     expect(out).toContain("offsetDistance: '100%'");
   });
+
+  it('applies the background-clip text trick for gradient color on text', () => {
+    const out = generateTailwind({
+      ...cfg,
+      target: 'text',
+      keyframes: [
+        { id: 'a', at: 0, color: 'linear-gradient(90deg, #ff0080, #7928ca)' },
+        { id: 'b', at: 100, color: '#fff' },
+      ],
+    });
+    expect(out).toContain("background: 'linear-gradient(90deg, #ff0080, #7928ca)'");
+    expect(out).toContain("backgroundClip: 'text'");
+    expect(out).toContain("WebkitBackgroundClip: 'text'");
+    expect(out).toContain("color: 'transparent'");
+  });
+
+  it('falls back to first stop for gradient color on non-text targets', () => {
+    const out = generateTailwind({
+      ...cfg,
+      target: 'shape',
+      keyframes: [
+        { id: 'a', at: 0, color: 'linear-gradient(90deg, #ff0080, #7928ca)' },
+      ],
+    });
+    expect(out).not.toContain("backgroundClip: 'text'");
+    expect(out).toContain("color: '#ff0080'");
+  });
 });
