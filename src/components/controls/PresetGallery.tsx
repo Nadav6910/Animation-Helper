@@ -23,7 +23,7 @@ const TABS: { id: TabId; label: string }[] = [
 
 export function PresetGallery() {
   const [tab, setTab] = useState<TabId>('entrance');
-  const applyConfig = useAnimationStore((s) => s.applyConfig);
+  const applyPreset = useAnimationStore((s) => s.applyPreset);
   const saved = useSavedPresetsStore((s) => s.saved);
   const remove = useSavedPresetsStore((s) => s.remove);
 
@@ -47,7 +47,7 @@ export function PresetGallery() {
 
   const onSurprise = () => {
     const p = randomPreset();
-    applyConfig(p.build());
+    applyPreset(p.build());
   };
 
   return (
@@ -106,7 +106,7 @@ export function PresetGallery() {
               key={it.key}
               name={it.name}
               build={it.build}
-              onApply={() => applyConfig(it.build())}
+              onApply={() => applyPreset(it.build())}
               onDelete={it.deletable && it.id ? () => remove(it.id!) : undefined}
             />
           ))}

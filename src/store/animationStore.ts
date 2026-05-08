@@ -86,6 +86,10 @@ export type AnimationState = {
   resetAll: () => void;
   // bulk replace (presets, undo/redo)
   applyConfig: (next: AnimationConfig, opts?: { record?: boolean }) => void;
+  /** Apply a preset's animation, keeping the user's current target / shape /
+   * text / svgPath / offset-path so picking a preset doesn't erase what
+   * they're already looking at. */
+  applyPreset: (next: AnimationConfig) => void;
   // history
   undo: () => void;
   redo: () => void;
@@ -288,6 +292,28 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
       set({
         config: cloned,
         selectedKeyframeId: cloned.keyframes[0]?.id ?? get().selectedKeyframeId,
+        ...refreshHistoryFlags(),
+      });
+    },
+
+    applyPreset: (next) => {
+      const current = get().config;
+      const presetCloned: AnimationConfig = JSON.parse(JSON.stringify(next));
+      // Take the animation from the preset, keep what the user is looking at
+      // (target / shape / text / svgPath / selector / offsetPath).
+      const merged: AnimationConfig = {
+        ...presetCloned,
+        target: current.target,
+        shape: current.shape,
+        text: current.text,
+        svgPath: current.svgPath,
+        selector: current.selector,
+        offsetPath: current.offsetPath ?? presetCloned.offsetPath,
+      };
+      history.record(merged);
+      set({
+        config: merged,
+        selectedKeyframeId: merged.keyframes[0]?.id ?? get().selectedKeyframeId,
         ...refreshHistoryFlags(),
       });
     },

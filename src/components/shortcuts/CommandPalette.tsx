@@ -31,6 +31,7 @@ export function CommandPalette() {
   const canRedo = useAnimationStore((s) => s.canRedo);
   const resetAll = useAnimationStore((s) => s.resetAll);
   const applyConfig = useAnimationStore((s) => s.applyConfig);
+  const applyPreset = useAnimationStore((s) => s.applyPreset);
   const setEasing = useAnimationStore((s) => s.setEasing);
   const config = useAnimationStore((s) => s.config);
 
@@ -112,7 +113,7 @@ export function CommandPalette() {
         hint: p.category,
         group: 'Presets',
         icon: <Sparkles size={14} />,
-        run: () => applyConfig(p.build()),
+        run: () => applyPreset(p.build()),
       });
     }
     for (const e of EASING_PRESETS) {
@@ -150,6 +151,7 @@ export function CommandPalette() {
     setSlowMo,
     slowMo,
     applyConfig,
+    applyPreset,
     setEasing,
   ]);
 
