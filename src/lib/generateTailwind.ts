@@ -1,13 +1,12 @@
 import type { AnimationConfig, Keyframe } from '@/types/animation';
 import { easingToCss } from './easings';
 import { transformToCss, filterToCss } from './generateCss';
-
-const num = (n: number) =>
-  Number.isInteger(n) ? String(n) : Number(n.toFixed(3)).toString();
-
-const GRADIENT_RE = /gradient\s*\(/i;
-const FIRST_COLOR_RE =
-  /#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)|hsla?\([^)]+\)|hwb\([^)]+\)/;
+import {
+  GRADIENT_RE,
+  durationStr,
+  firstColorStop,
+  num,
+} from './css-helpers';
 
 function decls(k: Keyframe, target: AnimationConfig['target']): Record<string, string> {
   const out: Record<string, string> = {};
@@ -22,7 +21,7 @@ function decls(k: Keyframe, target: AnimationConfig['target']): Record<string, s
       out.WebkitBackgroundClip = 'text';
       out.color = 'transparent';
     } else if (GRADIENT_RE.test(k.color)) {
-      out.color = k.color.match(FIRST_COLOR_RE)?.[0] ?? 'inherit';
+      out.color = firstColorStop(k.color);
     } else {
       out.color = k.color;
     }
@@ -56,10 +55,6 @@ function stringifyDecls(d: Record<string, string>, indent: string): string {
     (k) => `${indent}  ${quoteKey(k)}: '${d[k].replace(/'/g, "\\'")}',`
   );
   return `{\n${lines.join('\n')}\n${indent}}`;
-}
-
-function durationStr(ms: number): string {
-  return ms >= 1000 ? `${num(ms / 1000)}s` : `${num(ms)}ms`;
 }
 
 export type GenerateTailwindOptions = {

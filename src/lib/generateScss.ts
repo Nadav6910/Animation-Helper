@@ -1,5 +1,5 @@
 import type { AnimationConfig } from '@/types/animation';
-import { generateCss } from './generateCss';
+import { buildKeyframesBody, buildRuleDeclLines } from './generateCss';
 
 export type GenerateScssOptions = {
   name?: string;
@@ -7,9 +7,9 @@ export type GenerateScssOptions = {
 };
 
 /**
- * Wraps the canonical CSS output in an SCSS @mixin so consumers can reuse
- * it via `@include`. The keyframes are emitted alongside the mixin so the
- * whole snippet is self-contained.
+ * Wraps the canonical animation rule body in an SCSS @mixin so consumers
+ * can `@include play-anim;` from any rule. The keyframes block is
+ * emitted alongside the mixin so the snippet is fully self-contained.
  */
 export function generateScss(
   c: AnimationConfig,
@@ -17,23 +17,16 @@ export function generateScss(
 ): string {
   const name = opts.name ?? 'play';
   const mixin = opts.mixinName ?? `${name}-anim`;
-  const css = generateCss(c, { name, indent: '  ' });
-  // The CSS output is rule + keyframes. Split on @keyframes to wrap rule in a mixin.
-  const split = css.indexOf('@keyframes');
-  const ruleBlock = split >= 0 ? css.slice(0, split).trim() : css.trim();
-  const keyframes = split >= 0 ? css.slice(split).trim() : '';
-
-  // Convert the rule block (which is `selector { ... }`) into a mixin body
-  const mixinBody = ruleBlock
-    .replace(/^[^{]*\{/, '')
-    .replace(/\}\s*$/, '')
-    .trim();
+  const decls = buildRuleDeclLines(c, { name, indent: '  ' });
+  const keyframesBody = buildKeyframesBody(c, { indent: '  ' });
 
   return `@mixin ${mixin} {
-  ${mixinBody.replace(/\n/g, '\n  ')}
+${decls.join('\n')}
 }
 
-${keyframes}
+@keyframes ${name} {
+${keyframesBody}
+}
 
 // Apply with:
 // .my-element {

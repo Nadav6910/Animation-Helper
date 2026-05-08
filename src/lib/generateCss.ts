@@ -1,14 +1,15 @@
 import type { AnimationConfig, Keyframe, Transform } from '@/types/animation';
 import { easingToCss } from './easings';
 import { sanitisePathD } from './svgPathSafety';
-
-const num = (n: number) => {
-  if (Number.isInteger(n)) return String(n);
-  return Number(n.toFixed(3)).toString();
-};
-
-const px = (n: number) => `${num(n)}px`;
-const deg = (n: number) => `${num(n)}deg`;
+import {
+  GRADIENT_RE,
+  durationStr,
+  deg,
+  firstColorStop,
+  iterationsStr,
+  num,
+  px,
+} from './css-helpers';
 
 export function transformToCss(t: Transform | undefined): string | null {
   if (!t) return null;
@@ -63,14 +64,6 @@ export function filterToCss(k: Keyframe): string | null {
   return parts.length ? parts.join(' ') : null;
 }
 
-const GRADIENT_RE = /gradient\s*\(/i;
-const FIRST_COLOR_RE =
-  /#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)|hsla?\([^)]+\)|hwb\([^)]+\)/;
-
-function firstColorStop(value: string): string {
-  return value.match(FIRST_COLOR_RE)?.[0] ?? 'inherit';
-}
-
 function declarationsForKeyframe(
   k: Keyframe,
   target: AnimationConfig['target']
@@ -118,43 +111,37 @@ function sortedKeyframes(kfs: Keyframe[]): Keyframe[] {
   return [...kfs].sort((a, b) => a.at - b.at);
 }
 
-function durationStr(ms: number): string {
-  if (ms >= 1000) return `${num(ms / 1000)}s`;
-  return `${num(ms)}ms`;
-}
-
-function iterationsStr(it: number | 'infinite'): string {
-  return it === 'infinite' ? 'infinite' : num(it);
-}
-
 export type GenerateCssOptions = {
   name?: string;
   indent?: string;
 };
 
-export function generateCss(
+/** The `animation: ...` shorthand value (everything after `animation:`),
+ *  ready to drop into a CSS rule body or a styled-components template. */
+export function buildAnimationShorthand(
   c: AnimationConfig,
-  opts: GenerateCssOptions = {}
+  name = 'play'
 ): string {
-  const name = opts.name ?? 'play';
-  const indent = opts.indent ?? '  ';
   const easing = easingToCss(c.easing);
   const dur = durationStr(c.duration);
   const delay = c.delay ? ` ${durationStr(c.delay)}` : ' 0s';
   const iter = ` ${iterationsStr(c.iterations)}`;
   const dir = c.direction !== 'normal' ? ` ${c.direction}` : '';
   const fill = c.fill !== 'none' ? ` ${c.fill}` : '';
-  const animationValue = `${name} ${dur} ${easing}${delay}${iter}${dir}${fill}`.trim();
+  return `${name} ${dur} ${easing}${delay}${iter}${dir}${fill}`.trim();
+}
 
-  const ruleSelector = c.selector;
+/** Lines that belong inside the animated element's rule body (without
+ *  the `selector {` / `}` brace lines or the `@keyframes` block). Used
+ *  by the SCSS @mixin / styled-components / Vue / Svelte wrappers. */
+export function buildRuleDeclLines(
+  c: AnimationConfig,
+  opts: { name?: string; indent?: string } = {}
+): string[] {
+  const indent = opts.indent ?? '  ';
+  const name = opts.name ?? 'play';
   const lines: string[] = [];
-  if (c.target === 'svg') {
-    lines.push(
-      '/* For path-draw, your <path> needs pathLength="100" so stroke-dasharray:100 covers it exactly. */',
-    );
-  }
-  lines.push(`${ruleSelector} {`);
-  lines.push(`${indent}animation: ${animationValue};`);
+  lines.push(`${indent}animation: ${buildAnimationShorthand(c, name)};`);
   if (c.target === 'svg') {
     lines.push(`${indent}stroke-dasharray: 100;`);
   }
@@ -168,25 +155,17 @@ export function generateCss(
       lines.push(`${indent}offset-rotate: ${rotate};`);
     }
   }
-  lines.push('}');
-  lines.push('');
+  return lines;
+}
 
-  if (c.stagger && c.target === 'text') {
-    lines.push(`${ruleSelector} > span {`);
-    lines.push(
-      `${indent}animation: ${animationValue};`,
-    );
-    lines.push(
-      `${indent}animation-delay: calc(var(--i) * ${num(c.stagger.step)}ms);`,
-    );
-    lines.push(
-      `${indent}display: inline-block;`,
-    );
-    lines.push('}');
-    lines.push('');
-  }
-
-  lines.push(`@keyframes ${name} {`);
+/** The body of an `@keyframes name { ... }` block — keyframe markers +
+ *  declarations only, indented one level inside the @keyframes. */
+export function buildKeyframesBody(
+  c: AnimationConfig,
+  opts: { indent?: string } = {}
+): string {
+  const indent = opts.indent ?? '  ';
+  const lines: string[] = [];
   for (const k of sortedKeyframes(c.keyframes)) {
     const decls = declarationsForKeyframe(k, c.target);
     if (decls.length === 0) continue;
@@ -194,6 +173,42 @@ export function generateCss(
     for (const d of decls) lines.push(`${indent}${indent}${d}`);
     lines.push(`${indent}}`);
   }
+  return lines.join('\n');
+}
+
+export function generateCss(
+  c: AnimationConfig,
+  opts: GenerateCssOptions = {}
+): string {
+  const name = opts.name ?? 'play';
+  const indent = opts.indent ?? '  ';
+  const ruleSelector = c.selector;
+  const lines: string[] = [];
+  if (c.target === 'svg') {
+    lines.push(
+      '/* For path-draw, your <path> needs pathLength="100" so stroke-dasharray:100 covers it exactly. */',
+    );
+  }
+  lines.push(`${ruleSelector} {`);
+  for (const ln of buildRuleDeclLines(c, { name, indent })) lines.push(ln);
+  lines.push('}');
+  lines.push('');
+
+  if (c.stagger && c.target === 'text') {
+    const animationValue = buildAnimationShorthand(c, name);
+    lines.push(`${ruleSelector} > span {`);
+    lines.push(`${indent}animation: ${animationValue};`);
+    lines.push(
+      `${indent}animation-delay: calc(var(--i) * ${num(c.stagger.step)}ms);`
+    );
+    lines.push(`${indent}display: inline-block;`);
+    lines.push('}');
+    lines.push('');
+  }
+
+  lines.push(`@keyframes ${name} {`);
+  const body = buildKeyframesBody(c, { indent });
+  if (body) lines.push(body);
   lines.push('}');
 
   return lines.join('\n');

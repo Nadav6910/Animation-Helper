@@ -1,37 +1,49 @@
 import type { AnimationConfig } from '@/types/animation';
-import { generateCss } from './generateCss';
+import {
+  buildAnimationShorthand,
+  buildKeyframesBody,
+  buildRuleDeclLines,
+} from './generateCss';
 
 export type GenerateStyledComponentsOptions = {
   componentName?: string;
 };
 
+/**
+ * Builds a styled-components snippet that uses the `keyframes` helper for
+ * the @keyframes body and inlines the rule declarations into the
+ * styled.div template. Composes the shared IR helpers — no string
+ * surgery on the CSS output, no risk of mis-substitution.
+ */
 export function generateStyledComponents(
   c: AnimationConfig,
   opts: GenerateStyledComponentsOptions = {}
 ): string {
   const name = opts.componentName ?? 'Animated';
-  const animName = 'play';
-  const css = generateCss(c, { name: animName });
-  const kfStart = css.indexOf('@keyframes');
-  if (kfStart < 0) return css;
-  const ruleBlock = css.slice(0, kfStart).trim();
-  const keyframesBlock = css
-    .slice(kfStart)
-    .replace(/^@keyframes\s+\S+\s*\{/, '{')
-    .trim();
-
-  // Strip selector wrapper and pull animation declaration only
-  const inner = ruleBlock
-    .replace(/^[^{]*\{/, '')
-    .replace(/\}\s*$/, '')
-    .trim();
+  const animationName = 'play';
+  const keyframesBody = buildKeyframesBody(c, { indent: '  ' });
+  // Re-build the rule's declarations but rewire the animation shorthand
+  // so the styled-components keyframes ref (`${play}`) lands in place of
+  // the static name. Everything else (offset-path, stroke-dasharray) is
+  // untouched.
+  const decls = buildRuleDeclLines(c, { name: animationName, indent: '  ' });
+  const animationLine = `  animation: ${buildAnimationShorthand(c, animationName)};`;
+  const ruleBody = decls
+    .map((line) =>
+      line === animationLine
+        ? line.replace(`${animationName} `, '${play} ')
+        : line
+    )
+    .join('\n');
 
   return `import styled, { keyframes } from 'styled-components';
 
-const play = keyframes\`${keyframesBlock.slice(1, -1).trim()}\`;
+const play = keyframes\`
+${keyframesBody}
+\`;
 
 export const ${name} = styled.div\`
-  ${inner.replace(animName, '${play}').replace(/\n/g, '\n  ')}
+${ruleBody}
 \`;
 `;
 }

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, ExternalLink } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
+import { useFontStore } from '@/store/fontStore';
 import { generateCss } from '@/lib/generateCss';
 import { generateScss } from '@/lib/generateScss';
 import { generateTailwind } from '@/lib/generateTailwind';
@@ -32,43 +33,32 @@ type Format =
   | 'react'
   | 'html';
 
-const FORMATS: { value: Format; label: string; lang: CodeLang; ext: string }[] = [
-  { value: 'css', label: 'CSS', lang: 'css', ext: 'css' },
-  { value: 'scss', label: 'SCSS', lang: 'scss', ext: 'scss' },
-  { value: 'tailwind', label: 'Tailwind', lang: 'javascript', ext: 'js' },
-  { value: 'framer', label: 'Framer', lang: 'tsx', ext: 'tsx' },
-  { value: 'waapi', label: 'WAAPI', lang: 'javascript', ext: 'js' },
-  { value: 'styled', label: 'styled', lang: 'tsx', ext: 'tsx' },
-  { value: 'vue', label: 'Vue', lang: 'html', ext: 'vue' },
-  { value: 'svelte', label: 'Svelte', lang: 'html', ext: 'svelte' },
-  { value: 'react', label: 'React', lang: 'tsx', ext: 'tsx' },
-  { value: 'html', label: 'HTML', lang: 'html', ext: 'html' },
-];
+type GeneratorFn = (config: Parameters<typeof generateCss>[0]) => string;
 
-function generate(format: Format, config: Parameters<typeof generateCss>[0]): string {
-  switch (format) {
-    case 'css':
-      return generateCss(config);
-    case 'scss':
-      return generateScss(config);
-    case 'tailwind':
-      return generateTailwind(config);
-    case 'framer':
-      return generateFramerMotion(config);
-    case 'waapi':
-      return generateWaapi(config);
-    case 'styled':
-      return generateStyledComponents(config);
-    case 'vue':
-      return generateVue(config);
-    case 'svelte':
-      return generateSvelte(config);
-    case 'react':
-      return generateReactComponent(config);
-    case 'html':
-      return generateHtml(config);
-  }
-}
+type FormatRow = {
+  value: Format;
+  label: string;
+  lang: CodeLang;
+  ext: string;
+  fn: GeneratorFn;
+};
+
+// Each format owns its row: label + Shiki grammar + download extension +
+// the generator function. New formats add one entry — TypeScript checks
+// the union exhaustively against `Format`, so an out-of-sync row trips
+// the build instead of silently producing a "no matches" path.
+const FORMATS: FormatRow[] = [
+  { value: 'css', label: 'CSS', lang: 'css', ext: 'css', fn: generateCss },
+  { value: 'scss', label: 'SCSS', lang: 'scss', ext: 'scss', fn: generateScss },
+  { value: 'tailwind', label: 'Tailwind', lang: 'javascript', ext: 'js', fn: generateTailwind },
+  { value: 'framer', label: 'Framer', lang: 'tsx', ext: 'tsx', fn: generateFramerMotion },
+  { value: 'waapi', label: 'WAAPI', lang: 'javascript', ext: 'js', fn: generateWaapi },
+  { value: 'styled', label: 'styled', lang: 'tsx', ext: 'tsx', fn: generateStyledComponents },
+  { value: 'vue', label: 'Vue', lang: 'vue', ext: 'vue', fn: generateVue },
+  { value: 'svelte', label: 'Svelte', lang: 'svelte', ext: 'svelte', fn: generateSvelte },
+  { value: 'react', label: 'React', lang: 'tsx', ext: 'tsx', fn: generateReactComponent },
+  { value: 'html', label: 'HTML', lang: 'html', ext: 'html', fn: generateHtml },
+];
 
 function download(filename: string, contents: string, mime: string) {
   const blob = new Blob([contents], { type: mime });
@@ -112,13 +102,26 @@ function openCodePen(html: string, css: string) {
 
 export function CodePanel() {
   const config = useAnimationStore((s) => s.config);
+  const font = useFontStore((s) => s.font);
   const [format, setFormat] = useState<Format>('css');
   const [toast, setToast] = useState<string | null>(null);
   const { theme } = useTheme();
   const copyRef = useRef<HTMLButtonElement | null>(null);
 
-  const code = useMemo(() => generate(format, config), [format, config]);
   const meta = FORMATS.find((f) => f.value === format)!;
+  // The HTML export carries the user's chosen font (link tag + body
+  // font-family + inline text style) so the downloaded file matches the
+  // preview. Other formats are font-agnostic — consumer wires the font
+  // in the host project.
+  const code = useMemo(() => {
+    if (meta.value === 'html') {
+      return generateHtml(config, {
+        fontFamily: font.family,
+        fontHref: font.href,
+      });
+    }
+    return meta.fn(config);
+  }, [meta, config, font]);
 
   useEffect(() => {
     const handler = () => copyRef.current?.click();
@@ -173,7 +176,10 @@ export function CodePanel() {
           <button
             type="button"
             onClick={() => {
-              const html = generateHtml(config);
+              const html = generateHtml(config, {
+                fontFamily: font.family,
+                fontHref: font.href,
+              });
               const justHtml = html.match(/<body>([\s\S]*?)<\/body>/i)?.[1].trim() ?? '';
               openCodePen(justHtml, generateCss(config));
               showToast('Opening CodePen…');

@@ -1,9 +1,7 @@
 import type { AnimationConfig, Easing, Keyframe, Transform } from '@/types/animation';
 import { easingToCss } from './easings';
 import { sanitisePathD } from './svgPathSafety';
-
-const num = (n: number) =>
-  Number.isInteger(n) ? String(n) : Number(n.toFixed(3)).toString();
+import { firstColorStop, GRADIENT_RE, num } from './css-helpers';
 
 type ChannelKey =
   | 'x'
@@ -51,19 +49,16 @@ function readChannel(k: Keyframe, ch: ChannelKey): string | number | undefined {
       // is a static style rather than an animatable channel — fall back to
       // the gradient's first stop so Framer Motion's color interpolation
       // still produces a meaningful tween.
-      if (/gradient\s*\(/i.test(k.color)) {
-        return (
-          k.color.match(
-            /#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)|hsla?\([^)]+\)|hwb\([^)]+\)/
-          )?.[0] ?? undefined
-        );
+      if (GRADIENT_RE.test(k.color)) {
+        const stop = firstColorStop(k.color);
+        return stop === 'inherit' ? undefined : stop;
       }
       return k.color;
     }
     case 'backgroundColor':
-      return k.bg && !/gradient\s*\(/i.test(k.bg) ? k.bg : undefined;
+      return k.bg && !GRADIENT_RE.test(k.bg) ? k.bg : undefined;
     case 'background':
-      return k.bg && /gradient\s*\(/i.test(k.bg) ? k.bg : undefined;
+      return k.bg && GRADIENT_RE.test(k.bg) ? k.bg : undefined;
     case 'filter': {
       const parts: string[] = [];
       if (typeof k.blur === 'number' && k.blur > 0)

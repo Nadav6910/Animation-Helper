@@ -2,9 +2,7 @@ import type { AnimationConfig, Keyframe } from '@/types/animation';
 import { easingToCss } from './easings';
 import { transformToCss, filterToCss } from './generateCss';
 import { sanitisePathD } from './svgPathSafety';
-
-const num = (n: number) =>
-  Number.isInteger(n) ? String(n) : Number(n.toFixed(3)).toString();
+import { GRADIENT_RE, num } from './css-helpers';
 
 function keyframeObj(k: Keyframe): Record<string, string | number> {
   const out: Record<string, string | number> = {};
@@ -13,7 +11,7 @@ function keyframeObj(k: Keyframe): Record<string, string | number> {
   if (typeof k.opacity === 'number') out.opacity = k.opacity;
   if (k.color) out.color = k.color;
   if (k.bg) {
-    if (/gradient\s*\(/i.test(k.bg)) out.background = k.bg;
+    if (GRADIENT_RE.test(k.bg)) out.background = k.bg;
     else out.backgroundColor = k.bg;
   }
   const f = filterToCss(k);

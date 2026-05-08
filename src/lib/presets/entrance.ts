@@ -1,18 +1,11 @@
 import type { Preset } from './types';
-import type { AnimationConfig } from '@/types/animation';
+import { baseScaffold, blank, uid } from './shared';
 
-const uid = () => Math.random().toString(36).slice(2, 9);
-const blank = { translate: [0, 0] as [number, number], rotate: [0, 0] as [number, number], skew: [0, 0] as [number, number], scale: [1, 1] as [number, number] };
-
-const baseShape = (): Pick<AnimationConfig, 'target' | 'selector' | 'shape' | 'text' | 'svgPath' | 'iterations' | 'direction' | 'fill'> => ({
-  target: 'shape',
-  selector: '.animated',
-  shape: 'square',
-  text: 'Animate',
-  svgPath: 'check',
-  iterations: 1,
-  direction: 'normal',
-  fill: 'forwards',
+const baseShape = () => ({
+  ...baseScaffold(),
+  iterations: 1 as const,
+  direction: 'normal' as const,
+  fill: 'forwards' as const,
 });
 
 export const ENTRANCE_PRESETS: Preset[] = [
@@ -24,8 +17,8 @@ export const ENTRANCE_PRESETS: Preset[] = [
     build: () => ({
       ...baseShape(),
       keyframes: [
-        { id: uid(), at: 0, opacity: 0, transform: { ...blank } },
-        { id: uid(), at: 100, opacity: 1, transform: { ...blank } },
+        { id: uid(), at: 0, opacity: 0, transform: { ...blank() } },
+        { id: uid(), at: 100, opacity: 1, transform: { ...blank() } },
       ],
       duration: 600,
       delay: 0,
@@ -39,8 +32,8 @@ export const ENTRANCE_PRESETS: Preset[] = [
     build: () => ({
       ...baseShape(),
       keyframes: [
-        { id: uid(), at: 0, opacity: 0, transform: { ...blank, translate: [0, 30] } },
-        { id: uid(), at: 100, opacity: 1, transform: { ...blank } },
+        { id: uid(), at: 0, opacity: 0, transform: { ...blank(), translate: [0, 30] } },
+        { id: uid(), at: 100, opacity: 1, transform: { ...blank() } },
       ],
       duration: 700,
       delay: 0,
@@ -54,8 +47,8 @@ export const ENTRANCE_PRESETS: Preset[] = [
     build: () => ({
       ...baseShape(),
       keyframes: [
-        { id: uid(), at: 0, opacity: 0, transform: { ...blank, translate: [40, 0] } },
-        { id: uid(), at: 100, opacity: 1, transform: { ...blank } },
+        { id: uid(), at: 0, opacity: 0, transform: { ...blank(), translate: [40, 0] } },
+        { id: uid(), at: 100, opacity: 1, transform: { ...blank() } },
       ],
       duration: 700,
       delay: 0,
@@ -69,8 +62,8 @@ export const ENTRANCE_PRESETS: Preset[] = [
     build: () => ({
       ...baseShape(),
       keyframes: [
-        { id: uid(), at: 0, opacity: 0, transform: { ...blank, scale: [0.6, 0.6] } },
-        { id: uid(), at: 100, opacity: 1, transform: { ...blank } },
+        { id: uid(), at: 0, opacity: 0, transform: { ...blank(), scale: [0.6, 0.6] } },
+        { id: uid(), at: 100, opacity: 1, transform: { ...blank() } },
       ],
       duration: 600,
       delay: 0,
@@ -84,8 +77,8 @@ export const ENTRANCE_PRESETS: Preset[] = [
     build: () => ({
       ...baseShape(),
       keyframes: [
-        { id: uid(), at: 0, opacity: 0, blur: 14, transform: { ...blank } },
-        { id: uid(), at: 100, opacity: 1, blur: 0, transform: { ...blank } },
+        { id: uid(), at: 0, opacity: 0, blur: 14, transform: { ...blank() } },
+        { id: uid(), at: 100, opacity: 1, blur: 0, transform: { ...blank() } },
       ],
       duration: 800,
       delay: 0,
@@ -99,8 +92,8 @@ export const ENTRANCE_PRESETS: Preset[] = [
     build: () => ({
       ...baseShape(),
       keyframes: [
-        { id: uid(), at: 0, opacity: 0, transform: { ...blank, rotate: [-90, 0] } },
-        { id: uid(), at: 100, opacity: 1, transform: { ...blank } },
+        { id: uid(), at: 0, opacity: 0, transform: { ...blank(), rotate: [-90, 0] } },
+        { id: uid(), at: 100, opacity: 1, transform: { ...blank() } },
       ],
       duration: 700,
       delay: 0,
@@ -114,9 +107,9 @@ export const ENTRANCE_PRESETS: Preset[] = [
     build: () => ({
       ...baseShape(),
       keyframes: [
-        { id: uid(), at: 0, opacity: 0, transform: { ...blank, translate: [0, -80], scale: [0.8, 0.8] } },
-        { id: uid(), at: 70, opacity: 1, transform: { ...blank, translate: [0, 8], scale: [1.05, 1.05] } },
-        { id: uid(), at: 100, opacity: 1, transform: { ...blank } },
+        { id: uid(), at: 0, opacity: 0, transform: { ...blank(), translate: [0, -80], scale: [0.8, 0.8] } },
+        { id: uid(), at: 70, opacity: 1, transform: { ...blank(), translate: [0, 8], scale: [1.05, 1.05] } },
+        { id: uid(), at: 100, opacity: 1, transform: { ...blank() } },
       ],
       duration: 900,
       delay: 0,

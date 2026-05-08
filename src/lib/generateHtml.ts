@@ -30,7 +30,22 @@ const safeViewBox = (vb: string) =>
 const safeClass = (s: string) =>
   /^[A-Za-z_][\w-]*$/.test(s) ? s : 'animated';
 
-function targetMarkup(c: AnimationConfig, className: string): string {
+const ALLOWED_FONT_ORIGINS = new Set(['https://fonts.googleapis.com']);
+const safeFontHref = (href: string): string | null => {
+  try {
+    const url = new URL(href);
+    return ALLOWED_FONT_ORIGINS.has(url.origin) ? url.toString() : null;
+  } catch {
+    return null;
+  }
+};
+
+function targetMarkup(
+  c: AnimationConfig,
+  className: string,
+  fontFamily: string
+): string {
+  const textFontStyle = `font: 700 64px/1.1 ${fontFamily}`;
   if (c.target === 'text') {
     const text = escapeHtml(c.text ?? 'Animate');
     if (c.stagger) {
@@ -40,9 +55,9 @@ function targetMarkup(c: AnimationConfig, className: string): string {
             `<span style="display:inline-block;--i:${i}">${ch === ' ' ? '&nbsp;' : ch}</span>`
         )
         .join('');
-      return `<p class="${className}" style="font: 700 64px/1.1 system-ui, sans-serif">${letters}</p>`;
+      return `<p class="${className}" style="${escapeHtml(textFontStyle)}">${letters}</p>`;
     }
-    return `<p class="${className}" style="font: 700 64px/1.1 system-ui, sans-serif">${text}</p>`;
+    return `<p class="${className}" style="${escapeHtml(textFontStyle)}">${text}</p>`;
   }
   if (c.target === 'svg') {
     const def = SVG_PATH_BY_ID[c.svgPath ?? 'check'];
@@ -63,7 +78,16 @@ function targetMarkup(c: AnimationConfig, className: string): string {
 export type GenerateHtmlOptions = {
   className?: string;
   title?: string;
+  /** font-family CSS value to inject into the document body and the text
+   *  target's inline style. Defaults to system-ui. */
+  fontFamily?: string;
+  /** Optional stylesheet href (e.g. a Google Fonts link) emitted as a
+   *  <link rel="stylesheet"> in <head>. Allow-listed to font origins we
+   *  trust ourselves to ship. Tampered values are dropped silently. */
+  fontHref?: string;
 };
+
+const DEFAULT_FONT = 'system-ui, sans-serif';
 
 export function generateHtml(
   c: AnimationConfig,
@@ -71,17 +95,25 @@ export function generateHtml(
 ): string {
   const className = safeClass(opts.className ?? 'animated');
   const title = opts.title ?? 'Animation Helper export';
+  const fontFamily = opts.fontFamily ?? DEFAULT_FONT;
+  const fontHref = opts.fontHref ? safeFontHref(opts.fontHref) : null;
   const css = cssBlockSafe(
     generateCss({ ...c, selector: `.${className}` }, { name: 'play' })
   );
-  const markup = targetMarkup(c, className);
+  const markup = targetMarkup(c, className, fontFamily);
+  const fontLink = fontHref
+    ? `\n  <link rel="stylesheet" href="${escapeHtml(fontHref)}">`
+    : '';
+  // Body inherits the font-family so non-text targets still pick it up if
+  // the user adds extra content around the export later.
+  const safeBodyFontFamily = escapeHtml(fontFamily);
 
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>${escapeHtml(title)}</title>
+  <title>${escapeHtml(title)}</title>${fontLink}
   <style>
     html, body { height: 100%; margin: 0; }
     body {
@@ -89,7 +121,7 @@ export function generateHtml(
       place-items: center;
       background: #0b0b14;
       color: #f3f3f7;
-      font-family: system-ui, sans-serif;
+      font-family: ${safeBodyFontFamily};
     }
 ${css.replace(/^/gm, '    ')}
   </style>
