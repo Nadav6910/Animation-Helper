@@ -50,6 +50,7 @@ export function TransformSection({ axis }: Props) {
         min={cfg.min}
         max={cfg.max}
         suffix={cfg.suffix}
+        defaultValue={cfg.defaultVal[0]}
       />
       <NumberInput
         size="sm"
@@ -60,6 +61,7 @@ export function TransformSection({ axis }: Props) {
         min={cfg.min}
         max={cfg.max}
         suffix={cfg.suffix}
+        defaultValue={cfg.defaultVal[1]}
       />
     </div>
   );

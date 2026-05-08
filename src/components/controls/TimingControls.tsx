@@ -40,6 +40,7 @@ export function TimingControls() {
           min={0}
           max={60000}
           suffix="ms"
+          defaultValue={0}
         />
         <NumberInput
           label="Iterations"
@@ -48,6 +49,7 @@ export function TimingControls() {
           min={1}
           max={20}
           step={1}
+          defaultValue={1}
         />
       </div>
 
