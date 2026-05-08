@@ -84,12 +84,23 @@ export function KeyframeTimeline() {
                 exit={{ opacity: 0, scale: 0.6 }}
                 transition={{ type: 'spring', stiffness: 380, damping: 24 }}
                 className={cn(
-                  'absolute top-1/2 -translate-x-1/2 -translate-y-1/2 h-6 w-6 rounded-md rotate-45 border-2 cursor-grab focus-ring transition-colors',
+                  'absolute top-1/2 h-6 w-6 rounded-md border-2 cursor-grab focus-ring transition-colors',
                   active
                     ? 'bg-accent border-accent shadow-glow'
                     : 'bg-bg-panel border-border-strong hover:border-accent/60'
                 )}
-                style={{ left: `${k.at}%` }}
+                // left: ${at}% positions the anchor; translateX(-at%) of the
+                // diamond's own width keeps it inside the track — at 0 it's
+                // flush-left, at 100 it's flush-right, smoothly interpolated.
+                // translateY(-50%) handles vertical centring; rotate=45 is
+                // the visual rotation. All composed via Motion's individual
+                // transform props so the entrance scale/opacity still works.
+                style={{
+                  left: `${k.at}%`,
+                  x: `${-k.at}%`,
+                  y: '-50%',
+                  rotate: 45,
+                }}
                 aria-label={`Keyframe at ${k.at}%`}
                 aria-pressed={active}
               />

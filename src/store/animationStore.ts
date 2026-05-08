@@ -323,10 +323,15 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
 
     applyPreset: (next) => {
       // Presets are designed as cohesive animations — duration, easing,
-      // direction, fill, and iterations are all tuned to look right with
-      // the keyframes the preset ships. Apply them wholesale; the user can
-      // hit "Start blank" or undo if they wanted to keep their old settings.
+      // direction, fill, and keyframes are all tuned to look right
+      // together — so we apply them wholesale. The one exception:
+      // override iterations to 'infinite' so users see the motion loop
+      // continuously while previewing different presets. Entrance/exit
+      // presets ship as one-shots which would silently finish before the
+      // user could see them. They can toggle loop off in Timing if they
+      // want the original one-shot behavior.
       const cloned: AnimationConfig = JSON.parse(JSON.stringify(next));
+      cloned.iterations = 'infinite';
       history.record(cloned);
       set({
         config: cloned,
