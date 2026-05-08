@@ -1,8 +1,11 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Wand2, X } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
+import { EASING_PRESETS, easingToCss } from '@/lib/easings';
+import { easingDescription } from './BezierEditor';
 import { cn } from '@/lib/cn';
+import type { Easing } from '@/types/animation';
 
 export function KeyframeTimeline() {
   const trackRef = useRef<HTMLDivElement | null>(null);
@@ -54,7 +57,6 @@ export function KeyframeTimeline() {
         onClick={handleTrackClick}
         className="relative h-12 rounded-xl border border-border/70 bg-bg-soft cursor-copy overflow-hidden"
       >
-        {/* tick marks */}
         <div className="absolute inset-0 flex">
           {[0, 25, 50, 75, 100].map((t) => (
             <div
@@ -69,7 +71,6 @@ export function KeyframeTimeline() {
             </div>
           ))}
         </div>
-        {/* keyframe handles */}
         <AnimatePresence>
           {sorted.map((k) => {
             const active = selectedId === k.id;
@@ -106,19 +107,24 @@ export function KeyframeTimeline() {
         {sorted.map((k) => {
           const active = selectedId === k.id;
           return (
-            <button
-              key={k.id}
-              type="button"
-              onClick={() => select(k.id)}
-              className={cn(
-                'rounded-full border px-2.5 py-1 text-xs tabular-nums transition-colors focus-ring',
-                active
-                  ? 'bg-accent/15 border-accent/50 text-fg shadow-glow'
-                  : 'bg-bg-soft border-border/70 text-fg-muted hover:text-fg hover:border-border-strong'
-              )}
-            >
-              {k.at}%
-            </button>
+            <div key={k.id} className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => select(k.id)}
+                className={cn(
+                  'rounded-full border px-2.5 py-1 text-xs tabular-nums transition-colors focus-ring',
+                  active
+                    ? 'bg-accent/15 border-accent/50 text-fg shadow-glow'
+                    : 'bg-bg-soft border-border/70 text-fg-muted hover:text-fg hover:border-border-strong'
+                )}
+              >
+                {k.at}%
+              </button>
+              <PerKeyframeEasingChip
+                easing={k.easing}
+                onChange={(easing) => update(k.id, { easing })}
+              />
+            </div>
           );
         })}
         <button
@@ -140,6 +146,107 @@ export function KeyframeTimeline() {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+function PerKeyframeEasingChip({
+  easing,
+  onChange,
+}: {
+  easing?: Easing;
+  onChange: (e: Easing | undefined) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener('mousedown', onClick);
+    return () => window.removeEventListener('mousedown', onClick);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title={easing ? `Easing: ${easingToCss(easing)}` : 'Inherits global easing'}
+        className={cn(
+          'grid h-6 w-6 place-items-center rounded-full border focus-ring transition-colors',
+          easing
+            ? 'bg-accent/15 border-accent/50 text-fg'
+            : 'bg-bg-soft border-border/70 text-fg-subtle hover:text-fg'
+        )}
+      >
+        <Wand2 size={11} />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -4, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className="absolute left-0 top-full z-40 mt-2 w-56 rounded-xl border border-border/70 bg-bg-panel/95 p-2 shadow-2xl backdrop-blur-xl"
+          >
+            <div className="flex items-center justify-between px-1 py-1">
+              <span className="text-[11px] font-semibold text-fg">
+                Per-keyframe easing
+              </span>
+              {easing && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(undefined);
+                    setOpen(false);
+                  }}
+                  className="grid h-5 w-5 place-items-center rounded-full text-fg-subtle hover:text-fg focus-ring"
+                  aria-label="Clear easing"
+                >
+                  <X size={11} />
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1 px-1 pt-1 pb-1">
+              {EASING_PRESETS.map(({ name, value }) => {
+                const active =
+                  easing &&
+                  ((value.kind === 'preset' &&
+                    easing.kind === 'preset' &&
+                    value.value === easing.value) ||
+                    (value.kind === 'cubic' &&
+                      easing.kind === 'cubic' &&
+                      value.v.every((n, i) => Math.abs(n - easing.v[i]) < 0.001)));
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => {
+                      onChange(value);
+                      setOpen(false);
+                    }}
+                    className={cn(
+                      'rounded-full border px-2 py-0.5 text-[10px] focus-ring transition-colors',
+                      active
+                        ? 'bg-accent/15 border-accent/50 text-fg'
+                        : 'bg-bg-soft border-border/70 text-fg-muted hover:text-fg'
+                    )}
+                  >
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="border-t border-border/40 mt-1 pt-1.5 px-1 text-[10px] text-fg-subtle">
+              {easing ? easingDescription(easing) : 'Inherits the global easing'}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

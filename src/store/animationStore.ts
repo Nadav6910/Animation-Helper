@@ -5,6 +5,7 @@ import type {
   Easing,
   FillMode,
   Keyframe,
+  OffsetPath,
   ShapeKind,
   TargetKind,
   Transform,
@@ -74,6 +75,7 @@ export type AnimationState = {
   setFill: (f: FillMode) => void;
   setEasing: (e: Easing) => void;
   setStagger: (step: number | null) => void;
+  setOffsetPath: (op: OffsetPath | undefined) => void;
   // keyframes
   selectKeyframe: (id: string) => void;
   addKeyframe: (at?: number) => void;
@@ -126,6 +128,11 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
       update((c) => ({
         ...c,
         stagger: step === null ? undefined : { step },
+      })),
+    setOffsetPath: (op) =>
+      update((c) => ({
+        ...c,
+        offsetPath: op,
       })),
 
     selectKeyframe: (id) => set({ selectedKeyframeId: id }),

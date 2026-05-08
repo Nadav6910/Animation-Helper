@@ -61,6 +61,10 @@ export function PreviewStage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
         className="relative z-10 flex h-full min-h-[360px] items-center justify-center px-6 py-8"
+        style={{
+          perspective: '900px',
+          transformStyle: 'preserve-3d',
+        }}
       >
         {targetEl}
       </motion.div>
