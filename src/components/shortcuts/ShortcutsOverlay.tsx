@@ -33,6 +33,13 @@ const buildSections = (mod: string): { title: string; rows: Row[] }[] => [
       { keys: ['C'], label: 'Copy code' },
     ],
   },
+  {
+    title: 'Timeline',
+    rows: [
+      { keys: ['←', '→'], label: 'Scrub ±100 ms' },
+      { keys: [SHIFT_LABEL, '←', '→'], label: 'Scrub ±1 s' },
+    ],
+  },
 ];
 
 export function ShortcutsOverlay() {

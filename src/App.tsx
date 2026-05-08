@@ -67,6 +67,17 @@ export function App() {
       } else if (e.key === 'c' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('ah:copy'));
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        // Timeline scrub nudge — small step by default, larger jump
+        // with shift. The TimelinePanel handles the seek; we just
+        // dispatch the intent so the global handler doesn't need to
+        // know whether the panel is mounted.
+        const direction = e.key === 'ArrowRight' ? 1 : -1;
+        const deltaMs = direction * (e.shiftKey ? 1000 : 100);
+        e.preventDefault();
+        window.dispatchEvent(
+          new CustomEvent('ah:scrub-nudge', { detail: { deltaMs } })
+        );
       }
     };
     window.addEventListener('keydown', handler);
