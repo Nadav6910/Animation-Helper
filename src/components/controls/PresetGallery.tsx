@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Shuffle, Heart, X } from 'lucide-react';
+import { Shuffle, Heart, X, Eraser } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAnimationStore } from '@/store/animationStore';
 import { useSavedPresetsStore } from '@/store/savedPresetsStore';
@@ -24,6 +24,7 @@ const TABS: { id: TabId; label: string }[] = [
 export function PresetGallery() {
   const [tab, setTab] = useState<TabId>('entrance');
   const applyPreset = useAnimationStore((s) => s.applyPreset);
+  const resetAll = useAnimationStore((s) => s.resetAll);
   const saved = useSavedPresetsStore((s) => s.saved);
   const remove = useSavedPresetsStore((s) => s.remove);
 
@@ -86,15 +87,26 @@ export function PresetGallery() {
             );
           })}
         </div>
-        <button
-          type="button"
-          onClick={onSurprise}
-          className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-lg border border-border/70 bg-bg-soft px-2.5 text-xs text-fg-muted hover:text-fg focus-ring transition-colors"
-          title="Surprise me"
-        >
-          <Shuffle size={13} />
-          Surprise me
-        </button>
+        <div className="ml-auto flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={resetAll}
+            className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border/70 bg-bg-soft px-2.5 text-xs text-fg-muted hover:text-fg focus-ring transition-colors"
+            title="Clear and start with a blank canvas"
+          >
+            <Eraser size={13} />
+            Start blank
+          </button>
+          <button
+            type="button"
+            onClick={onSurprise}
+            className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border/70 bg-bg-soft px-2.5 text-xs text-fg-muted hover:text-fg focus-ring transition-colors"
+            title="Apply a random preset"
+          >
+            <Shuffle size={13} />
+            Surprise me
+          </button>
+        </div>
       </div>
 
       {items.length === 0 ? (

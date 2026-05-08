@@ -34,21 +34,21 @@ export function ControlsPanel() {
   return (
     <div className="flex flex-col gap-3">
       <Section
-        title="Presets"
-        description="Start from a curated animation"
-        icon={<Sparkles size={16} />}
-        defaultOpen
-      >
-        <PresetGallery />
-      </Section>
-
-      <Section
         title="Target"
         description="What gets animated"
         icon={<Target size={16} />}
-        defaultOpen={false}
+        defaultOpen
       >
         <TargetPicker />
+      </Section>
+
+      <Section
+        title="Presets"
+        description="Start from a curated animation"
+        icon={<Sparkles size={16} />}
+        defaultOpen={false}
+      >
+        <PresetGallery />
       </Section>
 
       <Section

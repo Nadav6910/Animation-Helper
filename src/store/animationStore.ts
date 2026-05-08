@@ -181,10 +181,35 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
         stagger: step === null ? undefined : { step },
       })),
     setOffsetPath: (op) =>
-      update((c) => ({
-        ...c,
-        offsetPath: op,
-      })),
+      update((c) => {
+        if (!op) {
+          // Disabling: strip offsetDistance from every keyframe so the
+          // element returns to its natural position.
+          const stripped = c.keyframes.map((k) => {
+            if (typeof k.offsetDistance !== 'number') return k;
+            const { offsetDistance: _drop, ...rest } = k;
+            return rest as Keyframe;
+          });
+          return { ...c, offsetPath: undefined, keyframes: stripped };
+        }
+        // Enabling (or first-time setup): make sure first keyframe has
+        // offsetDistance: 0 and last has 100, otherwise the element pins
+        // to the path's start and looks "frozen". Switching between path
+        // presets while already on doesn't re-seed.
+        const hasAny = c.keyframes.some(
+          (k) => typeof k.offsetDistance === 'number'
+        );
+        if (hasAny) return { ...c, offsetPath: op };
+        const sorted = [...c.keyframes].sort((a, b) => a.at - b.at);
+        const firstId = sorted[0]?.id;
+        const lastId = sorted[sorted.length - 1]?.id;
+        const keyframes = c.keyframes.map((k) => {
+          if (k.id === firstId) return { ...k, offsetDistance: 0 };
+          if (k.id === lastId) return { ...k, offsetDistance: 100 };
+          return k;
+        });
+        return { ...c, offsetPath: op, keyframes };
+      }),
     setPathDraw: (enabled) =>
       update((c) => {
         if (!enabled) {
@@ -297,24 +322,15 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
     },
 
     applyPreset: (next) => {
-      const current = get().config;
-      const presetCloned: AnimationConfig = JSON.parse(JSON.stringify(next));
-      // Take only the animation itself from the preset (keyframes, easing,
-      // stagger). Keep everything the user has dialed in: target, shape,
-      // text, svgPath, selector, offset-path, duration, delay, iterations,
-      // direction, fill. So picking "Pulse" applies the pulse motion to
-      // whatever shape they're staring at, at their preferred speed and
-      // loop setting.
-      const merged: AnimationConfig = {
-        ...current,
-        keyframes: presetCloned.keyframes,
-        easing: presetCloned.easing,
-        stagger: presetCloned.stagger,
-      };
-      history.record(merged);
+      // Presets are designed as cohesive animations — duration, easing,
+      // direction, fill, and iterations are all tuned to look right with
+      // the keyframes the preset ships. Apply them wholesale; the user can
+      // hit "Start blank" or undo if they wanted to keep their old settings.
+      const cloned: AnimationConfig = JSON.parse(JSON.stringify(next));
+      history.record(cloned);
       set({
-        config: merged,
-        selectedKeyframeId: merged.keyframes[0]?.id ?? get().selectedKeyframeId,
+        config: cloned,
+        selectedKeyframeId: cloned.keyframes[0]?.id ?? get().selectedKeyframeId,
         ...refreshHistoryFlags(),
       });
     },

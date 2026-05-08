@@ -1,13 +1,17 @@
 import { useAnimationStore } from '@/store/animationStore';
 import { NumberInput } from '@/components/ui/NumberInput';
 
+// Paths are intentionally small and centred near (0,0) because offset-path
+// is anchored to the element's own box origin — large numbers would push
+// the element well off-stage. The viewBox in the picker SVG below is
+// sized -100..100 / -60..60 to match.
 const PRESETS: { label: string; d: string }[] = [
-  { label: 'Straight', d: 'M0,40 L320,40' },
-  { label: 'Arc', d: 'M0,80 Q160,-40 320,80' },
-  { label: 'Wave', d: 'M0,40 Q80,-40 160,40 T320,40' },
-  { label: 'Circle', d: 'M160,40 m-80,0 a80,80 0 1,0 160,0 a80,80 0 1,0 -160,0' },
-  { label: 'Loop', d: 'M0,80 Q80,80 80,40 Q80,0 160,0 Q240,0 240,40 Q240,80 320,80' },
-  { label: 'Zigzag', d: 'M0,80 L60,0 L120,80 L180,0 L240,80 L300,0 L320,40' },
+  { label: 'Straight', d: 'M-80,0 L80,0' },
+  { label: 'Arc', d: 'M-80,30 Q0,-50 80,30' },
+  { label: 'Wave', d: 'M-80,0 Q-40,-40 0,0 T80,0' },
+  { label: 'Circle', d: 'M0,0 m-50,0 a50,50 0 1,0 100,0 a50,50 0 1,0 -100,0' },
+  { label: 'Loop', d: 'M-80,30 Q-40,30 -40,0 Q-40,-30 0,-30 Q40,-30 40,0 Q40,30 80,30' },
+  { label: 'Zigzag', d: 'M-80,30 L-40,-30 L0,30 L40,-30 L80,30' },
 ];
 
 export function OffsetPathSection() {
@@ -65,12 +69,12 @@ export function OffsetPathSection() {
                         : 'bg-bg-soft border-border/70 hover:border-border-strong')
                     }
                   >
-                    <svg viewBox="0 0 320 80" width="100%" height="32" preserveAspectRatio="xMidYMid meet">
+                    <svg viewBox="-100 -60 200 120" width="100%" height="32" preserveAspectRatio="xMidYMid meet">
                       <path
                         d={p.d}
                         fill="none"
                         stroke="rgb(var(--accent))"
-                        strokeWidth={3}
+                        strokeWidth={4}
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       />

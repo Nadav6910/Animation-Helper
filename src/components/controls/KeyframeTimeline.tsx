@@ -1,4 +1,5 @@
-import { useRef, useState, useEffect } from 'react';
+import { useLayoutEffect, useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, Wand2, X } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
@@ -55,22 +56,16 @@ export function KeyframeTimeline() {
       <div
         ref={trackRef}
         onClick={handleTrackClick}
-        className="relative h-12 rounded-xl border border-border/70 bg-bg-soft cursor-copy overflow-hidden"
+        className="relative h-10 rounded-xl border border-border/70 bg-bg-soft cursor-copy"
       >
-        <div className="absolute inset-0 flex">
-          {[0, 25, 50, 75, 100].map((t) => (
-            <div
-              key={t}
-              className="relative h-full"
-              style={{ width: `${t === 100 ? 0 : 25}%` }}
-            >
-              <span className="absolute right-0 top-1 text-[10px] text-fg-subtle/70 tabular-nums px-1">
-                {t}%
-              </span>
-              <span className="absolute right-0 inset-y-0 w-px bg-border/60" />
-            </div>
-          ))}
-        </div>
+        {/* tick lines (no labels — labels are below) */}
+        {[25, 50, 75].map((t) => (
+          <span
+            key={t}
+            className="absolute inset-y-0 w-px bg-border/40"
+            style={{ left: `${t}%` }}
+          />
+        ))}
         <AnimatePresence>
           {sorted.map((k) => {
             const active = selectedId === k.id;
@@ -101,6 +96,25 @@ export function KeyframeTimeline() {
             );
           })}
         </AnimatePresence>
+      </div>
+      <div className="relative h-3 -mt-1 select-none" aria-hidden>
+        {[0, 25, 50, 75, 100].map((t) => (
+          <span
+            key={t}
+            className="absolute top-0 text-[10px] text-fg-subtle/70 tabular-nums"
+            style={{
+              left: `${t}%`,
+              transform:
+                t === 0
+                  ? 'translateX(0)'
+                  : t === 100
+                    ? 'translateX(-100%)'
+                    : 'translateX(-50%)',
+            }}
+          >
+            {t}%
+          </span>
+        ))}
       </div>
 
       <div className="flex flex-wrap gap-1.5 items-center">
@@ -158,20 +172,127 @@ function PerKeyframeEasingChip({
   onChange: (e: Easing | undefined) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
-  useEffect(() => {
+  // Recompute position whenever the popover opens or the viewport changes.
+  useLayoutEffect(() => {
     if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    const place = () => {
+      const t = triggerRef.current?.getBoundingClientRect();
+      if (!t) return;
+      const POP_W = 224;
+      const margin = 8;
+      let left = t.left + t.width / 2 - POP_W / 2;
+      left = Math.max(margin, Math.min(window.innerWidth - POP_W - margin, left));
+      const top = t.bottom + 6;
+      setPos({ top, left });
     };
-    window.addEventListener('mousedown', onClick);
-    return () => window.removeEventListener('mousedown', onClick);
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
   }, [open]);
 
+  // Click-outside close (covers both portal popover and trigger).
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        popRef.current?.contains(target) ||
+        triggerRef.current?.contains(target)
+      )
+        return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const popover = (
+    <AnimatePresence>
+      {open && pos && (
+        <motion.div
+          ref={popRef}
+          initial={{ opacity: 0, y: -4, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -4, scale: 0.95 }}
+          transition={{ duration: 0.15 }}
+          className="fixed z-[80] w-56 rounded-xl border border-border/70 bg-bg-panel/95 p-2 shadow-2xl backdrop-blur-xl"
+          style={{ top: pos.top, left: pos.left }}
+        >
+          <div className="flex items-center justify-between px-1 py-1">
+            <span className="text-[11px] font-semibold text-fg">
+              Per-keyframe easing
+            </span>
+            {easing && (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange(undefined);
+                  setOpen(false);
+                }}
+                className="grid h-5 w-5 place-items-center rounded-full text-fg-subtle hover:text-fg focus-ring"
+                aria-label="Clear easing"
+              >
+                <X size={11} />
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1 px-1 pt-1 pb-1">
+            {EASING_PRESETS.map(({ name, value }) => {
+              const active =
+                easing &&
+                ((value.kind === 'preset' &&
+                  easing.kind === 'preset' &&
+                  value.value === easing.value) ||
+                  (value.kind === 'cubic' &&
+                    easing.kind === 'cubic' &&
+                    value.v.every((n, i) => Math.abs(n - easing.v[i]) < 0.001)));
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => {
+                    onChange(value);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    'rounded-full border px-2 py-0.5 text-[10px] focus-ring transition-colors',
+                    active
+                      ? 'bg-accent/15 border-accent/50 text-fg'
+                      : 'bg-bg-soft border-border/70 text-fg-muted hover:text-fg'
+                  )}
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+          <div className="border-t border-border/40 mt-1 pt-1.5 px-1 text-[10px] text-fg-subtle">
+            {easing ? easingDescription(easing) : 'Inherits the global easing'}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   return (
-    <div className="relative" ref={ref}>
+    <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         title={easing ? `Easing: ${easingToCss(easing)}` : 'Inherits global easing'}
@@ -184,69 +305,9 @@ function PerKeyframeEasingChip({
       >
         <Wand2 size={11} />
       </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -4, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.95 }}
-            transition={{ duration: 0.15 }}
-            className="absolute left-0 top-full z-40 mt-2 w-56 rounded-xl border border-border/70 bg-bg-panel/95 p-2 shadow-2xl backdrop-blur-xl"
-          >
-            <div className="flex items-center justify-between px-1 py-1">
-              <span className="text-[11px] font-semibold text-fg">
-                Per-keyframe easing
-              </span>
-              {easing && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onChange(undefined);
-                    setOpen(false);
-                  }}
-                  className="grid h-5 w-5 place-items-center rounded-full text-fg-subtle hover:text-fg focus-ring"
-                  aria-label="Clear easing"
-                >
-                  <X size={11} />
-                </button>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-1 px-1 pt-1 pb-1">
-              {EASING_PRESETS.map(({ name, value }) => {
-                const active =
-                  easing &&
-                  ((value.kind === 'preset' &&
-                    easing.kind === 'preset' &&
-                    value.value === easing.value) ||
-                    (value.kind === 'cubic' &&
-                      easing.kind === 'cubic' &&
-                      value.v.every((n, i) => Math.abs(n - easing.v[i]) < 0.001)));
-                return (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => {
-                      onChange(value);
-                      setOpen(false);
-                    }}
-                    className={cn(
-                      'rounded-full border px-2 py-0.5 text-[10px] focus-ring transition-colors',
-                      active
-                        ? 'bg-accent/15 border-accent/50 text-fg'
-                        : 'bg-bg-soft border-border/70 text-fg-muted hover:text-fg'
-                    )}
-                  >
-                    {name}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="border-t border-border/40 mt-1 pt-1.5 px-1 text-[10px] text-fg-subtle">
-              {easing ? easingDescription(easing) : 'Inherits the global easing'}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+      {typeof document !== 'undefined'
+        ? createPortal(popover, document.body)
+        : null}
+    </>
   );
 }
