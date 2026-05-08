@@ -15,10 +15,12 @@ const PREVIEW_GAP_PX = 8;
 // Fractions of the available container height for non-closed snaps.
 // Resolved to pixels at runtime via a ResizeObserver so framer-motion can
 // interpolate between concrete numbers (mixed-unit tweens like
-// '64px' ↔ '58dvh' silently snap instead of animating).
+// '64px' ↔ '58dvh' silently snap instead of animating). Full = 1.0 so
+// the sheet covers the entire container at the top snap, hiding the
+// preview completely instead of leaving a thin strip visible.
 const SNAP_FRACTION: Record<Exclude<SheetSnap, 'closed'>, number> = {
   half: 0.58,
-  full: 0.92,
+  full: 1.0,
 };
 
 const ORDER: SheetSnap[] = ['closed', 'half', 'full'];
@@ -56,7 +58,7 @@ export function MobileSheet() {
     () => ({
       closed: CLOSED_PILL_PX,
       half: Math.max(180, Math.round(containerH * SNAP_FRACTION.half)),
-      full: Math.max(280, Math.round(containerH * SNAP_FRACTION.full)),
+      full: Math.max(240, Math.round(containerH * SNAP_FRACTION.full)),
     }),
     [containerH],
   );

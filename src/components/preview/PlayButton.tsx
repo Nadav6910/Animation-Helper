@@ -22,7 +22,7 @@ export function PlayButton({ state, onClick }: Props) {
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.92 }}
       transition={{ type: 'spring', stiffness: 400, damping: 26 }}
-      className="group relative grid h-14 w-14 place-items-center rounded-full bg-accent text-accent-contrast shadow-glow focus-ring"
+      className="group relative grid h-12 w-12 place-items-center rounded-full bg-accent text-accent-contrast shadow-glow focus-ring lg:h-14 lg:w-14"
       aria-label={aria}
       title={title}
     >
