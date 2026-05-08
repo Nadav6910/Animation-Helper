@@ -10,6 +10,7 @@ import { useUiStore } from '@/store/uiStore';
 import { CommandPalette } from '@/components/shortcuts/CommandPalette';
 import { ShortcutsOverlay } from '@/components/shortcuts/ShortcutsOverlay';
 import { OnboardingHint } from '@/components/onboarding/OnboardingHint';
+import { GlobalToast } from '@/components/ui/GlobalToast';
 
 export function App() {
   useTheme();
@@ -68,6 +69,7 @@ export function App() {
       <CommandPalette />
       <ShortcutsOverlay />
       {!loading && <OnboardingHint />}
+      <GlobalToast />
     </>
   );
 }

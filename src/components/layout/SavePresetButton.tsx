@@ -3,6 +3,7 @@ import { Heart } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAnimationStore } from '@/store/animationStore';
 import { useSavedPresetsStore } from '@/store/savedPresetsStore';
+import { useUiStore } from '@/store/uiStore';
 import { IconButton } from '@/components/ui/IconButton';
 
 export function SavePresetButton() {
@@ -36,11 +37,16 @@ export function SavePresetButton() {
   }, [open]);
 
   const submit = () => {
-    save(name || `Untitled ${saved.length + 1}`, config);
+    const ok = save(name || `Untitled ${saved.length + 1}`, config);
     setName('');
     setOpen(false);
-    setJustSaved(true);
-    window.setTimeout(() => setJustSaved(false), 1200);
+    if (ok) {
+      setJustSaved(true);
+      window.setTimeout(() => setJustSaved(false), 1200);
+      useUiStore.getState().showToast('Preset saved.');
+    }
+    // Failure case (null) is announced by the GlobalToast persist-error
+    // listener — no need to double-up here.
   };
 
   return (

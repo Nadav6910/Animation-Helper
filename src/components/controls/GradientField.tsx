@@ -267,12 +267,14 @@ function StopEditor({
           value={color}
           onChange={(e) => onColor(e.target.value)}
           className="h-5 w-5 rounded border border-border/60 bg-transparent cursor-pointer"
+          aria-label={`${label} color`}
         />
         <input
           type="text"
           value={color}
           onChange={(e) => onColor(e.target.value)}
           className="w-full min-w-0 bg-transparent text-[10px] font-mono outline-none"
+          aria-label={`${label} hex value`}
         />
         <input
           type="number"
@@ -282,6 +284,7 @@ function StopEditor({
           value={pos}
           onChange={(e) => onPos(Number(e.target.value))}
           className="w-9 bg-transparent text-[10px] text-fg-muted tabular-nums text-right outline-none"
+          aria-label={`${label} position percent`}
         />
       </div>
     </div>

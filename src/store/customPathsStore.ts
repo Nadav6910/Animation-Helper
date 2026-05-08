@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { uid } from '@/lib/uid';
 
 const STORAGE_KEY = 'ah:custom-paths';
 
@@ -29,8 +30,6 @@ const persist = (entries: CustomPath[]) => {
     /* ignore */
   }
 };
-
-const uid = () => Math.random().toString(36).slice(2, 9);
 
 type State = {
   paths: CustomPath[];

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, X, Command, Keyboard } from 'lucide-react';
+import { modKeyLabel } from '@/lib/platform';
 
 const SEEN_KEY = 'ah:onboarded';
+const STORAGE_EVENT = 'storage';
 
 export function OnboardingHint() {
   const [show, setShow] = useState(false);
@@ -14,6 +16,15 @@ export function OnboardingHint() {
       const t = window.setTimeout(() => setShow(true), 600);
       return () => window.clearTimeout(t);
     }
+  }, []);
+
+  // Cross-tab sync: if another tab dismisses the hint, this tab follows.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === SEEN_KEY && e.newValue) setShow(false);
+    };
+    window.addEventListener(STORAGE_EVENT, onStorage);
+    return () => window.removeEventListener(STORAGE_EVENT, onStorage);
   }, []);
 
   const dismiss = () => {
@@ -33,8 +44,12 @@ export function OnboardingHint() {
           animate={{ y: 0, opacity: 1, scale: 1 }}
           exit={{ y: 12, opacity: 0, scale: 0.98 }}
           transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-2xl border border-accent/40 bg-bg-panel/95 p-4 shadow-glow backdrop-blur-xl"
-          role="dialog"
+          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-2xl border border-accent/40 bg-bg-panel/95 p-4 shadow-glow backdrop-blur-xl pb-[calc(1rem+env(safe-area-inset-bottom))]"
+          // Non-blocking tip — `status` (a polite live region) more
+          // accurately describes its semantics than `dialog`, which would
+          // imply a focus-trapped modal experience.
+          role="status"
+          aria-live="polite"
         >
           <div className="flex items-start gap-3">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent/20 text-accent">
@@ -49,7 +64,7 @@ export function OnboardingHint() {
                 </li>
                 <li className="flex items-center gap-2">
                   <Command size={12} className="text-accent" />
-                  Cmd / Ctrl + K opens the command palette
+                  {modKeyLabel()} + K opens the command palette
                 </li>
                 <li className="flex items-center gap-2">
                   <Keyboard size={12} className="text-accent" />

@@ -52,13 +52,31 @@ export const FONT_PRESETS: Font[] = [
   },
 ];
 
+// Only stylesheet hosts we trust ourselves to load opaquely. Tampered
+// localStorage (or a future feature that takes user-supplied URLs)
+// can't sneak in an arbitrary <link rel="stylesheet"> origin.
+const ALLOWED_FONT_ORIGINS = new Set(['https://fonts.googleapis.com']);
+
+const isSafeFontHref = (href: string): boolean => {
+  try {
+    const url = new URL(href);
+    return ALLOWED_FONT_ORIGINS.has(url.origin);
+  } catch {
+    return false;
+  }
+};
+
 const loadInitial = (): Font => {
   if (typeof window === 'undefined') return SYSTEM_FONT;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return SYSTEM_FONT;
     const parsed = JSON.parse(raw) as Font;
-    return parsed?.family ? parsed : SYSTEM_FONT;
+    if (!parsed?.family) return SYSTEM_FONT;
+    // Reject persisted fonts whose href has been tampered to a non-
+    // allow-listed origin. Falling back to the system font is harmless.
+    if (parsed.href && !isSafeFontHref(parsed.href)) return SYSTEM_FONT;
+    return parsed;
   } catch {
     return SYSTEM_FONT;
   }
@@ -66,6 +84,7 @@ const loadInitial = (): Font => {
 
 const ensureLink = (href: string) => {
   if (typeof document === 'undefined') return;
+  if (!isSafeFontHref(href)) return;
   const id = `ah-font-${btoa(href).replace(/[^a-zA-Z0-9]/g, '').slice(0, 16)}`;
   if (document.getElementById(id)) return;
   const link = document.createElement('link');

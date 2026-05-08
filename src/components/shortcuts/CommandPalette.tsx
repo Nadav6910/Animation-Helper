@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Sparkles, Wand2, Palette, Gauge, Undo2, Redo2, RefreshCw, Heart } from 'lucide-react';
 import { useUiStore } from '@/store/uiStore';
@@ -6,6 +6,7 @@ import { useAnimationStore } from '@/store/animationStore';
 import { useSavedPresetsStore } from '@/store/savedPresetsStore';
 import { useTheme } from '@/hooks/useTheme';
 import { useAccent, ACCENTS } from '@/hooks/useAccent';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { PRESETS } from '@/lib/presets';
 import { EASING_PRESETS } from '@/lib/easings';
 import { TEXT_EFFECTS } from '@/lib/textEffects';
@@ -43,6 +44,10 @@ export function CommandPalette() {
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
+  const listboxId = useId();
+  useFocusTrap(dialogRef, open, inputRef);
 
   const commands = useMemo<Command[]>(() => {
     const cmds: Command[] = [
@@ -168,9 +173,10 @@ export function CommandPalette() {
     setActive(0);
   }, [query, open]);
 
+  // Clear the query on close so reopening the palette doesn't show last
+  // session's filter / stale active row.
   useEffect(() => {
-    if (!open) return;
-    inputRef.current?.focus();
+    if (!open) setQuery('');
   }, [open]);
 
   useEffect(() => {
@@ -211,26 +217,50 @@ export function CommandPalette() {
           onClick={() => setOpen(false)}
         >
           <motion.div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            tabIndex={-1}
             initial={{ y: -10, opacity: 0, scale: 0.98 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: -10, opacity: 0, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-            className="w-full max-w-xl rounded-2xl border border-border/70 bg-bg-panel/95 shadow-2xl backdrop-blur-xl overflow-hidden"
+            className="w-full max-w-xl rounded-2xl border border-border/70 bg-bg-panel/95 shadow-2xl backdrop-blur-xl overflow-hidden focus:outline-none"
             onClick={(e) => e.stopPropagation()}
           >
+            <h2 id={titleId} className="sr-only">
+              Command palette
+            </h2>
             <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
-              <Search size={16} className="text-fg-subtle" />
+              <Search size={16} className="text-fg-subtle" aria-hidden />
               <input
                 ref={inputRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                role="combobox"
+                aria-expanded={filtered.length > 0}
+                aria-controls={listboxId}
+                aria-activedescendant={
+                  filtered[active] ? `${listboxId}-${active}` : undefined
+                }
+                aria-autocomplete="list"
                 onKeyDown={(e) => {
+                  // Don't fire commands while the IME is composing — Enter
+                  // is meant to commit the candidate, not run our action.
+                  if (e.nativeEvent.isComposing || e.keyCode === 229) return;
                   if (e.key === 'ArrowDown') {
                     e.preventDefault();
                     setActive((i) => Math.min(filtered.length - 1, i + 1));
                   } else if (e.key === 'ArrowUp') {
                     e.preventDefault();
                     setActive((i) => Math.max(0, i - 1));
+                  } else if (e.key === 'Home') {
+                    e.preventDefault();
+                    setActive(0);
+                  } else if (e.key === 'End') {
+                    e.preventDefault();
+                    setActive(Math.max(0, filtered.length - 1));
                   } else if (e.key === 'Enter') {
                     e.preventDefault();
                     choose(filtered[active]);
@@ -245,6 +275,9 @@ export function CommandPalette() {
             </div>
             <div
               ref={listRef}
+              role="listbox"
+              id={listboxId}
+              aria-label="Command results"
               className="max-h-[55vh] overflow-y-auto scrollbar-thin py-1.5"
             >
               {filtered.length === 0 ? (
@@ -255,6 +288,7 @@ export function CommandPalette() {
                 <CommandList
                   items={filtered}
                   active={active}
+                  listboxId={listboxId}
                   onHover={setActive}
                   onChoose={choose}
                 />
@@ -274,11 +308,13 @@ export function CommandPalette() {
 function CommandList({
   items,
   active,
+  listboxId,
   onHover,
   onChoose,
 }: {
   items: Command[];
   active: number;
+  listboxId: string;
   onHover: (idx: number) => void;
   onChoose: (c: Command) => void;
 }) {
@@ -297,6 +333,9 @@ function CommandList({
             )}
             <button
               type="button"
+              role="option"
+              id={`${listboxId}-${i}`}
+              aria-selected={i === active}
               data-idx={i}
               onMouseMove={() => onHover(i)}
               onClick={() => onChoose(c)}
@@ -307,7 +346,7 @@ function CommandList({
                   : 'text-fg hover:bg-bg-soft/60')
               }
             >
-              {c.icon && <span className="grid h-5 w-5 place-items-center text-fg-muted">{c.icon}</span>}
+              {c.icon && <span className="grid h-5 w-5 place-items-center text-fg-muted" aria-hidden>{c.icon}</span>}
               <span className="flex-1 truncate">{c.label}</span>
               {c.hint && (
                 <span className="text-[10px] text-fg-subtle">{c.hint}</span>
