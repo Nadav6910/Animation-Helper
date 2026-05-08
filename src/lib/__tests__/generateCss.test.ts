@@ -207,6 +207,21 @@ describe('generateCss — offset-path motion', () => {
   });
 });
 
+describe('generateCss — gradient backgrounds', () => {
+  it('emits background: for gradient strings', () => {
+    const css = generateCss(
+      makeConfig({
+        keyframes: [
+          { id: 'a', at: 0, bg: 'linear-gradient(45deg, #ff0080, #7928ca)' },
+          { id: 'b', at: 100, bg: '#7c5cff' },
+        ],
+      })
+    );
+    expect(css).toContain('background: linear-gradient(45deg, #ff0080, #7928ca);');
+    expect(css).toContain('background-color: #7c5cff;');
+  });
+});
+
 describe('generateCss — bug regression snapshot', () => {
   it('matches the canonical snapshot for the headline example', () => {
     const css = generateCss(

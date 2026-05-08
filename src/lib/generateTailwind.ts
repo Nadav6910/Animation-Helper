@@ -11,7 +11,10 @@ function decls(k: Keyframe): Record<string, string> {
   if (t) out.transform = t;
   if (typeof k.opacity === 'number') out.opacity = num(k.opacity);
   if (k.color) out.color = k.color;
-  if (k.bg) out.backgroundColor = k.bg;
+  if (k.bg) {
+    if (/gradient\s*\(/i.test(k.bg)) out.background = k.bg;
+    else out.backgroundColor = k.bg;
+  }
   const f = filterToCss(k);
   if (f) out.filter = f;
   if (typeof k.strokeDashoffset === 'number') {

@@ -17,6 +17,7 @@ type ChannelKey =
   | 'opacity'
   | 'color'
   | 'backgroundColor'
+  | 'background'
   | 'filter'
   | 'offsetDistance';
 
@@ -46,7 +47,9 @@ function readChannel(k: Keyframe, ch: ChannelKey): string | number | undefined {
     case 'color':
       return k.color;
     case 'backgroundColor':
-      return k.bg;
+      return k.bg && !/gradient\s*\(/i.test(k.bg) ? k.bg : undefined;
+    case 'background':
+      return k.bg && /gradient\s*\(/i.test(k.bg) ? k.bg : undefined;
     case 'filter': {
       const parts: string[] = [];
       if (typeof k.blur === 'number' && k.blur > 0)
@@ -102,6 +105,7 @@ export function generateFramerMotion(
     'opacity',
     'color',
     'backgroundColor',
+    'background',
     'filter',
     'offsetDistance',
   ];

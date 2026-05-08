@@ -1,5 +1,6 @@
 import { useAnimationStore } from '@/store/animationStore';
 import { Slider } from '@/components/ui/Slider';
+import { GradientField } from './GradientField';
 
 export function ColorFilterSection() {
   const selectedId = useAnimationStore((s) => s.selectedKeyframeId);
@@ -51,7 +52,7 @@ export function ColorFilterSection() {
           value={color}
           onChange={(v) => update(keyframe.id, { color: v || undefined })}
         />
-        <ColorField
+        <GradientField
           label="Background"
           value={bg}
           onChange={(v) => update(keyframe.id, { bg: v || undefined })}

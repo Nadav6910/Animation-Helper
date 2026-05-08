@@ -1,4 +1,5 @@
 import { SVG_PATH_BY_ID } from '@/lib/svgPaths';
+import { useCustomPathsStore } from '@/store/customPathsStore';
 
 type Props = {
   pathId: string;
@@ -6,7 +7,11 @@ type Props = {
 };
 
 export function SvgPathTarget({ pathId, className }: Props) {
-  const def = SVG_PATH_BY_ID[pathId] ?? Object.values(SVG_PATH_BY_ID)[0];
+  const customPaths = useCustomPathsStore((s) => s.paths);
+  const builtin = SVG_PATH_BY_ID[pathId];
+  const custom = customPaths.find((p) => p.id === pathId);
+  const def = builtin ?? custom ?? Object.values(SVG_PATH_BY_ID)[0];
+
   return (
     <svg
       viewBox={def.viewBox}

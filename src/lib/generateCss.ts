@@ -61,7 +61,10 @@ function declarationsForKeyframe(k: Keyframe): string[] {
   if (transform) decls.push(`transform: ${transform};`);
   if (typeof k.opacity === 'number') decls.push(`opacity: ${num(k.opacity)};`);
   if (k.color) decls.push(`color: ${k.color};`);
-  if (k.bg) decls.push(`background-color: ${k.bg};`);
+  if (k.bg) {
+    const prop = /gradient\s*\(/i.test(k.bg) ? 'background' : 'background-color';
+    decls.push(`${prop}: ${k.bg};`);
+  }
   const filter = filterToCss(k);
   if (filter) decls.push(`filter: ${filter};`);
   if (typeof k.strokeDashoffset === 'number') {
