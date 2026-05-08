@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useTheme } from '@/hooks/useTheme';
 import { useAccent, ACCENTS } from '@/hooks/useAccent';
 import { IconButton } from '@/components/ui/IconButton';
+import { SavePresetButton } from './SavePresetButton';
 
 export function TopBar() {
   const { theme, toggle } = useTheme();
@@ -62,6 +63,7 @@ export function TopBar() {
             );
           })}
         </div>
+        <SavePresetButton />
         <IconButton
           variant="ghost"
           size="md"

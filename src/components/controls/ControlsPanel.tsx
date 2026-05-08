@@ -8,6 +8,7 @@ import {
   Target,
   Spline,
   Type,
+  Sparkles,
 } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
 import { Section } from './Section';
@@ -18,6 +19,7 @@ import { EasingPicker } from './EasingPicker';
 import { ColorFilterSection } from './ColorFilterSection';
 import { StaggerControls } from './StaggerControls';
 import { KeyframeTimeline } from './KeyframeTimeline';
+import { PresetGallery } from './PresetGallery';
 
 export function ControlsPanel() {
   const target = useAnimationStore((s) => s.config.target);
@@ -25,9 +27,19 @@ export function ControlsPanel() {
   return (
     <div className="flex flex-col gap-3">
       <Section
+        title="Presets"
+        description="Start from a curated animation"
+        icon={<Sparkles size={16} />}
+        defaultOpen
+      >
+        <PresetGallery />
+      </Section>
+
+      <Section
         title="Target"
         description="What gets animated"
         icon={<Target size={16} />}
+        defaultOpen={false}
       >
         <TargetPicker />
       </Section>
