@@ -15,7 +15,28 @@ export type ShapeDef = {
     | { kind: 'rect'; rx: number }
     | { kind: 'circle' }
     | { kind: 'path'; d: string };
+  /**
+   * Optional Tailwind size override for the stage container. Default is
+   * a square `h-32 w-32 sm:h-40 sm:w-40`. Use this when a shape needs a
+   * non-square aspect (pill, banner, etc).
+   */
+  containerClass?: string;
+  /**
+   * Optional CSS `mask-image` URL. CSS `clip-path: path()` only accepts
+   * pixel coordinates, so curved shapes (e.g. heart) can't scale to the
+   * element's box from a fixed-size path string. `mask-image` with
+   * `mask-size: 100% 100%` stretches the SVG to fill the container, so
+   * use this for any shape whose geometry needs to scale.
+   */
+  maskImage?: string;
 };
+
+/** Tiny helper: wrap an SVG path payload as a data URL ready for
+ *  `mask-image`. Whitespace / `#` are URI-encoded so Safari accepts it. */
+function maskFromPath(d: string, viewBox = '0 0 100 100'): string {
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='${viewBox}' preserveAspectRatio='none'><path d='${d}' fill='black'/></svg>`;
+  return `url("data:image/svg+xml;utf8,${svg.replace(/#/g, '%23').replace(/"/g, "'")}")`;
+}
 
 export const SHAPES: ShapeDef[] = [
   {
@@ -92,15 +113,23 @@ export const SHAPES: ShapeDef[] = [
     label: 'Pill',
     clipPath: null,
     borderRadius: '9999px',
+    // 2:1 aspect — a fully-rounded square is just a circle. The picker
+    // tile is square (matching its grid cell) so its `rect` thumbnail
+    // shows the rounded ends as a flatter pill shape via `rx: 50`.
+    containerClass: 'h-16 w-32 sm:h-20 sm:w-44',
     preview: { kind: 'rect', rx: 50 },
   },
   {
     kind: 'heart',
     label: 'Heart',
-    // Two stacked semicircles + a triangle bottom — sized for the 0–100
-    // viewBox the picker uses, mapped to clip-path's percent-space.
-    clipPath:
-      'path("M50 90 C 18 70, 0 45, 14 24 C 26 6, 44 8, 50 26 C 56 8, 74 6, 86 24 C 100 45, 82 70, 50 90 Z")',
+    // CSS clip-path: path() is pixel-based and won't scale to fill a
+    // 128px / 160px element from a 100×100 path string. Use mask-image
+    // with mask-size: 100% 100% so the heart stretches to the full
+    // container, perfectly centred.
+    clipPath: null,
+    maskImage: maskFromPath(
+      'M50 90 C 18 70, 0 45, 14 24 C 26 6, 44 8, 50 26 C 56 8, 74 6, 86 24 C 100 45, 82 70, 50 90 Z'
+    ),
     preview: {
       kind: 'path',
       d: 'M50 90 C 18 70, 0 45, 14 24 C 26 6, 44 8, 50 26 C 56 8, 74 6, 86 24 C 100 45, 82 70, 50 90 Z',
