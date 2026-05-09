@@ -66,15 +66,29 @@ const loadInitial = (): CustomPath[] => {
   }
 };
 
-const persist = (entries: CustomPath[]) => {
-  if (typeof window === 'undefined') return;
+// Notify GlobalToast when persistence fails. Mirrors the
+// `savedPresetsStore` pattern — both stores write to localStorage,
+// both can hit quota, both surface a toast so the user knows their
+// edit didn't survive page reload. The previous "swallow silently"
+// behaviour produced a confusing UX where the user added a path,
+// closed the tab, and came back to find it gone with no warning.
+type PersistFailureListener = (err: unknown) => void;
+const persistListeners = new Set<PersistFailureListener>();
+
+export function onCustomPathsPersistError(fn: PersistFailureListener) {
+  persistListeners.add(fn);
+  return () => persistListeners.delete(fn);
+}
+
+const persist = (entries: CustomPath[]): boolean => {
+  if (typeof window === 'undefined') return true;
   try {
     const payload: StoredPayload = { version: SCHEMA_VERSION, entries };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  } catch {
-    /* ignore quota / serialisation errors — silently drop the
-     * write so the in-memory store still reflects the user's
-     * intent for the session. */
+    return true;
+  } catch (err) {
+    persistListeners.forEach((fn) => fn(err));
+    return false;
   }
 };
 

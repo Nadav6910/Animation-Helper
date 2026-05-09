@@ -135,7 +135,24 @@ export function ExportModal() {
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
       );
     }
-    const el = document.querySelector<HTMLElement>(`.${targetClassName}`);
+    // Retry across a handful of frames before giving up. The target
+    // element can briefly disappear during a key-bumped remount —
+    // that's how the controller's missing-animation fallback restores
+    // a finished CSS animation, and how a config change (preset
+    // apply, target swap) reseats the rendered tree. The published
+    // `targetClassName` stays set throughout because className is
+    // stable per `useId`, but the DOM element it points to is gone
+    // for a frame. Waiting a few rAFs avoids a spurious
+    // "Could not find the preview element" error during normal
+    // operation.
+    let el: HTMLElement | null = null;
+    for (let i = 0; i < 5; i++) {
+      el = document.querySelector<HTMLElement>(`.${targetClassName}`);
+      if (el) break;
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => resolve())
+      );
+    }
     if (!el) {
       setError('Could not find the preview element.');
       return;

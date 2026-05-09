@@ -173,6 +173,14 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
           ? restored
           : defaultKeyframesFor(target);
       const updated: AnimationConfig = { ...c, target, keyframes: fresh };
+      // Stagger is text-only. When swapping AWAY from text, drop any
+      // lingering stagger object so it can't survive into a shape /
+      // svg config — recorder + future generators that respect
+      // stagger on those targets would otherwise walk descendants
+      // for per-letter animations that don't exist.
+      if (target !== 'text' && updated.stagger) {
+        delete updated.stagger;
+      }
       history.record(updated);
       set({
         config: updated,
@@ -191,10 +199,19 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
     setFill: (fill) => update((c) => ({ ...c, fill })),
     setEasing: (easing) => update((c) => ({ ...c, easing })),
     setStagger: (step) =>
-      update((c) => ({
-        ...c,
-        stagger: step === null ? undefined : { step },
-      })),
+      update((c) => {
+        // Stagger only renders for text targets — generateCss gates
+        // the `> span` rule on `c.target === 'text'`, and the
+        // stagger UI is hidden for shape / svg. Guard the setter
+        // anyway so a future caller (URL hash, command palette,
+        // a hypothetical new generator) can't lodge a stagger value
+        // on a non-text config that the recorder would then walk
+        // descendants for, looking for per-letter Animations that
+        // don't exist. No-op on non-text — the user's intent is
+        // captured next time they switch back to text.
+        if (c.target !== 'text') return c;
+        return { ...c, stagger: step === null ? undefined : { step } };
+      }),
     setOffsetPath: (op) =>
       update((c) => {
         if (!op) {
