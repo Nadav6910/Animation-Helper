@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, ExternalLink } from 'lucide-react';
+import { Download, ExternalLink, Film } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
 import { useFontStore } from '@/store/fontStore';
+import { useUiStore } from '@/store/uiStore';
 import { generateCss } from '@/lib/generateCss';
 import { generateScss } from '@/lib/generateScss';
 import { generateTailwind } from '@/lib/generateTailwind';
@@ -12,6 +13,8 @@ import { generateVue } from '@/lib/generateVue';
 import { generateSvelte } from '@/lib/generateSvelte';
 import { generateReactComponent } from '@/lib/generateReactComponent';
 import { generateHtml } from '@/lib/generateHtml';
+import { generateLottie } from '@/lib/generateLottie';
+import { generateAnimatedSvg } from '@/lib/generateAnimatedSvg';
 import { CopyButton } from './CopyButton';
 import { Toast } from '@/components/ui/Toast';
 import { useTheme } from '@/hooks/useTheme';
@@ -31,7 +34,9 @@ type Format =
   | 'vue'
   | 'svelte'
   | 'react'
-  | 'html';
+  | 'html'
+  | 'lottie'
+  | 'animsvg';
 
 type GeneratorFn = (config: Parameters<typeof generateCss>[0]) => string;
 
@@ -58,6 +63,8 @@ const FORMATS: FormatRow[] = [
   { value: 'svelte', label: 'Svelte', lang: 'svelte', ext: 'svelte', fn: generateSvelte },
   { value: 'react', label: 'React', lang: 'tsx', ext: 'tsx', fn: generateReactComponent },
   { value: 'html', label: 'HTML', lang: 'html', ext: 'html', fn: generateHtml },
+  { value: 'lottie', label: 'Lottie', lang: 'javascript', ext: 'json', fn: generateLottie },
+  { value: 'animsvg', label: 'Animated SVG', lang: 'html', ext: 'svg', fn: generateAnimatedSvg },
 ];
 
 function download(filename: string, contents: string, mime: string) {
@@ -103,6 +110,7 @@ function openCodePen(html: string, css: string) {
 export function CodePanel() {
   const config = useAnimationStore((s) => s.config);
   const font = useFontStore((s) => s.font);
+  const setExportOpen = useUiStore((s) => s.setExportOpen);
   const [format, setFormat] = useState<Format>('css');
   const [toast, setToast] = useState<string | null>(null);
   const { theme } = useTheme();
@@ -187,6 +195,14 @@ export function CodePanel() {
             className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border/70 bg-bg-soft px-2.5 text-xs text-fg-muted hover:text-fg focus-ring"
           >
             <ExternalLink size={12} /> CodePen
+          </button>
+          <button
+            type="button"
+            onClick={() => setExportOpen(true)}
+            title="Export as MP4 / WebM / GIF"
+            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-accent/40 bg-accent/10 px-2.5 text-xs text-fg hover:bg-accent/15 focus-ring"
+          >
+            <Film size={12} /> Record
           </button>
           <CopyButton
             ref={copyRef}

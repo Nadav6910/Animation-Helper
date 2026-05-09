@@ -1,0 +1,233 @@
+import { totalDuration } from './timing';
+import type { AnimationConfig } from '@/types/animation';
+
+export type RecordFormat = 'mp4' | 'webm' | 'gif';
+
+export type RecordOptions = {
+  format: RecordFormat;
+  fps: 24 | 30 | 60;
+  /** Output canvas pixel size. The captured DOM element is rasterised to
+   *  this resolution. Defaults to the source element's `getBoundingClientRect`. */
+  width?: number;
+  height?: number;
+  /** Solid background colour painted under each frame. Use `null` for
+   *  transparent (only valid for WebM + GIF — MP4 always gets the
+   *  fallback colour because the H.264 codec doesn't carry alpha). */
+  background?: string | null;
+  /** How many full iterations of `totalDuration(config)` to capture.
+   *  Defaults to 1; 2–5 is useful for previewing infinite loops. */
+  iterations?: number;
+  /** Progress callback (0..1). Receives 0 on start, fractional values
+   *  during frame capture, then 1 on encode completion. */
+  onProgress?: (ratio: number) => void;
+  /** Aborts the recording at the next frame boundary. */
+  signal?: AbortSignal;
+};
+
+export type RecordResult = {
+  blob: Blob;
+  filename: string;
+  durationMs: number;
+  frameCount: number;
+};
+
+export class RecorderAbortError extends Error {
+  constructor() {
+    super('Recording aborted');
+    this.name = 'RecorderAbortError';
+  }
+}
+
+/**
+ * Capture each frame at the requested FPS by setting the Animation's
+ * currentTime, waiting one paint, then rasterising the DOM element to a
+ * canvas. We pause first so the WAAPI Animation doesn't drift between
+ * seek and capture.
+ */
+async function captureFrames(
+  element: HTMLElement | SVGElement,
+  animation: Animation,
+  c: AnimationConfig,
+  opts: RecordOptions
+): Promise<HTMLCanvasElement[]> {
+  const { fps, signal } = opts;
+  const oneCycle = totalDuration(c);
+  const totalMs = oneCycle * (opts.iterations ?? 1);
+  const frameInterval = 1000 / fps;
+  const frameCount = Math.max(1, Math.round(totalMs / frameInterval));
+  const rect = element.getBoundingClientRect();
+  const targetWidth = opts.width ?? Math.round(rect.width);
+  const targetHeight = opts.height ?? Math.round(rect.height);
+
+  // html-to-image is the fattest dep we own, so import it lazily here so
+  // the editor bundle never pays for it until the user actually records.
+  const { toCanvas } = await import('html-to-image');
+
+  animation.pause();
+  const wasCurrentTime = animation.currentTime;
+
+  const frames: HTMLCanvasElement[] = [];
+  try {
+    for (let i = 0; i < frameCount; i++) {
+      if (signal?.aborted) throw new RecorderAbortError();
+      const t = (i * totalMs) / frameCount;
+      // Loop the Animation's time within one cycle; iterations are baked
+      // into the captured frame sequence by re-traversing the cycle.
+      animation.currentTime = oneCycle > 0 ? t % oneCycle : 0;
+      // Yield to the browser so the new style is applied before capture.
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => resolve())
+      );
+      const canvas = await toCanvas(element as HTMLElement, {
+        width: targetWidth,
+        height: targetHeight,
+        pixelRatio: 1,
+        backgroundColor:
+          opts.background === undefined || opts.background === null
+            ? undefined
+            : opts.background,
+        cacheBust: true,
+      });
+      frames.push(canvas);
+      opts.onProgress?.((i + 1) / frameCount / 2); // first half = capture
+    }
+  } finally {
+    // Restore the animation's prior state — the user pressed Record from
+    // a particular play position; don't strand them at a different time.
+    animation.currentTime = wasCurrentTime;
+  }
+  return frames;
+}
+
+// ---- Encoders ----------------------------------------------------------
+
+async function encodeVideo(
+  frames: HTMLCanvasElement[],
+  fps: number,
+  format: 'mp4' | 'webm',
+  signal: AbortSignal | undefined,
+  onProgress: ((ratio: number) => void) | undefined
+): Promise<Blob> {
+  // Pick a MIME the user's browser actually supports for MediaRecorder —
+  // Chrome happily emits webm/vp9, Safari prefers mp4/H264. We negotiate
+  // before constructing the recorder.
+  const candidates =
+    format === 'mp4'
+      ? ['video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']
+      : ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+  const mimeType =
+    candidates.find((m) =>
+      typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)
+    ) ?? '';
+  if (!mimeType) {
+    throw new Error(
+      `${format.toUpperCase()} export isn't supported in this browser. Try WebM or GIF.`
+    );
+  }
+
+  const first = frames[0];
+  const canvas = document.createElement('canvas');
+  canvas.width = first.width;
+  canvas.height = first.height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(first, 0, 0);
+
+  // captureStream() taps the canvas at a fixed framerate. We then drive
+  // the canvas ourselves (one frame per 1/fps seconds) so the MediaRecorder
+  // sees a real video stream.
+  const stream = canvas.captureStream(fps);
+  const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 5_000_000 });
+  const chunks: Blob[] = [];
+  recorder.ondataavailable = (e) => {
+    if (e.data.size > 0) chunks.push(e.data);
+  };
+
+  const finished = new Promise<Blob>((resolve, reject) => {
+    recorder.onstop = () =>
+      resolve(new Blob(chunks, { type: mimeType.split(';')[0] }));
+    recorder.onerror = (e: Event) =>
+      reject((e as ErrorEvent).error ?? new Error('MediaRecorder failed'));
+  });
+
+  recorder.start();
+
+  const intervalMs = 1000 / fps;
+  for (let i = 0; i < frames.length; i++) {
+    if (signal?.aborted) {
+      recorder.stop();
+      throw new RecorderAbortError();
+    }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(frames[i], 0, 0);
+    onProgress?.(0.5 + ((i + 1) / frames.length) * 0.5);
+    await new Promise<void>((resolve) => window.setTimeout(resolve, intervalMs));
+  }
+
+  recorder.stop();
+  return finished;
+}
+
+async function encodeGif(
+  frames: HTMLCanvasElement[],
+  fps: number,
+  signal: AbortSignal | undefined,
+  onProgress: ((ratio: number) => void) | undefined
+): Promise<Blob> {
+  const { default: GIF } = await import('gif.js');
+  // gif.js needs a worker script URL. Vite ships the file inside its node
+  // dep; route it through `?url` so the bundler emits a hashed asset.
+  const { default: workerUrl } = await import('gif.js/dist/gif.worker.js?url');
+
+  return new Promise<Blob>((resolve, reject) => {
+    const first = frames[0];
+    const gif = new GIF({
+      workers: 2,
+      quality: 10,
+      width: first.width,
+      height: first.height,
+      workerScript: workerUrl,
+    });
+    const delay = 1000 / fps;
+    for (const frame of frames) {
+      if (signal?.aborted) {
+        gif.abort();
+        reject(new RecorderAbortError());
+        return;
+      }
+      gif.addFrame(frame, { delay, copy: true });
+    }
+    gif.on('progress', (p) => onProgress?.(0.5 + p * 0.5));
+    gif.on('finished', (blob) => resolve(blob));
+    gif.render();
+  });
+}
+
+// ---- Public ------------------------------------------------------------
+
+export async function recordPreview(
+  element: HTMLElement | SVGElement,
+  animation: Animation,
+  config: AnimationConfig,
+  opts: RecordOptions
+): Promise<RecordResult> {
+  if (opts.signal?.aborted) throw new RecorderAbortError();
+  opts.onProgress?.(0);
+  const frames = await captureFrames(element, animation, config, opts);
+  const blob =
+    opts.format === 'gif'
+      ? await encodeGif(frames, opts.fps, opts.signal, opts.onProgress)
+      : await encodeVideo(
+          frames,
+          opts.fps,
+          opts.format,
+          opts.signal,
+          opts.onProgress
+        );
+  opts.onProgress?.(1);
+  return {
+    blob,
+    filename: `animation.${opts.format}`,
+    durationMs: totalDuration(config) * (opts.iterations ?? 1),
+    frameCount: frames.length,
+  };
+}

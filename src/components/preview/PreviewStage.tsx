@@ -1,4 +1,5 @@
 import { useAnimationStore } from '@/store/animationStore';
+import { useUiStore } from '@/store/uiStore';
 import { useAnimationStyle } from '@/hooks/useAnimationStyle';
 import { useTimelineController } from '@/hooks/useTimelineController';
 import { TextTarget } from './TextTarget';
@@ -14,8 +15,19 @@ export function PreviewStage() {
   const config = useAnimationStore((s) => s.config);
   const { className, restart, tick } = useAnimationStyle(config);
   const controller = useTimelineController(className);
+  const setPreviewTargetClassName = useUiStore(
+    (s) => s.setPreviewTargetClassName
+  );
   const [paused, setPaused] = useState(false);
   const [finished, setFinished] = useState(false);
+
+  // Publish the live target's className so the visual exporter (mounted
+  // elsewhere in the tree) can find the same DOM element + animation
+  // without a React ref tunnel.
+  useEffect(() => {
+    setPreviewTargetClassName(className);
+    return () => setPreviewTargetClassName(null);
+  }, [className, setPreviewTargetClassName]);
 
   const replay = useCallback(() => {
     setPaused(false);

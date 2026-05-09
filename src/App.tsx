@@ -10,6 +10,7 @@ import { useUiStore } from '@/store/uiStore';
 import { CommandPalette } from '@/components/shortcuts/CommandPalette';
 import { ShortcutsOverlay } from '@/components/shortcuts/ShortcutsOverlay';
 import { OnboardingHint } from '@/components/onboarding/OnboardingHint';
+import { ExportModal } from '@/components/code/ExportModal';
 import { GlobalToast } from '@/components/ui/GlobalToast';
 
 export function App() {
@@ -92,6 +93,7 @@ export function App() {
       </AnimatePresence>
       <CommandPalette />
       <ShortcutsOverlay />
+      <ExportModal />
       {!loading && <OnboardingHint />}
       <GlobalToast />
     </>

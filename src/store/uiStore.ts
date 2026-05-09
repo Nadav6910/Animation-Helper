@@ -21,9 +21,16 @@ type State = {
   setPaletteOpen: (v: boolean) => void;
   shortcutsOpen: boolean;
   setShortcutsOpen: (v: boolean) => void;
+  exportOpen: boolean;
+  setExportOpen: (v: boolean) => void;
   toast: ToastEntry | null;
   showToast: (message: string, tone?: ToastTone) => void;
   dismissToast: () => void;
+  /** Class name that `useAnimationStyle` puts on the live preview
+   *  element. Published by PreviewStage so the visual exporter can find
+   *  the same element + its WAAPI Animation without a React ref tunnel. */
+  previewTargetClassName: string | null;
+  setPreviewTargetClassName: (cn: string | null) => void;
 };
 
 let toastCounter = 0;
@@ -36,6 +43,10 @@ export const useUiStore = create<State>((set) => ({
   setPaletteOpen: (v) => set({ paletteOpen: v }),
   shortcutsOpen: false,
   setShortcutsOpen: (v) => set({ shortcutsOpen: v }),
+  exportOpen: false,
+  setExportOpen: (v) => set({ exportOpen: v }),
+  previewTargetClassName: null,
+  setPreviewTargetClassName: (cn) => set({ previewTargetClassName: cn }),
   toast: null,
   showToast: (message, tone = 'info') => {
     toastCounter += 1;
