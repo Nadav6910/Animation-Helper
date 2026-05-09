@@ -185,25 +185,26 @@ export function useTimelineController(
       }
       return;
     }
-    // Resume playback from the React-mirrored playhead — i.e. wherever
-    // the user last scrubbed. Two pins (before AND after play()) are
-    // needed because of an asymmetry in how WAAPI handles currentTime
-    // writes around the pending-pause → running transition:
+    // Resume playback at the React-mirrored playhead — i.e. wherever
+    // the user last scrubbed. We use THREE mechanisms because each
+    // covers a different failure mode in browsers' WAAPI ↔ CSS-anim
+    // interop:
     //
-    //   • The pre-pin sets hold-time on the (paused) animation, which
-    //     is what spec-compliant browsers read during play(). For
-    //     those, the post-pin is a no-op.
+    //   1. Pre-`play()` `currentTime = target`. Sets hold-time on the
+    //      paused animation so spec-compliant browsers resume from
+    //      target out of the box.
     //
-    //   • Some browsers leave the pause task pending after a quick
-    //     pause-then-seek-then-play sequence and discard the
-    //     pre-play currentTime write, resuming from a stale hold-time
-    //     (= pre-drag position) instead of the seeked one. Once
-    //     play() has transitioned the animation to 'running', a
-    //     currentTime write is unambiguous: it updates the start
-    //     time so the visible playhead jumps to `target` and
-    //     continues forward — bypassing the pending-pause race
-    //     entirely. This is the actual fix for the racy browsers,
-    //     and harmless for the well-behaved ones.
+    //   2. `play()` itself — transitions to running.
+    //
+    //   3. Post-`play()` `startTime = timeline.currentTime - target`.
+    //      For a running animation, currentTime is derived as
+    //      `(timeline.currentTime - startTime) × playbackRate`, so
+    //      writing startTime is the deterministic way to pin
+    //      currentTime regardless of any pending-pause / hold-time
+    //      drift. The currentTime setter path can be silently dropped
+    //      for backward seeks during a pending-pause race; the
+    //      startTime path can't (no hold-time involved). This is what
+    //      finally makes scrub-then-play correct in both directions.
     const target = currentTimeRef.current;
     const validTarget =
       typeof target === 'number' && Number.isFinite(target);
@@ -212,7 +213,17 @@ export function useTimelineController(
     }
     for (const a of anims) a.play();
     if (validTarget) {
-      for (const a of anims) a.currentTime = target;
+      for (const a of anims) {
+        const tl = a.timeline;
+        const tlNow = tl ? (tl.currentTime as number | null) : null;
+        if (typeof tlNow === 'number') {
+          a.startTime = tlNow - target;
+        } else {
+          // No timeline currentTime to anchor against — fall back to
+          // the currentTime setter and hope.
+          a.currentTime = target;
+        }
+      }
     }
     setIsPlaying(true);
   }, [className]);
