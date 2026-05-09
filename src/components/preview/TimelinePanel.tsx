@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
 import { useAnimationStore } from '@/store/animationStore';
 import type { TimelineController } from '@/hooks/useTimelineController';
 import { clampTime, formatTime, totalDuration } from '@/lib/timing';
@@ -45,17 +44,36 @@ export function TimelinePanel({ controller }: Props) {
   // For infinite animations, the WAAPI Animation.currentTime keeps
   // accumulating forever — wrap it modulo one iteration so the playhead
   // stays inside the ruler. For finite animations the timeline shows
-  // every iteration end-to-end, so we just clamp to totalMs.
+  // every iteration end-to-end, so we clamp to totalMs.
+  //
+  // We treat anything-other-than-the-literal-string-`'infinite'` as
+  // infinite-from-the-timeline's-perspective when iterations isn't a
+  // sensible positive integer; this guards against the iterations field
+  // ever holding a stale value during config transitions.
+  const isInfinite =
+    config.iterations === 'infinite' ||
+    !(typeof config.iterations === 'number' && config.iterations > 0);
+
   const displayTime = useMemo(() => {
     if (!Number.isFinite(controller.currentTime)) return 0;
-    if (config.iterations === 'infinite' && totalMs > 0) {
+    if (isInfinite && totalMs > 0) {
       const t = ((controller.currentTime % totalMs) + totalMs) % totalMs;
       return t;
     }
     return Math.max(0, Math.min(controller.currentTime, totalMs));
-  }, [controller.currentTime, config.iterations, totalMs]);
+  }, [controller.currentTime, isInfinite, totalMs]);
 
-  const playheadPct = totalMs > 0 ? (displayTime / totalMs) * 100 : 0;
+  // Belt-and-suspenders: the playhead position is also clamped to
+  // [0, 100] so even if some upstream regression let displayTime drift
+  // past totalMs, the visual playhead never escapes the track.
+  const playheadPct = useMemo(
+    () =>
+      Math.max(
+        0,
+        Math.min(100, totalMs > 0 ? (displayTime / totalMs) * 100 : 0)
+      ),
+    [displayTime, totalMs]
+  );
 
   const positionFromPointer = useCallback(
     (clientX: number): number => {
@@ -195,7 +213,9 @@ export function TimelinePanel({ controller }: Props) {
           }
         }}
         className={cn(
-          'relative h-10 rounded-lg border border-border/70 bg-bg-soft cursor-pointer focus-ring select-none touch-none',
+          // overflow-hidden so the playhead clips at the track's edge
+          // even if a future bug pushed playheadPct outside [0, 100].
+          'relative h-10 rounded-lg border border-border/70 bg-bg-soft cursor-pointer focus-ring select-none touch-none overflow-hidden',
           scrubbing && 'border-accent/60 ring-2 ring-accent/30',
           !controller.ready && 'opacity-50 cursor-not-allowed'
         )}
@@ -240,32 +260,25 @@ export function TimelinePanel({ controller }: Props) {
           style={{ width: `${playheadPct}%` }}
         />
         {/* playhead — bigger, with a circular grip on top so users
-            recognise it as draggable */}
-        <motion.span
+            recognise it as draggable. We render plain spans (not
+            motion.span) so the position snaps to wherever the rAF tick
+            put it — a spring transition was visibly overshooting on
+            every iteration wrap (99% → 0% playing through ~−5%). */}
+        <span
           aria-hidden
           className={cn(
-            'absolute top-1/2 h-9 w-1 rounded-full bg-accent shadow-glow',
+            'absolute top-1/2 h-9 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-glow',
             scrubbing && 'shadow-[0_0_18px_rgb(var(--accent)/0.7)]'
           )}
-          style={{
-            left: `${playheadPct}%`,
-            x: '-50%',
-            y: '-50%',
-          }}
-          transition={{ type: 'spring', stiffness: 600, damping: 32 }}
+          style={{ left: `${playheadPct}%` }}
         />
-        <motion.span
+        <span
           aria-hidden
           className={cn(
-            'absolute top-1/2 h-3.5 w-3.5 rounded-full bg-accent shadow-glow ring-2 ring-bg-panel',
+            'absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-glow ring-2 ring-bg-panel',
             scrubbing && 'h-4 w-4 ring-accent/40'
           )}
-          style={{
-            left: `${playheadPct}%`,
-            x: '-50%',
-            y: '-50%',
-          }}
-          transition={{ type: 'spring', stiffness: 600, damping: 32 }}
+          style={{ left: `${playheadPct}%` }}
         />
       </div>
       <div className="flex justify-between text-[10px] text-fg-subtle/70 px-1 tabular-nums select-none">
