@@ -227,7 +227,11 @@ export function CommandPalette() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-[100] grid place-items-start justify-items-center bg-bg/70 backdrop-blur-md p-4 pt-[14vh]"
+          // pt uses dvh on mobile so the dialog isn't pushed below
+          // the iOS keyboard when the search input is focused;
+          // sm+ keeps the original 14vh feel on desktops where
+          // there's no keyboard to worry about.
+          className="fixed inset-0 z-[100] grid place-items-start justify-items-center bg-bg/70 backdrop-blur-md p-4 pt-[6dvh] sm:pt-[14vh]"
           onClick={() => setOpen(false)}
         >
           <motion.div
@@ -240,7 +244,12 @@ export function CommandPalette() {
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: -10, opacity: 0, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-            className="w-full max-w-xl rounded-2xl border border-border/70 bg-bg-panel/95 shadow-2xl backdrop-blur-xl overflow-hidden focus:outline-none"
+            // The card itself is height-capped by the visible (small)
+            // dynamic viewport minus the top inset and a comfortable
+            // bottom margin, with `flex flex-col` + `min-h-0` so the
+            // listbox below can take the remaining height and scroll
+            // its own contents instead of bleeding off-screen.
+            className="flex w-full max-w-xl flex-col rounded-2xl border border-border/70 bg-bg-panel/95 shadow-2xl backdrop-blur-xl overflow-hidden focus:outline-none max-h-[calc(100dvh-12dvh-1rem)] sm:max-h-[80vh]"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id={titleId} className="sr-only">
@@ -292,7 +301,11 @@ export function CommandPalette() {
               role="listbox"
               id={listboxId}
               aria-label="Command results"
-              className="max-h-[55vh] overflow-y-auto scrollbar-thin py-1.5"
+              // flex-1 + min-h-0 lets the list take all the room
+              // between the search header and footer, and scroll
+              // independently. overscroll-contain stops the scroll
+              // chaining out to the page underneath on iOS.
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain scrollbar-thin py-1.5"
             >
               {filtered.length === 0 ? (
                 <div className="px-4 py-6 text-center text-sm text-fg-subtle">
