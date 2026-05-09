@@ -165,10 +165,30 @@ export function OnboardingTour() {
     }
   }, []);
 
+  /**
+   * Hard-dismiss: the user explicitly tapped the "Skip tour" pill.
+   * Persists `SEEN_KEY` so we don't show the tour again on next
+   * visit. The "Let's go ✨" button on the final step also calls
+   * `finish()` directly for the same reason.
+   */
   const skip = useCallback(() => {
     finish();
     setOpen(false);
   }, [finish]);
+
+  /**
+   * Soft-dismiss: Esc closes the tour for THIS session but does NOT
+   * write `SEEN_KEY`, so the next page load will surface the tour
+   * again as if the user hadn't seen it. Esc is too easy to hit
+   * accidentally — especially when other modals are stacked
+   * underneath and the keypress dismisses everything together —
+   * to count as "I've seen this, never show it again". The visible
+   * "Skip tour" pill in the corner is the explicit don't-show-again
+   * affordance.
+   */
+  const softDismiss = useCallback(() => {
+    setOpen(false);
+  }, []);
 
   // If the user opens the export modal while the tour is up — most
   // likely by clicking the Record button that the export step is
@@ -320,7 +340,10 @@ export function OnboardingTour() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        skip();
+        // Soft dismiss — see softDismiss vs skip rationale above.
+        // Hitting Esc is "close this", not "I'm done with onboarding
+        // forever".
+        softDismiss();
       } else if (e.key === 'ArrowRight' || e.key === 'Enter') {
         // Don't hijack Enter inside the focus-trapped buttons (they fire
         // on click already); guard by checking the active tag.
@@ -337,7 +360,7 @@ export function OnboardingTour() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, next, back, skip]);
+  }, [open, next, back, softDismiss]);
 
   // -------- Spotlight panels -------------------------------------------
   // Four dim panels that surround the spotlight rect (or fill the

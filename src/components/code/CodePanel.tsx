@@ -94,13 +94,32 @@ function openCodePen(html: string, css: string) {
     js: '',
     editors: '110',
   };
+  // Open a placeholder window FIRST with explicit `noopener`, then
+  // submit the form into its name. `form.rel` isn't honoured on
+  // `<form>` elements per HTML5 (it's an `<a>`-only attribute), so
+  // the previous code was relying on modern browsers' implicit
+  // noopener behaviour — pre-2022 engines would still grant
+  // `window.opener` access to the CodePen tab, which could navigate
+  // us to a phishing URL via `opener.location`. window.open with
+  // 'noopener' is the spec-defined way to break the opener chain.
+  const popup = window.open('about:blank', '_blank', 'noopener,noreferrer');
+  // Some popup blockers / security policies refuse the open; in that
+  // case we fall back to a same-tab navigation by submitting the form
+  // without a target — the user keeps their work because we already
+  // have the share-URL `#c=` round-tripping their config.
+  const targetName = popup ? `_ah_codepen_${Date.now()}` : '';
+  if (popup) {
+    // Re-open with a unique name we can target the form at. The
+    // first about:blank popup served only to break the opener
+    // relationship; we close it and use a fresh named window for
+    // the actual POST.
+    popup.close();
+    window.open('about:blank', targetName, 'noopener,noreferrer');
+  }
   const form = document.createElement('form');
   form.method = 'POST';
   form.action = 'https://codepen.io/pen/define';
-  form.target = '_blank';
-  // Block the new tab from accessing window.opener (otherwise CodePen
-  // could navigate this tab via window.opener.location).
-  form.rel = 'noopener noreferrer';
+  if (targetName) form.target = targetName;
   const input = document.createElement('input');
   input.type = 'hidden';
   input.name = 'data';

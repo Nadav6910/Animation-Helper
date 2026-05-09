@@ -335,6 +335,12 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
       }
       set({
         config: cloned,
+        // Drop per-target snapshots — the inbound config is a fresh
+        // starting point (URL load, undo restore, etc.), and a
+        // subsequent target swap should re-seed defaults rather than
+        // restore stashed keyframes from before this `applyConfig`
+        // ran. Same rationale as `resetAll` and `applyPreset` above.
+        keyframesByTarget: {},
         selectedKeyframeId: cloned.keyframes[0]?.id ?? get().selectedKeyframeId,
         ...refreshHistoryFlags(),
       });
@@ -368,6 +374,15 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
       if (!prev) return;
       set({
         config: prev,
+        // Clear per-target snapshots on undo / redo. The history
+        // recorder only walks `config`, but `keyframesByTarget`
+        // accumulated edits from before the undo point — restoring
+        // it would silently overwrite an undo's "go back to text"
+        // with the post-edit shape keyframes the user typed in
+        // afterwards. Easier and safer to drop the cache entirely
+        // and let target swaps re-seed defaults until the user
+        // edits again.
+        keyframesByTarget: {},
         selectedKeyframeId: prev.keyframes[0]?.id ?? get().selectedKeyframeId,
         ...refreshHistoryFlags(),
       });
@@ -378,6 +393,7 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
       if (!next) return;
       set({
         config: next,
+        keyframesByTarget: {},
         selectedKeyframeId: next.keyframes[0]?.id ?? get().selectedKeyframeId,
         ...refreshHistoryFlags(),
       });

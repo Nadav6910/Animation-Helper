@@ -57,3 +57,48 @@
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
+# Baseline security headers, applied to every response. These are
+# defence-in-depth — the runtime validators cover what they can in
+# the JS layer (`validateAnimationConfig`, `cssValueSafe`, `isSafePathD`)
+# but a well-tuned CSP stops categorical classes of injection from
+# even reaching the parser.
+#
+# CSP details:
+#   - default-src 'self' — every fetch source must be same-origin
+#     unless explicitly allowed below.
+#   - script-src 'self' — no inline JS, no eval. The PWA sw.js, all
+#     hashed chunks, and Workbox are same-origin so this just works.
+#     `'wasm-unsafe-eval'` lets Shiki's Oniguruma WASM compile (needed
+#     for syntax highlighting).
+#   - style-src 'self' 'unsafe-inline' https://fonts.googleapis.com —
+#     `unsafe-inline` is required because Tailwind ships a small
+#     amount of inline `<style>` (the splash + the ErrorBoundary fall-
+#     back) and Framer Motion writes inline styles. Google Fonts CSS
+#     is loaded async from the listed origin.
+#   - font-src 'self' https://fonts.gstatic.com data: — Google Fonts
+#     ships woff2 from gstatic; data: URIs cover any inlined SVG icons.
+#   - img-src 'self' data: blob: — the recorder produces blob: URLs
+#     for downloads; SVG icons + favicon are inline data:.
+#   - connect-src 'self' — restricts XHR / fetch / SSE / WebSocket to
+#     same origin. The app makes no third-party API calls today.
+#   - worker-src 'self' blob: — gif.js renders into a blob: worker.
+#   - frame-ancestors 'none' — the deployed site can't be iframed.
+#   - base-uri 'self' — no <base> tag injection escape.
+#   - form-action 'self' https://codepen.io — only one external form
+#     POST destination (the CodePen export); everything else stays
+#     internal.
+#   - object-src 'none' — disables Flash / plugins outright.
+#
+# The CSP is intentionally a Report-Only first cut so we can iterate
+# without breaking users; flip to enforcing once we've confirmed no
+# legit traffic violates it. Until then, browsers send violation
+# reports (or just log them locally) but still load the page.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://codepen.io; object-src 'none'"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "DENY"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"

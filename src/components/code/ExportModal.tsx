@@ -171,6 +171,27 @@ export function ExportModal() {
     setRecording(true);
     setProgress(0);
 
+    // While recording, any config mutation regenerates the CSS, which
+    // replaces the WAAPI Animation we just resolved — leaving the
+    // recorder driving currentTime on a defunct ref and capturing
+    // frames against whatever state the new Animation happens to be
+    // in. Abort the recording instead of silently producing a broken
+    // file. The user can dismiss the modal, change config, and try
+    // again. We snapshot via reference identity (the store creates a
+    // new config object on every change) so even unrelated edits like
+    // theme / accent / slow-mo (already snapshotted above) trip this
+    // — that's intentional, the recorder's contract is "don't touch
+    // anything for the next few seconds".
+    const startConfig = useAnimationStore.getState().config;
+    const unsubscribeAbort = useAnimationStore.subscribe((s) => {
+      if (s.config !== startConfig && !ac.signal.aborted) {
+        ac.abort();
+        setError(
+          'Config changed mid-record — the captured frames would be inconsistent. Try again without editing during the recording.'
+        );
+      }
+    });
+
     const rect = el.getBoundingClientRect();
     const widthHeight: { width?: number; height?: number } =
       resolution === 'auto'
@@ -214,6 +235,10 @@ export function ExportModal() {
     } finally {
       setRecording(false);
       abortRef.current = null;
+      // Detach the config-change watcher — once the recording is
+      // done (success / abort / error all hit this branch) we no
+      // longer care if the user edits the config.
+      unsubscribeAbort();
       // Restore the user's slow-mo preference once the capture is
       // done — they likely want to keep tweaking at the same speed
       // they were before opening the export modal.

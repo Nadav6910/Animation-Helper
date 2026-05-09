@@ -63,11 +63,16 @@ export function useUrlState() {
     loadedRef.current = true;
     const decoded = decode(window.location.hash);
     if (decoded && decoded.keyframes?.length) {
-      useAnimationStore.setState((s) => ({
-        config: { ...s.config, ...decoded },
-        selectedKeyframeId:
-          decoded.keyframes[0]?.id ?? s.selectedKeyframeId,
-      }));
+      // Route through `applyConfig` instead of poking state directly.
+      // Direct setState bypassed history.record() (so the URL-loaded
+      // config didn't appear as an undo step) AND bypassed the
+      // per-target keyframe snapshot reset (so a subsequent target
+      // swap would restore stale pre-load keyframes from another
+      // target). `applyConfig({ record: false })` resets history to
+      // exactly this config — undo / redo treat the URL load as the
+      // floor, which matches user expectation ("opening a share
+      // URL is my starting point, not something I want to undo").
+      useAnimationStore.getState().applyConfig(decoded, { record: false });
     }
   }, []);
 
