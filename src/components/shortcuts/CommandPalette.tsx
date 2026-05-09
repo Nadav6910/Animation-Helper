@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Sparkles, Wand2, Palette, Gauge, Undo2, Redo2, RefreshCw, Heart, Compass, Film, X } from 'lucide-react';
 import { useUiStore } from '@/store/uiStore';
+import { SHOW_TOUR_EVENT } from '@/lib/events';
 import { useAnimationStore } from '@/store/animationStore';
 import { useSavedPresetsStore } from '@/store/savedPresetsStore';
 import { useTheme } from '@/hooks/useTheme';
@@ -96,7 +97,7 @@ export function CommandPalette() {
         label: 'Show onboarding tour',
         group: 'Editor',
         icon: <Compass size={14} />,
-        run: () => window.dispatchEvent(new CustomEvent('ah:show-tour')),
+        run: () => window.dispatchEvent(new CustomEvent(SHOW_TOUR_EVENT)),
       },
       {
         id: 'theme',

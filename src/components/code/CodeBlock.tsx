@@ -35,6 +35,16 @@ export function CodeBlock({ code, lang, theme, explain = false }: Props) {
   const [html, setHtml] = useState<string>('');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
+  // Tooltip ref + measured height so the vertical-flip decision is
+  // based on the actual rendered tooltip size, not a hard-coded
+  // threshold. Re-measured every time hover changes.
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const [tooltipHeight, setTooltipHeight] = useState(140);
+  useEffect(() => {
+    if (!hover || !tooltipRef.current) return;
+    const h = tooltipRef.current.getBoundingClientRect().height;
+    if (h > 0 && Math.abs(h - tooltipHeight) > 2) setTooltipHeight(h);
+  }, [hover, tooltipHeight]);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,6 +152,7 @@ export function CodeBlock({ code, lang, theme, explain = false }: Props) {
                 // when the actual content changes; position updates
                 // are handled by re-rendering the same node.
                 key={hover.prop}
+                ref={tooltipRef}
                 initial={{ opacity: 0, y: 4, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 4, scale: 0.96 }}
@@ -149,12 +160,15 @@ export function CodeBlock({ code, lang, theme, explain = false }: Props) {
                 role="tooltip"
                 className="pointer-events-none fixed z-[140] w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-accent/40 bg-bg-panel/95 p-3 shadow-[0_24px_64px_-16px_rgb(0_0_0_/_0.55)] backdrop-blur-xl"
                 style={{
-                  // Position above the token; if there's not enough
-                  // headroom, drop below.
-                  top:
-                    hover.rect.top > 140
-                      ? hover.rect.top - 8
-                      : hover.rect.bottom + 8,
+                  // Place above the token by default. Flip below when
+                  // there isn't enough headroom — measured against the
+                  // tooltip's own height (captured via tooltipRef on
+                  // the previous frame) plus a margin, instead of a
+                  // hard-coded 140 px that could clip on long-detail
+                  // tooltips or short viewports.
+                  top: hover.rect.top > tooltipHeight + 16
+                    ? hover.rect.top - 8
+                    : hover.rect.bottom + 8,
                   left: Math.max(
                     8,
                     Math.min(
@@ -162,8 +176,9 @@ export function CodeBlock({ code, lang, theme, explain = false }: Props) {
                       hover.rect.left + hover.rect.width / 2 - 144
                     )
                   ),
-                  transform:
-                    hover.rect.top > 140 ? 'translateY(-100%)' : undefined,
+                  transform: hover.rect.top > tooltipHeight + 16
+                    ? 'translateY(-100%)'
+                    : undefined,
                 }}
               >
                 <div className="text-[10px] uppercase tracking-wider text-accent font-semibold">

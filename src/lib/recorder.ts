@@ -46,13 +46,19 @@ export class RecorderAbortError extends Error {
  */
 async function captureFrames(
   element: HTMLElement | SVGElement,
-  animation: Animation,
+  animations: Animation[],
   c: AnimationConfig,
   opts: RecordOptions
 ): Promise<HTMLCanvasElement[]> {
   const { fps, signal } = opts;
   const oneCycle = totalDuration(c);
   const totalMs = oneCycle * (opts.iterations ?? 1);
+  // The "primary" Animation is the first in the list — for non-
+  // staggered targets there's only one; for stagger we take the
+  // parent's so its currentTime mirrors what the timeline UI shows.
+  // All other Animations get the same currentTime so per-letter
+  // spans stay in lockstep with the parent during capture.
+  const primary = animations[0];
   const frameInterval = 1000 / fps;
   const frameCount = Math.max(1, Math.round(totalMs / frameInterval));
   const rect = element.getBoundingClientRect();
@@ -63,13 +69,15 @@ async function captureFrames(
   // the editor bundle never pays for it until the user actually records.
   const { toCanvas } = await import('html-to-image');
 
-  animation.pause();
+  // Pause every animation in the group so the seek + capture can't
+  // race with WAAPI's own progression on any of them.
+  for (const a of animations) a.pause();
   // Snapshot via Number() — Animation.currentTime's spec type is
   // CSSNumberish | null and writing the raw value back can throw on
   // browsers exposing the new typed-OM shape (a CSSNumericValue
   // instance). Coerce to a plain number; null becomes 0 which is the
   // safe restore point if the animation hadn't played yet.
-  const wasCurrentTime = Number(animation.currentTime ?? 0);
+  const wasCurrentTime = Number(primary.currentTime ?? 0);
 
   const frames: HTMLCanvasElement[] = [];
   try {
@@ -82,7 +90,10 @@ async function captureFrames(
       // CSSNumberish | null, and writing the raw object back would
       // throw on browsers exposing the new typed-OM shape.
       const currentTime = oneCycle > 0 ? t % oneCycle : 0;
-      animation.currentTime = currentTime;
+      // Drive every animation in lockstep — for stagger groups the
+      // per-letter spans need the same currentTime as the parent so
+      // the captured frame shows the correct mid-stagger state.
+      for (const a of animations) a.currentTime = currentTime;
       // Yield to the browser so the new style is applied before capture.
       // Two rAFs — Safari needs the second one for filter / offset-path
       // changes to actually paint into the captured canvas; one is
@@ -120,9 +131,12 @@ async function captureFrames(
       opts.onProgress?.((i + 1) / frameCount / 2); // first half = capture
     }
   } finally {
-    // Restore the animation's prior state — the user pressed Record from
-    // a particular play position; don't strand them at a different time.
-    animation.currentTime = wasCurrentTime;
+    // Restore every animation's prior state — the user pressed Record
+    // from a particular play position; don't strand them at a
+    // different time. All animations in the group share the same
+    // wall-clock currentTime by construction, so writing the
+    // primary's snapshot value to each is correct.
+    for (const a of animations) a.currentTime = wasCurrentTime;
   }
   return frames;
 }
@@ -281,13 +295,23 @@ async function encodeGif(
 
 export async function recordPreview(
   element: HTMLElement | SVGElement,
-  animation: Animation,
+  /**
+   * Every WAAPI Animation that drives the captured element. For
+   * non-stagger targets this is one Animation; for staggered text
+   * it's the parent's Animation followed by one per letter span.
+   * `captureFrames` writes `currentTime` to every entry in lockstep
+   * so the captured frame matches the live preview exactly.
+   */
+  animations: Animation[],
   config: AnimationConfig,
   opts: RecordOptions
 ): Promise<RecordResult> {
   if (opts.signal?.aborted) throw new RecorderAbortError();
+  if (animations.length === 0) {
+    throw new Error('No animations supplied to recordPreview.');
+  }
   opts.onProgress?.(0);
-  const frames = await captureFrames(element, animation, config, opts);
+  const frames = await captureFrames(element, animations, config, opts);
   const blob =
     opts.format === 'gif'
       ? await encodeGif(frames, opts.fps, opts.signal, opts.onProgress)

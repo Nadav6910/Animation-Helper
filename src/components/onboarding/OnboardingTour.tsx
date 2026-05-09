@@ -18,6 +18,7 @@ import { ArrowLeft, ArrowRight, Sparkles, X } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { useUiStore } from '@/store/uiStore';
 import { cn } from '@/lib/cn';
+import { SHOW_TOUR_EVENT } from '@/lib/events';
 import { MeshGradient } from './MeshGradient';
 import { Confetti } from './Confetti';
 import { HeroIllustration } from './illustrations/Hero';
@@ -27,7 +28,6 @@ import { TimelineIllustration } from './illustrations/Timeline';
 import { ExportIllustration } from './illustrations/Export';
 
 const SEEN_KEY = 'ah:onboarded-tour-v1';
-const SHOW_TOUR_EVENT = 'ah:show-tour';
 
 type Step = {
   id: string;
@@ -173,7 +173,12 @@ export function OnboardingTour() {
     // last step → celebrate then close.
     setDone(true);
     finish();
-    window.setTimeout(() => setOpen(false), 1600);
+    // 2.6 s instead of 1.6 — long enough for AT consumers to hear the
+    // celebration text from the live region announce ("Step 5 of 5:
+    // …Let's go ✨") before the dialog unmounts and the live region
+    // disappears. The visual confetti runs ~1.5 s so the extra second
+    // is mostly afterglow.
+    window.setTimeout(() => setOpen(false), 2600);
   }, [step, finish]);
 
   const back = useCallback(() => {
@@ -359,7 +364,6 @@ export function OnboardingTour() {
           // itself. Net effect: highlighted UI stays interactive,
           // dimmed surroundings + the card are not clickable through.
           className="fixed inset-0 z-[120] overflow-hidden pointer-events-none"
-          aria-hidden={false}
         >
           {/* Ambient mood layer. No full-screen backdrop sits above it
               anymore — the four dim panels below carve out the

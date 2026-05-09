@@ -125,14 +125,28 @@ export function ExportModal() {
       setError('Could not find the preview element.');
       return;
     }
-    const animations = el.getAnimations();
-    const anim = animations.find(
-      (a) =>
-        (a as Animation & { animationName?: string }).animationName?.startsWith(
-          'ah-anim-'
-        )
-    );
-    if (!anim) {
+    // Collect every `ah-anim-*` animation off the target element AND
+    // its descendants. Stagger emits one Animation per letter span;
+    // driving only the parent's animation skips the per-letter
+    // sequencing during capture, so the recorded video is missing
+    // the visual staggering. We pass the whole group to the
+    // recorder, which writes `currentTime` to each in sync.
+    const collectAnims = (root: Element): Animation[] => {
+      const out: Animation[] = [];
+      const each = (n: Element) => {
+        const list = (n as HTMLElement).getAnimations?.() ?? [];
+        for (const a of list) {
+          const name = (a as Animation & { animationName?: string })
+            .animationName;
+          if (name?.startsWith('ah-anim-')) out.push(a);
+        }
+      };
+      each(root);
+      root.querySelectorAll('*').forEach(each);
+      return out;
+    };
+    const anims = collectAnims(el);
+    if (anims.length === 0) {
       setError('No live animation to record.');
       return;
     }
@@ -165,7 +179,7 @@ export function ExportModal() {
     };
 
     try {
-      const result = await recordPreview(el, anim, config, opts);
+      const result = await recordPreview(el, anims, config, opts);
       // Trigger the download with the same deferred-revoke trick CodePanel
       // uses for text exports.
       const url = URL.createObjectURL(result.blob);
@@ -226,6 +240,11 @@ export function ExportModal() {
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
+            // Mark the dialog as busy while encoding so AT consumers
+            // know it's mid-operation and shouldn't expect immediate
+            // input response. Pairs with the progressbar role on the
+            // body to give a complete in-flight picture.
+            aria-busy={recording}
             tabIndex={-1}
             initial={{ y: 14, opacity: 0, scale: 0.97 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}

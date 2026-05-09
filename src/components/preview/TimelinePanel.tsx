@@ -171,6 +171,12 @@ export function TimelinePanel({ controller, animated = true }: Props) {
           {formatTime(displayTime)}
         </span>
         <span
+          // Polite live region so screen-reader users hear status
+          // changes (Playing → Paused, Scrubbing → Paused, No
+          // animation) instead of visually-flagged but silent
+          // updates. The dot before the text is decorative.
+          role="status"
+          aria-live="polite"
           className={cn(
             'flex items-center gap-1.5 text-[10px] uppercase tracking-wider',
             !animated
@@ -183,6 +189,7 @@ export function TimelinePanel({ controller, animated = true }: Props) {
           )}
         >
           <span
+            aria-hidden
             className={cn(
               'h-1.5 w-1.5 rounded-full',
               !animated

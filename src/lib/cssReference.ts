@@ -83,11 +83,8 @@ const REFERENCE: Record<string, CssExplanation> = {
   '-webkit-background-clip': {
     what: 'Vendor-prefixed `background-clip` for Safari + older Chromium. Pair both for max coverage.',
   },
-  'webkit-text-fill-color': {
-    what: 'Makes text glyphs transparent so the clipped background shows through (used with background-clip: text).',
-  },
   '-webkit-text-fill-color': {
-    what: 'Vendor-prefixed text fill — `transparent` reveals a clipped background gradient on the glyphs.',
+    what: 'Vendor-prefixed text fill — `transparent` reveals a clipped background gradient on the glyphs (paired with `background-clip: text`).',
   },
 
   // ---- SVG draw + offset path --------------------------------------
