@@ -12,6 +12,7 @@ import { ShortcutsOverlay } from '@/components/shortcuts/ShortcutsOverlay';
 import { OnboardingTour } from '@/components/onboarding/OnboardingTour';
 import { ExportModal } from '@/components/code/ExportModal';
 import { GlobalToast } from '@/components/ui/GlobalToast';
+import { UpdateToast } from '@/components/ui/UpdateToast';
 
 export function App() {
   useTheme();
@@ -97,6 +98,7 @@ export function App() {
       <ExportModal />
       {!loading && <OnboardingTour />}
       <GlobalToast />
+      <UpdateToast />
     </>
   );
 }

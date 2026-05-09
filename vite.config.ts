@@ -13,8 +13,19 @@ export default defineConfig({
     // offline; use a lightweight Workbox config (no runtime caching) so
     // the service worker stays small and updates auto-deploy.
     VitePWA({
-      registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      // 'prompt' over 'autoUpdate': when a new build is deployed the
+      // SW installs in the background but waits for the user to accept
+      // the update. UpdateToast (mounted from App.tsx) calls
+      // `useRegisterSW` from `virtual:pwa-register/react` to surface a
+      // "New version available" prompt; accepting it skipWaitings the
+      // new SW and reloads the page so the user sees the latest build
+      // instead of staying stuck on cached assets. autoUpdate silently
+      // swapped the SW but didn't reload, which is exactly the
+      // staleness we kept hitting.
+      registerType: 'prompt',
+      // We register manually via the React hook, so skip the auto-
+      // injected registerSW script (it would race the hook).
+      injectRegister: false,
       manifest: false, // we ship public/manifest.webmanifest by hand
       includeAssets: [
         'manifest.webmanifest',
