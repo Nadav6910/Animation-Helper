@@ -17,10 +17,34 @@ const escapeXml = (s: string) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
 
-/** Inside a CDATA-protected `<style>` block we still need to neutralise
- *  `]]>` so the CDATA section can't be terminated early by user-supplied
- *  CSS. The CSS parser silently drops the broken declaration. */
-const cssBlockSafe = (css: string) => css.replace(/]]>/g, ']]&gt;');
+/**
+ * Make a CSS string safe to embed inside an SVG `<style>` block, in
+ * BOTH XML and HTML rendering modes.
+ *
+ *  - `]]>` would prematurely terminate the CDATA wrapper used for
+ *    standalone-SVG mode. Encode the `>`.
+ *
+ *  - `</style>` and `</svg>` would close the surrounding element when
+ *    the SVG is INLINED into an HTML document (GitHub README,
+ *    `el.innerHTML = svg`, etc.) — CDATA is not honoured by the HTML
+ *    parser in that mode. The CSS spec lets us escape `<` / `/` as
+ *    `\3c` / `\2f`, which the CSS tokeniser reads back as the literal
+ *    characters but the HTML tag-soup parser can't see — closing the
+ *    breakout. Trailing space terminates the escape so a following
+ *    hex digit in user CSS isn't absorbed into the sequence.
+ *
+ *  Per-declaration `}` injection from user-controlled values (color /
+ *  bg / dropShadow strings flowing into rule bodies via
+ *  `declarationsForKeyframe`) is handled upstream by sanitising the
+ *  *value*, not the whole CSS string — see `cssValueSafe` in
+ *  `css-helpers.ts`. We can't blanket-encode `}` here because the
+ *  CSS structure itself needs literal `}` to close blocks.
+ */
+const cssBlockSafe = (css: string) =>
+  css
+    .replace(/]]>/g, ']]&gt;')
+    .replace(/<\/style/gi, '\\3c\\2f style')
+    .replace(/<\/svg/gi, '\\3c\\2f svg');
 
 export type GenerateAnimatedSvgOptions = {
   className?: string;

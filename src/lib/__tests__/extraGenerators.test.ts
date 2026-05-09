@@ -132,7 +132,7 @@ describe('generateHtml', () => {
     expect(out).toContain('Hello');
   });
 
-  it('neutralises </style> inside CSS values to prevent breakout', () => {
+  it('strips angle brackets from CSS values so </style> can\'t break out', () => {
     // Imagine a tampered share URL that injected </style><script>alert(1)
     // into the bg gradient string.
     const out = generateHtml({
@@ -147,13 +147,16 @@ describe('generateHtml', () => {
       ],
     });
     // The output's CSS block sits between the opening <style> and the
-    // single legitimate </style>. Anything inside that block must not
-    // contain a literal </style.
+    // single legitimate </style>. The breakout sequence must not
+    // appear inside that block in any form.
     const cssBlock = out.slice(out.indexOf('<style>'), out.lastIndexOf('</style>'));
     expect(cssBlock).not.toMatch(/<\/style/i);
-    // The neutralised marker is present so we know the input reached the
-    // generator and was rewritten rather than dropped.
-    expect(cssBlock).toContain('<\\/style');
+    expect(cssBlock).not.toContain('<script');
+    // The user's bg DID reach the generator (the `linear-gradient(`
+    // wrapper survives) — but every `<` and `>` inside the value has
+    // been stripped by the value-side CSS sanitiser, defanging the
+    // breakout entirely. No encoded marker, no original — just gone.
+    expect(cssBlock).toContain('linear-gradient(45deg, red 0%');
   });
 
   it('strips invalid characters from custom selector / className', () => {

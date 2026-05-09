@@ -191,12 +191,25 @@ export function OnboardingTour() {
     }
     const r = el.getBoundingClientRect();
     // Pad the spotlight slightly so the highlighted section breathes.
+    // When the padded rect would extend past the top / left edge
+    // (anchor sits near the viewport boundary), clamp the *position*
+    // to 0 AND shrink the dimensions by the same delta — otherwise
+    // `width` / `height` carry the full padded size while the
+    // origin has been pinched back, making the spotlight taller /
+    // wider than the actual element and overlapping real UI on the
+    // far side.
     const pad = 12;
+    const rawTop = r.top - pad;
+    const rawLeft = r.left - pad;
+    const top = Math.max(0, rawTop);
+    const left = Math.max(0, rawLeft);
+    const topClampDelta = top - rawTop; // 0 normally, positive if clamped
+    const leftClampDelta = left - rawLeft;
     setAnchorRect({
-      top: Math.max(0, r.top - pad),
-      left: Math.max(0, r.left - pad),
-      width: r.width + pad * 2,
-      height: r.height + pad * 2,
+      top,
+      left,
+      width: Math.max(0, r.width + pad * 2 - leftClampDelta),
+      height: Math.max(0, r.height + pad * 2 - topClampDelta),
     });
   }, [current.anchor]);
 
@@ -206,17 +219,57 @@ export function OnboardingTour() {
     const onScrollOrResize = () => measureAnchor();
     window.addEventListener('resize', onScrollOrResize);
     window.addEventListener('scroll', onScrollOrResize, true);
-    let ro: ResizeObserver | null = null;
-    if (current.anchor) {
-      const el = document.querySelector(current.anchor);
-      if (el) {
+
+    // The same step transition that triggers this effect also fires
+    // `tourStepId` → MobileSheet's effect, which may swap the active
+    // tab a tick later (revealing the anchor's actual DOM node). On
+    // first run our `querySelector` may pick up the previous tab's
+    // node (or null), so we re-measure across the next few frames
+    // until we find the real, sized element. We also keep a
+    // MutationObserver on document.body — broad but cheap — so any
+    // late DOM swap (sheet animation, lazy-loaded panel) re-measures
+    // automatically. Both observers terminate when the step changes.
+    let raf = 0;
+    let attempts = 0;
+    const reobserve = () => {
+      const elNow = current.anchor
+        ? document.querySelector(current.anchor)
+        : null;
+      const r = elNow?.getBoundingClientRect();
+      const sized = !!r && r.width > 0 && r.height > 0;
+      if (elNow && (sized || attempts > 30)) {
+        ro?.disconnect();
         ro = new ResizeObserver(() => measureAnchor());
-        ro.observe(el);
+        ro.observe(elNow);
+        measureAnchor();
+        return;
       }
-    }
+      attempts += 1;
+      raf = requestAnimationFrame(reobserve);
+    };
+    let ro: ResizeObserver | null = null;
+    raf = requestAnimationFrame(reobserve);
+
+    const mo = new MutationObserver(() => {
+      // Re-bind to whatever node currently matches the anchor — if
+      // a tab swap mounted a new element, this catches it.
+      const elNow = current.anchor
+        ? document.querySelector(current.anchor)
+        : null;
+      if (elNow) {
+        ro?.disconnect();
+        ro = new ResizeObserver(() => measureAnchor());
+        ro.observe(elNow);
+        measureAnchor();
+      }
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+
     return () => {
       window.removeEventListener('resize', onScrollOrResize);
       window.removeEventListener('scroll', onScrollOrResize, true);
+      cancelAnimationFrame(raf);
+      mo.disconnect();
       ro?.disconnect();
     };
   }, [open, measureAnchor, current.anchor]);

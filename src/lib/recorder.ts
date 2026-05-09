@@ -108,12 +108,15 @@ async function encodeVideo(
   signal: AbortSignal | undefined,
   onProgress: ((ratio: number) => void) | undefined
 ): Promise<Blob> {
-  // Pick a MIME the user's browser actually supports for MediaRecorder —
-  // Chrome happily emits webm/vp9, Safari prefers mp4/H264. We negotiate
-  // before constructing the recorder.
+  // Pick a MIME the user's browser actually supports for MediaRecorder.
+  // We deliberately keep the candidate lists same-format-only — falling
+  // back from MP4 to WebM silently produces a `.mp4` file that's
+  // actually WebM, which players reject. The user picked MP4 explicitly;
+  // if it's not available, surface a clear error so they can choose
+  // WebM themselves.
   const candidates =
     format === 'mp4'
-      ? ['video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']
+      ? ['video/mp4;codecs=avc1.42E01E', 'video/mp4;codecs=h264', 'video/mp4']
       : ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
   const mimeType =
     candidates.find((m) =>
@@ -121,7 +124,9 @@ async function encodeVideo(
     ) ?? '';
   if (!mimeType) {
     throw new Error(
-      `${format.toUpperCase()} export isn't supported in this browser. Try WebM or GIF.`
+      format === 'mp4'
+        ? "MP4 isn't supported in this browser (Firefox lacks an MP4 encoder). Try WebM or GIF."
+        : "WebM isn't supported in this browser. Try MP4 or GIF."
     );
   }
 

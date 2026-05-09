@@ -83,11 +83,22 @@ export function ExportModal() {
     if (!open) return;
     setProgress(0);
     setError(null);
+  }, [open]);
+
+  // Abort an in-flight recording ONLY when the component unmounts.
+  // Earlier this was bundled into the open-effect's cleanup, which
+  // meant React 18 StrictMode (and any toggle of `open`) tore down
+  // the AbortController out from under the user — clicking Record
+  // immediately after open could land on a controller that had
+  // already been aborted by StrictMode's double-invoke. Now the
+  // controller's lifecycle is bound to the component, not the
+  // open/close cycle.
+  useEffect(() => {
     return () => {
       abortRef.current?.abort();
       abortRef.current = null;
     };
-  }, [open]);
+  }, []);
 
   // Esc closes (in addition to focus-trap arrow handling).
   useEffect(() => {

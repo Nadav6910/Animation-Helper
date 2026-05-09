@@ -62,11 +62,25 @@ export function TimelinePanel({ controller, animated = true }: Props) {
   const displayTime = useMemo(() => {
     if (!Number.isFinite(controller.currentTime)) return 0;
     if (isInfinite && totalMs > 0) {
-      const t = ((controller.currentTime % totalMs) + totalMs) % totalMs;
-      return t;
+      // For infinite animations the WAAPI currentTime grows forever
+      // and we modulo into the visible loop. Crucially: the loop
+      // length is `totalMs - delay` (the perceptual cycle), NOT
+      // `totalMs` — the leading delay only applies to the first
+      // iteration, then the animation loops on its iteration body.
+      // Modulo'ing by `totalMs` would stretch the wrapped value
+      // back into the delay region every cycle, making the playhead
+      // overshoot when delay > 0.
+      const delay = config.delay > 0 ? config.delay : 0;
+      const loopMs = Math.max(1, totalMs - delay);
+      const raw = controller.currentTime - delay;
+      // Pre-delay frames: show the playhead at 0 (before active
+      // phase). After delay starts, walk the wrapped iteration.
+      if (raw < 0) return 0;
+      const wrapped = ((raw % loopMs) + loopMs) % loopMs;
+      return wrapped + delay;
     }
     return Math.max(0, Math.min(controller.currentTime, totalMs));
-  }, [controller.currentTime, isInfinite, totalMs]);
+  }, [controller.currentTime, isInfinite, totalMs, config.delay]);
 
   // Belt-and-suspenders: the playhead position is also clamped to
   // [0, 100] so even if some upstream regression let displayTime drift
@@ -212,22 +226,31 @@ export function TimelinePanel({ controller, animated = true }: Props) {
           else if (e.key === 'ArrowRight') delta = e.shiftKey ? 1000 : 100;
           else if (e.key === 'Home') {
             e.preventDefault();
+            // stopPropagation so the global keyboard handler in
+            // App.tsx doesn't ALSO fire its replay/copy/arrow-scrub
+            // shortcuts on top of ours when the slider has focus —
+            // double-handling Space was firing both `ah:replay` and
+            // a play-toggle, with the replay winning.
+            e.stopPropagation();
             controller.pause();
             controller.seek(0);
             return;
           } else if (e.key === 'End') {
             e.preventDefault();
+            e.stopPropagation();
             controller.pause();
             controller.seek(totalMs);
             return;
           } else if (e.key === ' ' || e.code === 'Space') {
             e.preventDefault();
+            e.stopPropagation();
             if (controller.isPlaying) controller.pause();
             else controller.play();
             return;
           }
           if (delta !== 0) {
             e.preventDefault();
+            e.stopPropagation();
             controller.pause();
             controller.seek(clampTime(controller.currentTime + delta, config));
           }

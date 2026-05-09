@@ -78,6 +78,11 @@ export function PreviewStage() {
         : 'paused';
 
   const replay = useCallback(() => {
+    // Skip when there's nothing to play. The play button visibly
+    // disables itself in this state (`animated === false`); the Space
+    // hotkey from App.tsx would otherwise quietly restart a no-op
+    // animation, which contradicts the disabled UI.
+    if (!animated) return;
     if (!controller.ready) {
       // Animation not yet attached — fall back to the className-bump
       // restart and let the controller pick the new one up.
@@ -85,7 +90,7 @@ export function PreviewStage() {
       return;
     }
     controller.restart();
-  }, [controller, restart]);
+  }, [animated, controller, restart]);
 
   // Replay event from `Space`-key handler in App.tsx.
   useEffect(() => {

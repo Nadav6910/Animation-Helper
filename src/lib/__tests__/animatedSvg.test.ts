@@ -53,7 +53,7 @@ describe('generateAnimatedSvg', () => {
     expect(out).not.toMatch(/<text[^>]*>[^<]*<[^/]/);
   });
 
-  it('neutralises ]]> inside the CSS block to keep the CDATA safe', () => {
+  it('strips the `>` from `]]>` inside CSS values so the CDATA can\'t be terminated', () => {
     const out = generateAnimatedSvg(
       cfg({
         keyframes: [
@@ -70,8 +70,10 @@ describe('generateAnimatedSvg', () => {
     expect(close).toBeGreaterThan(open);
     const cssRegion = out.slice(open + '<![CDATA['.length, close);
     expect(cssRegion).not.toContain(']]>');
-    // The escaped form proves the user-supplied bg actually reached the
-    // generator and got rewritten.
-    expect(cssRegion).toContain(']]&gt;');
+    // The user-supplied bg DID reach the generator (its other tokens
+    // survive) — only the breakout char `>` is stripped by the
+    // value-side sanitiser. `]] ` (with the gap left by removing `>`)
+    // is still inside `linear-gradient(...)`.
+    expect(cssRegion).toContain('linear-gradient(]] )');
   });
 });
