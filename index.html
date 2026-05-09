@@ -54,10 +54,27 @@
         padding: 0;
         background: #0c0d12;
         color: #e9e9ee;
+        /* Belt-and-suspenders against iOS Safari making the page
+           scroll because of a min-height that overflows the visible
+           area when the URL bar is collapsed/expanded. The mobile
+           sheet provides its own vertical adjustment, so the body
+           itself never needs to scroll. */
+        overflow: hidden;
+        height: 100%;
       }
       #root {
-        min-height: 100dvh;
+        /* `100vh` first as a fallback, `100dvh` second as the
+           override on browsers that support it. Order matters:
+           the LAST valid declaration wins. Putting `vh` last meant
+           even iOS Safari (which supports `dvh`) ended up using
+           the static viewport — taller than what's actually
+           visible while the URL bar is up — and the page scrolled
+           vertically. The mobile sheet handles content overflow on
+           its own; the document never needs to scroll. */
         min-height: 100vh;
+        min-height: 100dvh;
+        height: 100vh;
+        height: 100dvh;
       }
       .ah-pre-splash {
         position: fixed;
