@@ -11,7 +11,6 @@ import type {
   Transform,
 } from '@/types/animation';
 import { createHistoryRecorder } from './middleware/history';
-import { hasMeaningfulAnimation } from '@/lib/timing';
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -92,6 +91,13 @@ export type AnimationState = {
   canUndo: boolean;
   canRedo: boolean;
   isDirty: boolean;
+  /** Per-target snapshot of the keyframes the user last had under each
+   *  target. Repopulated on every setTarget so swapping shape ↔ svg ↔
+   *  text restores the customised animation for the destination
+   *  instead of dragging keyframes that don't apply visually. Not
+   *  history-tracked — this is UI ergonomics, not part of the
+   *  canonical config. */
+  keyframesByTarget: Partial<Record<TargetKind, Keyframe[]>>;
   // setters
   setTarget: (t: TargetKind) => void;
   setShape: (s: ShapeKind) => void;
@@ -147,28 +153,30 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
     canUndo: false,
     canRedo: false,
     isDirty: false,
+    keyframesByTarget: {},
 
     setTarget: (target) => {
       const c = get().config;
       if (c.target === target) return;
-      // If the current keyframes still animate visibly under the new
-      // target, keep them (e.g. shape → text preserves transform /
-      // opacity diffs; svg → svg just changes shape glyph). Otherwise
-      // re-seed with target-appropriate defaults so we don't end up
-      // with stroke-only keyframes on a shape (the WAAPI animation
-      // runs but nothing visually moves and the timeline lies about
-      // "Playing"), or transform-only keyframes on an SVG with no
-      // stroke-draw to show.
-      const candidate: AnimationConfig = { ...c, target };
-      if (hasMeaningfulAnimation(candidate)) {
-        commit(candidate);
-        return;
-      }
-      const fresh = defaultKeyframesFor(target);
+      // Per-target keyframe memory: snapshot the OUTGOING target's
+      // keyframes so we can restore them when the user comes back,
+      // then load whatever was previously under the INCOMING target
+      // (or the target's default if this is the first time visiting
+      // it). Result: shape → svg seeds the draw animation, svg → shape
+      // restores the shape animation, and any tweaks the user made on
+      // each target survive the round-trip independently.
+      const prevSnapshots = get().keyframesByTarget;
+      const snapshots = { ...prevSnapshots, [c.target]: c.keyframes };
+      const restored = snapshots[target];
+      const fresh =
+        restored && restored.length >= 2
+          ? restored
+          : defaultKeyframesFor(target);
       const updated: AnimationConfig = { ...c, target, keyframes: fresh };
       history.record(updated);
       set({
         config: updated,
+        keyframesByTarget: snapshots,
         selectedKeyframeId: fresh[0].id,
         ...refreshHistoryFlags(),
       });
@@ -309,6 +317,10 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
       history.reset(fresh);
       set({
         config: fresh,
+        // Drop per-target snapshots — "Reset everything" should mean
+        // exactly that, including any keyframes the user had stashed
+        // under non-active targets.
+        keyframesByTarget: {},
         selectedKeyframeId: fresh.keyframes[0].id,
         ...refreshHistoryFlags(),
       });
@@ -342,6 +354,10 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
       history.record(cloned);
       set({
         config: cloned,
+        // A preset is a "start fresh" gesture. Wipe per-target
+        // snapshots so a subsequent target swap can't restore stale
+        // pre-preset keyframes from another target.
+        keyframesByTarget: {},
         selectedKeyframeId: cloned.keyframes[0]?.id ?? get().selectedKeyframeId,
         ...refreshHistoryFlags(),
       });
