@@ -193,6 +193,40 @@ export function CommandPalette() {
     if (!open) setQuery('');
   }, [open]);
 
+  // Lock body scroll while the palette is open. iOS lets touches that
+  // don't scroll a child (or that start outside the scrollable list)
+  // chain into the document scroll, which is exactly what people see
+  // as "the page scrolls instead of the command list" on phones.
+  // position: fixed on the body is the only iOS-reliable way to fully
+  // disable that — overflow:hidden alone is ignored by Safari for
+  // momentum touches. We restore the previous scroll position on
+  // close so opening the palette doesn't reset the page.
+  useEffect(() => {
+    if (!open) return;
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const prev = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+    };
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.width = '100%';
+    return () => {
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.left = prev.left;
+      body.style.right = prev.right;
+      body.style.width = prev.width;
+      window.scrollTo(0, scrollY);
+    };
+  }, [open]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
