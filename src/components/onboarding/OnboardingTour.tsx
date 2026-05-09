@@ -93,6 +93,7 @@ export function OnboardingTour() {
   const titleId = useId();
   const bodyId = useId();
   const setTourOpen = useUiStore((s) => s.setTourOpen);
+  const setTourStepId = useUiStore((s) => s.setTourStepId);
   useFocusTrap(dialogRef, open, primaryBtnRef);
 
   // Publish open state so App.tsx's global hotkey handlers stay out of
@@ -103,6 +104,15 @@ export function OnboardingTour() {
   }, [open, setTourOpen]);
 
   const current = STEPS[step];
+
+  // Publish the active step id so layout surfaces that hide content
+  // (MobileSheet's tab switcher, timeline collapse) can reveal whatever
+  // the current step's anchor lives inside before measureAnchor fires.
+  // Null when the tour is closed so layouts return to user choice.
+  useEffect(() => {
+    setTourStepId(open ? current.id : null);
+    return () => setTourStepId(null);
+  }, [open, current.id, setTourStepId]);
 
   // -------- Open / close lifecycle --------------------------------------
   useEffect(() => {
@@ -256,6 +266,19 @@ export function OnboardingTour() {
   const fullscreenSpotlight = !anchorRect;
   const Illustration = current.illustration;
 
+  // Place the coach mark in the OPPOSITE vertical half from the
+  // spotlight so the modal never occludes the highlighted element.
+  // For the timeline step (anchor at the bottom of the screen) this
+  // pins the card to the top; for picker / keyframes / export
+  // (anchors above the fold) it pins to the bottom. Hero step keeps
+  // the centered "owns the screen" placement.
+  const coachPlacement: 'top' | 'bottom' | 'center' = useMemo(() => {
+    if (!anchorRect || typeof window === 'undefined') return 'center';
+    const viewportH = window.innerHeight;
+    const anchorMid = anchorRect.top + anchorRect.height / 2;
+    return anchorMid > viewportH / 2 ? 'top' : 'bottom';
+  }, [anchorRect]);
+
   return (
     <AnimatePresence>
       {open && (
@@ -335,9 +358,18 @@ export function OnboardingTour() {
             </>
           )}
 
-          {/* Coach mark — centred card. Stays out of the spotlight area
-              by living in a fixed, vertically-centred slot. */}
-          <div className="pointer-events-none absolute inset-0 grid place-items-center p-4">
+          {/* Coach mark — placed in the opposite vertical half from the
+              spotlight (or centred for the hero step) so the modal
+              never sits over the element it's describing. Horizontal
+              centre is preserved across all placements. */}
+          <div
+            className={cn(
+              'pointer-events-none absolute inset-0 flex justify-center p-4',
+              coachPlacement === 'center' && 'items-center',
+              coachPlacement === 'top' && 'items-start pt-4',
+              coachPlacement === 'bottom' && 'items-end pb-4'
+            )}
+          >
             <motion.div
               key={current.id}
               ref={dialogRef}

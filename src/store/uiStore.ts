@@ -28,6 +28,14 @@ type State = {
    *  navigation isn't shadowed by the timeline scrub nudges. */
   tourOpen: boolean;
   setTourOpen: (v: boolean) => void;
+  /** ID of the active tour step (or null when no tour is running).
+   *  Layout surfaces that hide their content (e.g. MobileSheet's
+   *  "Code" / "Controls" tabs) read this to auto-reveal whatever
+   *  the current step's `data-tour-anchor` lives inside, so the
+   *  spotlight always lands on a visible element instead of an
+   *  empty box at (0, 0). */
+  tourStepId: string | null;
+  setTourStepId: (id: string | null) => void;
   toast: ToastEntry | null;
   showToast: (message: string, tone?: ToastTone) => void;
   dismissToast: () => void;
@@ -52,6 +60,8 @@ export const useUiStore = create<State>((set) => ({
   setExportOpen: (v) => set({ exportOpen: v }),
   tourOpen: false,
   setTourOpen: (v) => set({ tourOpen: v }),
+  tourStepId: null,
+  setTourStepId: (id) => set({ tourStepId: id }),
   previewTargetClassName: null,
   setPreviewTargetClassName: (cn) => set({ previewTargetClassName: cn }),
   toast: null,

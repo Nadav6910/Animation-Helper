@@ -6,6 +6,23 @@ import { PreviewStage } from '@/components/preview/PreviewStage';
 import { Tabs } from '@/components/ui/Tabs';
 import { Code2, Sliders, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { useUiStore } from '@/store/uiStore';
+
+// Maps each tour step id to the sheet state that has to be true for
+// the step's `data-tour-anchor` to be visible (and therefore measurable
+// by getBoundingClientRect, otherwise it returns 0×0 at (0, 0) and the
+// spotlight collapses to an empty dot at the screen's top-left corner).
+//   - presets / keyframes live in ControlsPanel → 'controls' tab
+//   - export lives in CodePanel → 'code' tab
+//   - timeline lives in PreviewStage above the sheet → no tab needed,
+//     but the sheet must NOT be at 'full' (which fully covers the
+//     preview), so we drop it to 'half' for that step.
+//   - hero has no anchor; the sheet stays where the user left it.
+const TOUR_STEP_TAB: Record<string, 'controls' | 'code'> = {
+  picker: 'controls',
+  keyframes: 'controls',
+  export: 'code',
+};
 
 type SheetSnap = 'closed' | 'half' | 'full';
 
@@ -35,6 +52,30 @@ const SHEET_SPRING = { type: 'spring' as const, stiffness: 260, damping: 24, mas
 export function MobileSheet() {
   const [snap, setSnap] = useState<SheetSnap>('half');
   const [tab, setTab] = useState<'controls' | 'code'>('controls');
+  const tourStepId = useUiStore((s) => s.tourStepId);
+
+  // Tour layout coordination. Whenever the tour transitions to a step
+  // whose anchor is hidden behind a tab swap or a fully-extended sheet,
+  // adjust the sheet so the spotlight has something to land on. We
+  // never override the user's preference outside the tour — null
+  // tourStepId is treated as "no opinion" and the effect bails.
+  useEffect(() => {
+    if (!tourStepId) return;
+    const wantsTab = TOUR_STEP_TAB[tourStepId];
+    if (wantsTab) {
+      setTab(wantsTab);
+      // Make sure the sheet is open so the tab content is rendered;
+      // `closed` would still hide everything via the !isClosed guard
+      // below.
+      setSnap((s) => (s === 'closed' ? 'half' : s));
+    }
+    if (tourStepId === 'timeline') {
+      // Timeline lives in the preview area above the sheet. 'full'
+      // covers the preview entirely, so drop down to 'half' (or
+      // smaller) so the timeline anchor is on-screen and measurable.
+      setSnap((s) => (s === 'full' ? 'half' : s));
+    }
+  }, [tourStepId]);
 
   // Track the actual container height so dvh-based snaps interpolate as
   // concrete pixels. Init from window.innerHeight - top-bar so the first

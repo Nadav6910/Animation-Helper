@@ -127,7 +127,11 @@ export function PreviewStage() {
   }, [config, className, tick]);
 
   return (
-    <div className="flex h-full flex-col gap-3">
+    // No `gap-3` on the parent — the gap above the timeline is animated
+    // as part of the timeline's collapse (see motion.div below) so the
+    // stage gets the freed pixels back when the timeline is hidden,
+    // instead of staring at a permanent 12 px stub on mobile.
+    <div className="flex h-full flex-col">
       <div className="card relative flex-1 lg:min-h-[320px] overflow-hidden p-0">
         <div
           aria-hidden
@@ -195,9 +199,11 @@ export function PreviewStage() {
           {showTimeline && (
             <motion.div
               key="timeline-panel"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
+              // marginTop animates with height so the gap above the
+              // timeline collapses cleanly into the stage when hidden.
+              initial={{ height: 0, opacity: 0, marginTop: 0 }}
+              animate={{ height: 'auto', opacity: 1, marginTop: 12 }}
+              exit={{ height: 0, opacity: 0, marginTop: 0 }}
               transition={{ duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
               style={{ overflow: 'hidden' }}
             >
