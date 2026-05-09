@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Sparkles, Wand2, Palette, Gauge, Undo2, Redo2, RefreshCw, Heart, Compass, Film } from 'lucide-react';
+import { Search, Sparkles, Wand2, Palette, Gauge, Undo2, Redo2, RefreshCw, Heart, Compass, Film, X } from 'lucide-react';
 import { useUiStore } from '@/store/uiStore';
 import { useAnimationStore } from '@/store/animationStore';
 import { useSavedPresetsStore } from '@/store/savedPresetsStore';
@@ -272,12 +272,13 @@ export function CommandPalette() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          // On mobile the palette becomes the screen — flex-col +
-          // items-stretch so the inner card claims `flex-1` and the
-          // `<div>` underneath the search input gets a real height to
-          // scroll inside. On `sm:` and up we go back to the
-          // centred-card-with-top-padding layout.
-          className="fixed inset-0 z-[100] flex flex-col items-stretch bg-bg/70 backdrop-blur-md sm:items-center sm:justify-start sm:p-4 sm:pt-[14vh]"
+          // Modal-style palette on every viewport — centred card with
+          // a comfortable top inset. Body scroll lock + keyboardNav-
+          // gated scrollIntoView (above) + overscroll-contain on the
+          // list (below) is what actually makes the inner list
+          // scrollable on iOS, so we don't need a full-screen layout
+          // to get reliable scroll.
+          className="fixed inset-0 z-[100] grid place-items-start justify-items-center bg-bg/70 backdrop-blur-md p-4 pt-[8vh] sm:pt-[14vh]"
           onClick={() => setOpen(false)}
         >
           <motion.div
@@ -290,12 +291,11 @@ export function CommandPalette() {
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: -10, opacity: 0, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-            // Mobile: flex-1 — the card fills the screen, header and
-            // footer pin via flex-shrink-0, list takes the remaining
-            // space and scrolls inside it. Desktop: flex-none with a
-            // capped max-height + centred max-width so we get the
-            // familiar floating card.
-            className="flex flex-1 w-full flex-col overflow-hidden border-y border-border/70 bg-bg-panel/95 shadow-2xl backdrop-blur-xl focus:outline-none sm:flex-none sm:max-w-xl sm:max-h-[80vh] sm:rounded-2xl sm:border"
+            // Card capped at the available viewport (less the top
+            // inset and a small bottom margin) and uses flex-col so
+            // the listbox below can claim every leftover pixel and
+            // scroll inside.
+            className="flex w-full max-w-xl flex-col rounded-2xl border border-border/70 bg-bg-panel/95 shadow-2xl backdrop-blur-xl overflow-hidden focus:outline-none max-h-[calc(100vh-12vh)] sm:max-h-[80vh]"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id={titleId} className="sr-only">
@@ -345,6 +345,18 @@ export function CommandPalette() {
               <span className="hidden sm:inline rounded-md border border-border/70 bg-bg-soft px-1.5 py-0.5 text-[10px] text-fg-subtle">
                 Esc
               </span>
+              {/* Visible close button — required for touch users
+                  who can't hit Esc and may not realise tapping the
+                  backdrop dismisses the palette. */}
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close command palette"
+                title="Close"
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-fg-muted hover:bg-bg-soft hover:text-fg focus-ring transition-colors"
+              >
+                <X size={14} />
+              </button>
             </div>
             <div
               ref={listRef}
