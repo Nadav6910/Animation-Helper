@@ -272,7 +272,12 @@ export function CommandPalette() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-[100] grid place-items-start justify-items-center bg-bg/70 backdrop-blur-md p-4 pt-[8vh] sm:pt-[14vh]"
+          // On mobile the palette becomes the screen — flex-col +
+          // items-stretch so the inner card claims `flex-1` and the
+          // `<div>` underneath the search input gets a real height to
+          // scroll inside. On `sm:` and up we go back to the
+          // centred-card-with-top-padding layout.
+          className="fixed inset-0 z-[100] flex flex-col items-stretch bg-bg/70 backdrop-blur-md sm:items-center sm:justify-start sm:p-4 sm:pt-[14vh]"
           onClick={() => setOpen(false)}
         >
           <motion.div
@@ -285,13 +290,18 @@ export function CommandPalette() {
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: -10, opacity: 0, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-            className="w-full max-w-xl rounded-2xl border border-border/70 bg-bg-panel/95 shadow-2xl backdrop-blur-xl overflow-hidden focus:outline-none"
+            // Mobile: flex-1 — the card fills the screen, header and
+            // footer pin via flex-shrink-0, list takes the remaining
+            // space and scrolls inside it. Desktop: flex-none with a
+            // capped max-height + centred max-width so we get the
+            // familiar floating card.
+            className="flex flex-1 w-full flex-col overflow-hidden border-y border-border/70 bg-bg-panel/95 shadow-2xl backdrop-blur-xl focus:outline-none sm:flex-none sm:max-w-xl sm:max-h-[80vh] sm:rounded-2xl sm:border"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id={titleId} className="sr-only">
               Command palette
             </h2>
-            <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
+            <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
               <Search size={16} className="text-fg-subtle" aria-hidden />
               <input
                 ref={inputRef}
@@ -341,10 +351,17 @@ export function CommandPalette() {
               role="listbox"
               id={listboxId}
               aria-label="Command results"
-              // overscroll-contain stops iOS from chaining the
-              // scroll out to the page underneath when the user
-              // hits the top / bottom of the list.
-              className="max-h-[55vh] overflow-y-auto overscroll-contain scrollbar-thin py-1.5"
+              // flex-1 + min-h-0 makes this region size to the leftover
+              // height (mobile: viewport minus header / footer; desktop:
+              // up to max-h-80vh on the card minus header / footer),
+              // and overflow-y-auto scrolls inside that. min-h-0 is
+              // critical — without it the flex child insists on its
+              // intrinsic content height and the scroll never engages.
+              // overscroll-contain stops iOS from chaining the touch
+              // momentum out to the page underneath when the user
+              // reaches the top or bottom of the list.
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain scrollbar-thin py-1.5"
+              style={{ WebkitOverflowScrolling: 'touch' }}
             >
               {filtered.length === 0 ? (
                 <div className="px-4 py-6 text-center text-sm text-fg-subtle">
@@ -360,7 +377,7 @@ export function CommandPalette() {
                 />
               )}
             </div>
-            <div className="flex items-center justify-between border-t border-border/60 px-3 py-1.5 text-[10px] text-fg-subtle">
+            <div className="flex shrink-0 items-center justify-between border-t border-border/60 px-3 py-1.5 text-[10px] text-fg-subtle">
               <span>↑↓ navigate · Enter to run</span>
               <span>{filtered.length} commands</span>
             </div>

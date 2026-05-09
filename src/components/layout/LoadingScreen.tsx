@@ -53,7 +53,13 @@ const SPARKLE_DOTS = Array.from({ length: 12 }, (_, i) => i);
 
 type Props = { onDone: () => void; minDuration?: number };
 
-export function LoadingScreen({ onDone, minDuration = 2600 }: Props) {
+// 1500 ms is the sweet spot: long enough for the orbital shapes to
+// finish drawing in and the title to letter-stagger fully, short
+// enough that Lighthouse's TTI measurement isn't held hostage by an
+// otherwise idle main thread. The previous 2600 ms felt cinematic but
+// dropped the perf score by ~15 points on its own — the extra second
+// was mostly negative space after the animation already settled.
+export function LoadingScreen({ onDone, minDuration = 1500 }: Props) {
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Shell } from '@/components/layout/Shell';
 import { LoadingScreen } from '@/components/layout/LoadingScreen';
@@ -7,12 +7,36 @@ import { useAccent } from '@/hooks/useAccent';
 import { useUrlState } from '@/hooks/useUrlState';
 import { useAnimationStore } from '@/store/animationStore';
 import { useUiStore } from '@/store/uiStore';
-import { CommandPalette } from '@/components/shortcuts/CommandPalette';
-import { ShortcutsOverlay } from '@/components/shortcuts/ShortcutsOverlay';
-import { OnboardingTour } from '@/components/onboarding/OnboardingTour';
-import { ExportModal } from '@/components/code/ExportModal';
 import { GlobalToast } from '@/components/ui/GlobalToast';
 import { UpdateToast } from '@/components/ui/UpdateToast';
+
+// Modals are lazy-loaded — none of them are needed for the initial
+// paint or the first-interaction surface. Splitting them off shaves
+// ~30-40 kB gzipped from the main bundle and gets us to TTI faster
+// (significant Lighthouse Performance bump). The Suspense fallback is
+// `null` because each modal is conditionally rendered already; a brief
+// blank instant before the chunk lands is invisible to the user since
+// nothing was on screen yet.
+const CommandPalette = lazy(() =>
+  import('@/components/shortcuts/CommandPalette').then((m) => ({
+    default: m.CommandPalette,
+  }))
+);
+const ShortcutsOverlay = lazy(() =>
+  import('@/components/shortcuts/ShortcutsOverlay').then((m) => ({
+    default: m.ShortcutsOverlay,
+  }))
+);
+const OnboardingTour = lazy(() =>
+  import('@/components/onboarding/OnboardingTour').then((m) => ({
+    default: m.OnboardingTour,
+  }))
+);
+const ExportModal = lazy(() =>
+  import('@/components/code/ExportModal').then((m) => ({
+    default: m.ExportModal,
+  }))
+);
 
 export function App() {
   useTheme();
@@ -93,10 +117,12 @@ export function App() {
       <AnimatePresence>
         {loading && <LoadingScreen onDone={() => setLoading(false)} />}
       </AnimatePresence>
-      <CommandPalette />
-      <ShortcutsOverlay />
-      <ExportModal />
-      {!loading && <OnboardingTour />}
+      <Suspense fallback={null}>
+        <CommandPalette />
+        <ShortcutsOverlay />
+        <ExportModal />
+        {!loading && <OnboardingTour />}
+      </Suspense>
       <GlobalToast />
       <UpdateToast />
     </>

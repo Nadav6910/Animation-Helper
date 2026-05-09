@@ -17,10 +17,27 @@
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      Async font load: `media="print"` makes the stylesheet non-render-
+      blocking; the onload handler swaps it back to `all` once it's
+      downloaded. The <noscript> fallback gives no-JS users the same
+      sync load they'd get without this trick. font-display:swap (in
+      the URL) means text paints in the system fallback first and
+      re-renders once Inter / JetBrains Mono / Sansita Swashed are
+      ready, so the FCP / LCP land before the network fonts arrive.
+    -->
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Sansita+Swashed:wght@600;700&display=swap"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Sansita+Swashed:wght@600;700&display=swap"
+      />
+    </noscript>
   </head>
   <body>
     <div id="root"></div>
