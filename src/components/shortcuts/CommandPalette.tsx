@@ -206,9 +206,20 @@ export function CommandPalette() {
     return () => window.removeEventListener('keydown', handler);
   }, [setOpen]);
 
+  // Only auto-scroll the active row into view for KEYBOARD-driven
+  // navigation (arrow keys, Home, End). Pointer / hover-driven active
+  // changes must NOT trigger scrollIntoView, otherwise on touch the
+  // user's drag-to-scroll fires mouse-move-equivalents along the way,
+  // each one re-points `active` at the item under the finger, and the
+  // scrollIntoView snaps the list back to that item — killing scroll.
+  const keyboardNav = useRef(false);
   useEffect(() => {
     if (!open) return;
-    const el = listRef.current?.querySelector<HTMLElement>(`[data-idx="${active}"]`);
+    if (!keyboardNav.current) return;
+    keyboardNav.current = false;
+    const el = listRef.current?.querySelector<HTMLElement>(
+      `[data-idx="${active}"]`
+    );
     el?.scrollIntoView({ block: 'nearest' });
   }, [active, open]);
 
@@ -227,11 +238,7 @@ export function CommandPalette() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          // pt uses dvh on mobile so the dialog isn't pushed below
-          // the iOS keyboard when the search input is focused;
-          // sm+ keeps the original 14vh feel on desktops where
-          // there's no keyboard to worry about.
-          className="fixed inset-0 z-[100] grid place-items-start justify-items-center bg-bg/70 backdrop-blur-md p-4 pt-[6dvh] sm:pt-[14vh]"
+          className="fixed inset-0 z-[100] grid place-items-start justify-items-center bg-bg/70 backdrop-blur-md p-4 pt-[8vh] sm:pt-[14vh]"
           onClick={() => setOpen(false)}
         >
           <motion.div
@@ -244,12 +251,7 @@ export function CommandPalette() {
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: -10, opacity: 0, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-            // The card itself is height-capped by the visible (small)
-            // dynamic viewport minus the top inset and a comfortable
-            // bottom margin, with `flex flex-col` + `min-h-0` so the
-            // listbox below can take the remaining height and scroll
-            // its own contents instead of bleeding off-screen.
-            className="flex w-full max-w-xl flex-col rounded-2xl border border-border/70 bg-bg-panel/95 shadow-2xl backdrop-blur-xl overflow-hidden focus:outline-none max-h-[calc(100dvh-12dvh-1rem)] sm:max-h-[80vh]"
+            className="w-full max-w-xl rounded-2xl border border-border/70 bg-bg-panel/95 shadow-2xl backdrop-blur-xl overflow-hidden focus:outline-none"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id={titleId} className="sr-only">
@@ -274,15 +276,19 @@ export function CommandPalette() {
                   if (e.nativeEvent.isComposing || e.keyCode === 229) return;
                   if (e.key === 'ArrowDown') {
                     e.preventDefault();
+                    keyboardNav.current = true;
                     setActive((i) => Math.min(filtered.length - 1, i + 1));
                   } else if (e.key === 'ArrowUp') {
                     e.preventDefault();
+                    keyboardNav.current = true;
                     setActive((i) => Math.max(0, i - 1));
                   } else if (e.key === 'Home') {
                     e.preventDefault();
+                    keyboardNav.current = true;
                     setActive(0);
                   } else if (e.key === 'End') {
                     e.preventDefault();
+                    keyboardNav.current = true;
                     setActive(Math.max(0, filtered.length - 1));
                   } else if (e.key === 'Enter') {
                     e.preventDefault();
@@ -301,11 +307,10 @@ export function CommandPalette() {
               role="listbox"
               id={listboxId}
               aria-label="Command results"
-              // flex-1 + min-h-0 lets the list take all the room
-              // between the search header and footer, and scroll
-              // independently. overscroll-contain stops the scroll
-              // chaining out to the page underneath on iOS.
-              className="flex-1 min-h-0 overflow-y-auto overscroll-contain scrollbar-thin py-1.5"
+              // overscroll-contain stops iOS from chaining the
+              // scroll out to the page underneath when the user
+              // hits the top / bottom of the list.
+              className="max-h-[55vh] overflow-y-auto overscroll-contain scrollbar-thin py-1.5"
             >
               {filtered.length === 0 ? (
                 <div className="px-4 py-6 text-center text-sm text-fg-subtle">
