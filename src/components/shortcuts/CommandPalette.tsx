@@ -305,6 +305,7 @@ export function CommandPalette() {
               <Search size={16} className="text-fg-subtle" aria-hidden />
               <input
                 ref={inputRef}
+                aria-label="Search commands, presets, and easings"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 role="combobox"

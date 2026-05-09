@@ -38,9 +38,67 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Sansita+Swashed:wght@600;700&display=swap"
       />
     </noscript>
+    <!--
+      Inline splash so the LCP element (the title) paints during HTML
+      parsing, before any JS executes. With Lighthouse's throttled
+      mobile profile the React + LoadingScreen path doesn't paint
+      anything for 3+ seconds; the inline splash drops FCP / LCP into
+      the sub-second range. The React app's <createRoot> later
+      replaces #root's children, so this is purely a first-paint
+      stand-in. System-font stack so we don't wait on Google Fonts.
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: #0c0d12;
+        color: #e9e9ee;
+      }
+      #root {
+        min-height: 100dvh;
+        min-height: 100vh;
+      }
+      .ah-pre-splash {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 1.5rem;
+        background:
+          radial-gradient(60% 60% at 50% 45%, rgba(124, 92, 255, 0.18), transparent 70%),
+          radial-gradient(40% 50% at 50% 100%, rgba(124, 92, 255, 0.1), transparent 70%);
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          'Helvetica Neue', Arial, sans-serif;
+        text-align: center;
+      }
+      .ah-pre-splash h1 {
+        margin: 0;
+        font-size: clamp(1.875rem, 5vw, 3rem);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        background: linear-gradient(135deg, #7c5cff 0%, #ec4899 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .ah-pre-splash p {
+        margin: 0.75rem 0 0;
+        font-size: 0.875rem;
+        opacity: 0.65;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="ah-pre-splash" aria-hidden="true">
+        <div>
+          <h1>Animation Helper</h1>
+          <p>Crafting motion…</p>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

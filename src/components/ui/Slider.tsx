@@ -42,6 +42,11 @@ export function Slider({
         />
         <input
           type="range"
+          aria-label={label}
+          aria-valuenow={value}
+          aria-valuemin={min}
+          aria-valuemax={max}
+          aria-valuetext={format ? format(value) : undefined}
           min={min}
           max={max}
           step={step}

@@ -75,6 +75,7 @@ export function NumberInput({
         </button>
         <input
           type="number"
+          aria-label={label}
           value={display}
           step={step}
           min={Number.isFinite(min) ? min : undefined}
