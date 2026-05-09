@@ -34,28 +34,39 @@ export type TimelineController = {
 
 const CSS_ANIMATION_PREFIX = 'ah-anim-';
 
-/** Pull the user-animation off an element. We name every preview animation
- *  `ah-anim-<id>` in `useAnimationStyle`, so we can ignore Framer Motion's
- *  WAAPI ticks and other UI animations on the same element. */
-function findUserAnimation(el: Element | null): Animation | null {
-  if (!el || typeof (el as HTMLElement).getAnimations !== 'function') return null;
-  const animations = (el as HTMLElement).getAnimations();
-  for (const a of animations) {
-    const name = (a as Animation & { animationName?: string }).animationName;
-    if (name && name.startsWith(CSS_ANIMATION_PREFIX)) {
-      return a;
+/** Pull every user-animation off an element OR any of its descendants.
+ *  Stagger emits one `<span>` per letter, each with its own Animation
+ *  object — so the controller has to treat them as a group. play /
+ *  pause / seek apply to all matching animations atomically. */
+function collectUserAnimations(root: Element | null): Animation[] {
+  if (!root) return [];
+  const out: Animation[] = [];
+  const collectFrom = (el: Element) => {
+    const getter = (el as HTMLElement).getAnimations;
+    if (typeof getter !== 'function') return;
+    for (const a of (el as HTMLElement).getAnimations()) {
+      const name = (a as Animation & { animationName?: string }).animationName;
+      if (name && name.startsWith(CSS_ANIMATION_PREFIX)) {
+        out.push(a);
+      } else if (!name && out.length === 0) {
+        // Fallback for browsers that don't expose `animationName` (older
+        // Safari): include the first animation on the root so seek/pause
+        // still work; later descendants ignored under the same condition.
+        out.push(a);
+      }
     }
-  }
-  // Fallback: if the browser doesn't expose `animationName` on the
-  // Animation object (older Safari), assume the first animation is ours
-  // — the only animations on the target element should be the user's.
-  return animations[0] ?? null;
+  };
+  collectFrom(root);
+  // Stagger spans live one level deep; traverse all descendants for safety
+  // (also covers any future renderer that adds more nested animated nodes).
+  root.querySelectorAll('*').forEach(collectFrom);
+  return out;
 }
 
-function liveAnimation(className: string | null): Animation | null {
-  if (!className || typeof document === 'undefined') return null;
-  const el = document.querySelector(`.${className}`);
-  return findUserAnimation(el);
+function liveAnimations(className: string | null): Animation[] {
+  if (!className || typeof document === 'undefined') return [];
+  const root = document.querySelector(`.${className}`);
+  return collectUserAnimations(root);
 }
 
 export function useTimelineController(className: string | null): TimelineController {
@@ -75,15 +86,16 @@ export function useTimelineController(className: string | null): TimelineControl
     let attempts = 0;
     const tryFind = () => {
       if (cancelled) return;
-      const anim = liveAnimation(className);
-      if (anim) {
+      const anims = liveAnimations(className);
+      const first = anims[0];
+      if (first) {
         setReady(true);
         // Sync initial play state to whatever the animation has — CSS
         // animations created from `animation: …` start in 'running'
         // unless the rule sets `animation-play-state: paused`.
-        setIsPlaying(anim.playState === 'running');
-        if (typeof anim.currentTime === 'number') {
-          setCurrentTime(anim.currentTime);
+        setIsPlaying(first.playState === 'running');
+        if (typeof first.currentTime === 'number') {
+          setCurrentTime(first.currentTime);
         }
         return;
       }
@@ -96,23 +108,23 @@ export function useTimelineController(className: string | null): TimelineControl
     };
   }, [className]);
 
-  // While the animation is running, mirror its currentTime onto React
-  // state via rAF so the playhead UI tracks live playback. We re-fetch
-  // the animation on every tick — cheap, and fully insulates us from
-  // any CSS regeneration that swapped the underlying Animation out.
+  // While playing, mirror the parent (= first) animation's currentTime
+  // onto React state via rAF so the playhead UI tracks live playback.
+  // Re-fetch every tick so a CSS regeneration that swapped the
+  // underlying Animation out can't leave the controller stale.
   useEffect(() => {
     if (!isPlaying || !className) return;
     const tick = () => {
-      const anim = liveAnimation(className);
-      if (anim && typeof anim.currentTime === 'number') {
-        setCurrentTime(anim.currentTime);
-        if (anim.playState === 'finished') {
+      const anims = liveAnimations(className);
+      const first = anims[0];
+      if (first && typeof first.currentTime === 'number') {
+        setCurrentTime(first.currentTime);
+        if (first.playState === 'finished') {
           setIsPlaying(false);
           return;
         }
-        if (anim.playState === 'paused') {
-          // Something else paused us (browser tab background, devtools,
-          // etc.). Reflect that in the controller state.
+        if (first.playState === 'paused') {
+          // Something else paused us (browser tab background, devtools).
           setIsPlaying(false);
           return;
         }
@@ -127,40 +139,49 @@ export function useTimelineController(className: string | null): TimelineControl
   }, [isPlaying, className]);
 
   const play = useCallback(() => {
-    const anim = liveAnimation(className);
-    if (!anim) return;
-    anim.play();
+    const anims = liveAnimations(className);
+    if (anims.length === 0) return;
+    for (const a of anims) a.play();
     setIsPlaying(true);
   }, [className]);
 
   const pause = useCallback(() => {
-    const anim = liveAnimation(className);
-    if (!anim) return;
-    anim.pause();
+    const anims = liveAnimations(className);
+    if (anims.length === 0) return;
+    for (const a of anims) a.pause();
     setIsPlaying(false);
-    if (typeof anim.currentTime === 'number') setCurrentTime(anim.currentTime);
+    const first = anims[0];
+    if (first && typeof first.currentTime === 'number') {
+      setCurrentTime(first.currentTime);
+    }
   }, [className]);
 
   const seek = useCallback(
     (ms: number) => {
-      const anim = liveAnimation(className);
-      if (!anim) {
+      const anims = liveAnimations(className);
+      if (anims.length === 0) {
         // Even without a live animation, surface the requested time so
         // the UI reflects the user's intent immediately.
         setCurrentTime(ms);
         return;
       }
-      anim.currentTime = ms;
+      // For staggered groups (one Animation per letter) every animation
+      // shares the same internal time-base — setting currentTime on
+      // each individually keeps each letter at its own offset within
+      // the group while honouring the user's scrub position.
+      for (const a of anims) a.currentTime = ms;
       setCurrentTime(ms);
     },
     [className]
   );
 
   const restart = useCallback(() => {
-    const anim = liveAnimation(className);
-    if (!anim) return;
-    anim.currentTime = 0;
-    anim.play();
+    const anims = liveAnimations(className);
+    if (anims.length === 0) return;
+    for (const a of anims) {
+      a.currentTime = 0;
+      a.play();
+    }
     setCurrentTime(0);
     setIsPlaying(true);
   }, [className]);
