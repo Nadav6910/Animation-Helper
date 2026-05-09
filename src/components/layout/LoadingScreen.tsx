@@ -31,7 +31,11 @@ const ORBIT_SHAPES = [
     id: 'circle',
     d: 'M12 3 A 9 9 0 1 1 11.99 3 Z',
     radius: 150,
-    angle: 180,
+    // Was 180° (straight left) — that put the circle right at title-
+    // top level, sitting on top of the "An" of "Animation Helper".
+    // 200° lifts the orbit position to up-left so the title reads
+    // cleanly while keeping the four-shape compass arrangement.
+    angle: 200,
     delay: 0.44,
     color: '#22d3ee',
   },

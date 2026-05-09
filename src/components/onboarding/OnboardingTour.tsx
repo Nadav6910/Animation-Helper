@@ -264,34 +264,46 @@ export function OnboardingTour() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: reduced ? 0.08 : 0.25 }}
-          className="fixed inset-0 z-[120] overflow-hidden"
+          // pointer-events-none on the wrapper so clicks fall through
+          // to the actual UI in the spotlight area. The four dim panels
+          // below set pointer-events-auto to block clicks outside the
+          // spotlight; the coach mark sets pointer-events-auto on
+          // itself. Net effect: highlighted UI stays interactive,
+          // dimmed surroundings + the card are not clickable through.
+          className="fixed inset-0 z-[120] overflow-hidden pointer-events-none"
           aria-hidden={false}
         >
-          {/* Backdrop colour layer (does not animate so the page text
-              behind it is consistently dimmed). */}
-          <div className="absolute inset-0 bg-bg/85 backdrop-blur-md" />
+          {/* Ambient mood layer. No full-screen backdrop sits above it
+              anymore — the four dim panels below carve out the
+              spotlight, and the spotlight area is left clear so the
+              actual UI shows through and stays interactive. For the
+              hero step (no anchor), the panels collapse and the mesh
+              gradient alone provides the dim. */}
           <MeshGradient />
+          {fullscreenSpotlight && (
+            <div className="pointer-events-auto absolute inset-0 bg-bg/80 backdrop-blur-md" />
+          )}
 
           {/* Four dim panels carving out a hole around the anchor.
-              When anchor is null, all four panels collapse to fill the
-              screen — the spotlight effectively isn't shown. */}
+              Each blocks pointer events (pointer-events-auto) so the
+              user can only interact with the spotlit element. */}
           {!fullscreenSpotlight && (
             <>
               {/* Top panel — full-width strip above the spotlight. */}
               <motion.div
-                className="absolute left-0 right-0 top-0 bg-bg/85 backdrop-blur-md"
+                className="pointer-events-auto absolute left-0 right-0 top-0 bg-bg/85 backdrop-blur-md"
                 animate={{ height: rect.top }}
                 transition={{ type: 'spring', stiffness: 220, damping: 28 }}
               />
               {/* Bottom panel */}
               <motion.div
-                className="absolute left-0 right-0 bottom-0 bg-bg/85 backdrop-blur-md"
+                className="pointer-events-auto absolute left-0 right-0 bottom-0 bg-bg/85 backdrop-blur-md"
                 animate={{ top: rect.top + rect.height }}
                 transition={{ type: 'spring', stiffness: 220, damping: 28 }}
               />
               {/* Left panel */}
               <motion.div
-                className="absolute left-0 bg-bg/85 backdrop-blur-md"
+                className="pointer-events-auto absolute left-0 bg-bg/85 backdrop-blur-md"
                 animate={{
                   top: rect.top,
                   width: rect.left,
@@ -301,7 +313,7 @@ export function OnboardingTour() {
               />
               {/* Right panel */}
               <motion.div
-                className="absolute right-0 bg-bg/85 backdrop-blur-md"
+                className="pointer-events-auto absolute right-0 bg-bg/85 backdrop-blur-md"
                 animate={{
                   top: rect.top,
                   left: rect.left + rect.width,

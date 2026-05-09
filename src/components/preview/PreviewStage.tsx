@@ -2,12 +2,14 @@ import { useAnimationStore } from '@/store/animationStore';
 import { useUiStore } from '@/store/uiStore';
 import { useAnimationStyle } from '@/hooks/useAnimationStyle';
 import { useTimelineController } from '@/hooks/useTimelineController';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { TextTarget } from './TextTarget';
 import { ShapeTarget } from './ShapeTarget';
 import { SvgPathTarget } from './SvgPathTarget';
 import { PlayButton, type PlayButtonState } from './PlayButton';
 import { TimelinePanel } from './TimelinePanel';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
+import { PanelBottomClose, PanelBottomOpen } from 'lucide-react';
 import { useCallback, useEffect, useMemo } from 'react';
 import { totalDuration } from '@/lib/timing';
 
@@ -24,6 +26,18 @@ export function PreviewStage() {
   const setPreviewTargetClassName = useUiStore(
     (s) => s.setPreviewTargetClassName
   );
+  const tourOpen = useUiStore((s) => s.tourOpen);
+  // Timeline visibility — persisted so the user's preference survives
+  // reload. Collapsing the timeline frees its vertical space for the
+  // preview stage (the card has flex-1, so flexbox redistributes the
+  // freed space automatically) without dropping any controller state.
+  // The tour temporarily un-collapses the timeline so its
+  // `data-tour-anchor` step has something to spotlight.
+  const [timelineHidden, setTimelineHidden] = useLocalStorage(
+    'ah:timeline-hidden',
+    false
+  );
+  const showTimeline = !timelineHidden || tourOpen;
 
   // Publish the live target's className so the visual exporter (mounted
   // elsewhere in the tree) can find the same DOM element + animation
@@ -147,12 +161,50 @@ export function PreviewStage() {
             Live preview
           </span>
         </div>
-        <div className="absolute right-4 bottom-4 z-20">
+        <div className="absolute right-4 bottom-4 z-20 flex items-center gap-2.5">
+          <motion.button
+            type="button"
+            onClick={() => setTimelineHidden((v) => !v)}
+            whileHover={{ scale: 1.06 }}
+            whileTap={{ scale: 0.92 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 26 }}
+            className="grid h-9 w-9 place-items-center rounded-full border border-border/70 bg-bg-panel/80 text-fg-muted backdrop-blur hover:text-fg focus-ring transition-colors"
+            aria-label={timelineHidden ? 'Show timeline' : 'Hide timeline'}
+            aria-pressed={!timelineHidden}
+            title={timelineHidden ? 'Show timeline' : 'Hide timeline'}
+          >
+            {timelineHidden ? (
+              <PanelBottomOpen size={15} />
+            ) : (
+              <PanelBottomClose size={15} />
+            )}
+          </motion.button>
           <PlayButton state={playState} onClick={onPlayClick} />
         </div>
       </div>
+      {/* Timeline collapses into the stage with a smooth height +
+          opacity transition. AnimatePresence keeps the panel mounted
+          during exit so the height interpolation has a target to
+          read. The stage's flex-1 absorbs the freed space. The
+          data-tour-anchor stays in the DOM unconditionally so the
+          onboarding tour can find it even when the user has the
+          timeline collapsed (the tour also flips it open via
+          `showTimeline` so the spotlight has visible content). */}
       <div data-tour-anchor="timeline">
-        <TimelinePanel controller={controller} />
+        <AnimatePresence initial={false}>
+          {showTimeline && (
+            <motion.div
+              key="timeline-panel"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
+              style={{ overflow: 'hidden' }}
+            >
+              <TimelinePanel controller={controller} />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
