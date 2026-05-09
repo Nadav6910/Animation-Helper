@@ -59,6 +59,68 @@ describe('totalDuration', () => {
       )
     ).toBe(3000);
   });
+
+  it('extends the ruler by stagger × (n − 1) when text is staggered', () => {
+    expect(
+      totalDuration(
+        cfg({
+          target: 'text',
+          text: 'Animate', // 7 letters
+          stagger: { step: 50 },
+          duration: 1000,
+          delay: 0,
+          iterations: 1,
+          direction: 'normal',
+        })
+      )
+    ).toBe(50 * 6 + 1000); // 1300
+  });
+
+  it('keeps base delay when it exceeds the stagger offset', () => {
+    expect(
+      totalDuration(
+        cfg({
+          target: 'text',
+          text: 'Hi', // 2 letters → stagger offset = 50ms
+          stagger: { step: 50 },
+          duration: 1000,
+          delay: 500,
+          iterations: 1,
+          direction: 'normal',
+        })
+      )
+    ).toBe(500 + 1000); // delay wins over stagger offset
+  });
+
+  it('combines stagger + alternate-infinite (one perceptual loop covers every letter)', () => {
+    expect(
+      totalDuration(
+        cfg({
+          target: 'text',
+          text: 'Hello', // 5 letters
+          stagger: { step: 100 },
+          duration: 1000,
+          delay: 0,
+          iterations: 'infinite',
+          direction: 'alternate',
+        })
+      )
+    ).toBe(100 * 4 + 1000 * 2); // 2400
+  });
+
+  it('ignores stagger when target is not text', () => {
+    expect(
+      totalDuration(
+        cfg({
+          target: 'shape',
+          stagger: { step: 100 },
+          duration: 1000,
+          delay: 0,
+          iterations: 1,
+        })
+      )
+    ).toBe(1000);
+  });
 });
 
 describe('clampTime', () => {

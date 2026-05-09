@@ -69,11 +69,30 @@ function liveAnimations(className: string | null): Animation[] {
   return collectUserAnimations(root);
 }
 
-export function useTimelineController(className: string | null): TimelineController {
+export function useTimelineController(
+  className: string | null,
+  /**
+   * Called when the controller wants to act on a live Animation but
+   * `getAnimations()` returns empty. This happens for finite CSS
+   * animations with `fill: none`: once they reach their after-phase
+   * the browser removes the Animation, leaving `play()` / `restart()`
+   * with nothing to bind to. The fallback is expected to remount the
+   * target (a `key++` bump) so a fresh Animation attaches and the rAF
+   * tick can pick it up next frame.
+   */
+  onMissingAnimation?: () => void
+): TimelineController {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [ready, setReady] = useState(false);
   const rafRef = useRef<number | null>(null);
+  // Latest fallback in a ref so play / restart's identities don't
+  // depend on it — otherwise every tick increment in useAnimationStyle
+  // would recreate these callbacks downstream.
+  const fallbackRef = useRef(onMissingAnimation);
+  useEffect(() => {
+    fallbackRef.current = onMissingAnimation;
+  }, [onMissingAnimation]);
 
   // Mark ready once the DOM has an animation we can talk to. Retry for
   // a short window covering first paint after element mount.
@@ -114,17 +133,36 @@ export function useTimelineController(className: string | null): TimelineControl
   // underlying Animation out can't leave the controller stale.
   useEffect(() => {
     if (!isPlaying || !className) return;
+    let missingFrames = 0;
     const tick = () => {
       const anims = liveAnimations(className);
       const first = anims[0];
       if (first && typeof first.currentTime === 'number') {
+        missingFrames = 0;
         setCurrentTime(first.currentTime);
-        if (first.playState === 'finished') {
+        // For staggered groups (one Animation per letter) every letter
+        // shares the same wall-clock currentTime but enters its
+        // after-phase at a different time because of its
+        // animation-delay. Only stop the playhead when EVERY animation
+        // has finished — otherwise the late letters would freeze
+        // mid-frame the moment the first one completes.
+        if (anims.every((a) => a.playState === 'finished')) {
           setIsPlaying(false);
           return;
         }
         if (first.playState === 'paused') {
           // Something else paused us (browser tab background, devtools).
+          setIsPlaying(false);
+          return;
+        }
+      } else {
+        // Animation reaped — finite CSS animations with fill:none get
+        // removed from getAnimations() in their after-phase. Tolerate
+        // a few empty frames (covers the brief gap of a className-bump
+        // remount) before declaring playback finished; otherwise we'd
+        // race the remount and prematurely flip isPlaying off.
+        missingFrames += 1;
+        if (missingFrames > 6) {
           setIsPlaying(false);
           return;
         }
@@ -140,14 +178,33 @@ export function useTimelineController(className: string | null): TimelineControl
 
   const play = useCallback(() => {
     const anims = liveAnimations(className);
-    if (anims.length === 0) return;
+    if (anims.length === 0) {
+      // Animation gone (finite + fill:none, after-phase). Ask the host
+      // to remount the target — a fresh Animation attaches and the rAF
+      // tick (armed by setIsPlaying(true) below) follows it as soon as
+      // it materialises.
+      const fallback = fallbackRef.current;
+      if (fallback) {
+        fallback();
+        setCurrentTime(0);
+        setIsPlaying(true);
+      }
+      return;
+    }
+    // Calling play() on a finished Animation rewinds to 0 and replays,
+    // so this also covers "click play after finish but before reap".
     for (const a of anims) a.play();
     setIsPlaying(true);
   }, [className]);
 
   const pause = useCallback(() => {
     const anims = liveAnimations(className);
-    if (anims.length === 0) return;
+    if (anims.length === 0) {
+      // Nothing to pause — animation is already absent. Reflect the
+      // not-playing state so the UI stays consistent.
+      setIsPlaying(false);
+      return;
+    }
     for (const a of anims) a.pause();
     setIsPlaying(false);
     const first = anims[0];
@@ -160,15 +217,16 @@ export function useTimelineController(className: string | null): TimelineControl
     (ms: number) => {
       const anims = liveAnimations(className);
       if (anims.length === 0) {
-        // Even without a live animation, surface the requested time so
-        // the UI reflects the user's intent immediately.
+        // Without a live animation we can't move the rendered element,
+        // but surface the requested time on the ruler so the user's
+        // intent shows. Hitting play afterward remounts via the
+        // missing-animation fallback and resumes from 0.
         setCurrentTime(ms);
         return;
       }
-      // For staggered groups (one Animation per letter) every animation
-      // shares the same internal time-base — setting currentTime on
-      // each individually keeps each letter at its own offset within
-      // the group while honouring the user's scrub position.
+      // Every Animation in a stagger group shares the same wall-clock
+      // currentTime; setting it identically on each keeps every letter
+      // at its correct stagger-offset frame for the scrubbed time.
       for (const a of anims) a.currentTime = ms;
       setCurrentTime(ms);
     },
@@ -177,7 +235,15 @@ export function useTimelineController(className: string | null): TimelineControl
 
   const restart = useCallback(() => {
     const anims = liveAnimations(className);
-    if (anims.length === 0) return;
+    if (anims.length === 0) {
+      const fallback = fallbackRef.current;
+      if (fallback) {
+        fallback();
+        setCurrentTime(0);
+        setIsPlaying(true);
+      }
+      return;
+    }
     for (const a of anims) {
       a.currentTime = 0;
       a.play();

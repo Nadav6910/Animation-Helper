@@ -14,7 +14,11 @@ import { totalDuration } from '@/lib/timing';
 export function PreviewStage() {
   const config = useAnimationStore((s) => s.config);
   const { className, restart, tick } = useAnimationStyle(config);
-  const controller = useTimelineController(className);
+  // The className-bump `restart` doubles as the controller's recovery
+  // path when getAnimations() comes back empty (finite + fill:none in
+  // after-phase). Hitting Play after the animation has been reaped
+  // remounts the target → a fresh Animation attaches → tick follows.
+  const controller = useTimelineController(className, restart);
   const setPreviewTargetClassName = useUiStore(
     (s) => s.setPreviewTargetClassName
   );
