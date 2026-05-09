@@ -42,22 +42,26 @@ export function ControlsPanel() {
         <TargetPicker />
       </Section>
 
-      <Section
-        title="Presets"
-        description="Start from a curated animation"
-        icon={<Sparkles size={16} />}
-        defaultOpen={false}
-      >
-        <PresetGallery />
-      </Section>
+      <div data-tour-anchor="presets">
+        <Section
+          title="Presets"
+          description="Start from a curated animation"
+          icon={<Sparkles size={16} />}
+          defaultOpen={false}
+        >
+          <PresetGallery />
+        </Section>
+      </div>
 
-      <Section
-        title="Keyframes"
-        description="From → through → to"
-        icon={<Wand2 size={16} />}
-      >
-        <KeyframeTimeline />
-      </Section>
+      <div data-tour-anchor="keyframes">
+        <Section
+          title="Keyframes"
+          description="From → through → to"
+          icon={<Wand2 size={16} />}
+        >
+          <KeyframeTimeline />
+        </Section>
+      </div>
 
       <Section title="Translate" icon={<Move size={16} />} defaultOpen>
         <TransformSection axis="translate" />

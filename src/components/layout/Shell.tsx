@@ -27,7 +27,7 @@ export function Shell({ ready }: Props) {
         return;
       }
       const ui = useUiStore.getState();
-      if (ui.paletteOpen || ui.shortcutsOpen) return;
+      if (ui.paletteOpen || ui.shortcutsOpen || ui.tourOpen || ui.exportOpen) return;
       if (e.key === 'r' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         resetAll();

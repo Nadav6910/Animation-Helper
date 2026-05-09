@@ -144,7 +144,10 @@ export function CodePanel() {
 
   return (
     <div className="card flex h-full min-h-[240px] flex-col p-0 overflow-hidden sm:min-h-[360px]">
-      <div className="flex flex-col gap-2 border-b border-border/60 p-3">
+      <div
+        className="flex flex-col gap-2 border-b border-border/60 p-3"
+        data-tour-anchor="export"
+      >
         <div className="flex items-center gap-1 overflow-x-auto scrollbar-thin">
           {FORMATS.map((f) => {
             const active = f.value === format;

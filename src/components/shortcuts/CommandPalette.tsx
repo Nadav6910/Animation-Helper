@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Sparkles, Wand2, Palette, Gauge, Undo2, Redo2, RefreshCw, Heart } from 'lucide-react';
+import { Search, Sparkles, Wand2, Palette, Gauge, Undo2, Redo2, RefreshCw, Heart, Compass, Film } from 'lucide-react';
 import { useUiStore } from '@/store/uiStore';
 import { useAnimationStore } from '@/store/animationStore';
 import { useSavedPresetsStore } from '@/store/savedPresetsStore';
@@ -83,6 +83,20 @@ export function CommandPalette() {
         run: () => {
           save('Untitled', config);
         },
+      },
+      {
+        id: 'export',
+        label: 'Export as video / GIF',
+        group: 'Editor',
+        icon: <Film size={14} />,
+        run: () => useUiStore.getState().setExportOpen(true),
+      },
+      {
+        id: 'show-tour',
+        label: 'Show onboarding tour',
+        group: 'Editor',
+        icon: <Compass size={14} />,
+        run: () => window.dispatchEvent(new CustomEvent('ah:show-tour')),
       },
       {
         id: 'theme',

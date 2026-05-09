@@ -23,6 +23,11 @@ type State = {
   setShortcutsOpen: (v: boolean) => void;
   exportOpen: boolean;
   setExportOpen: (v: boolean) => void;
+  /** True while the OnboardingTour is mounted + visible. App.tsx's
+   *  global hotkey handlers consult this so the tour's own arrow-key
+   *  navigation isn't shadowed by the timeline scrub nudges. */
+  tourOpen: boolean;
+  setTourOpen: (v: boolean) => void;
   toast: ToastEntry | null;
   showToast: (message: string, tone?: ToastTone) => void;
   dismissToast: () => void;
@@ -45,6 +50,8 @@ export const useUiStore = create<State>((set) => ({
   setShortcutsOpen: (v) => set({ shortcutsOpen: v }),
   exportOpen: false,
   setExportOpen: (v) => set({ exportOpen: v }),
+  tourOpen: false,
+  setTourOpen: (v) => set({ tourOpen: v }),
   previewTargetClassName: null,
   setPreviewTargetClassName: (cn) => set({ previewTargetClassName: cn }),
   toast: null,

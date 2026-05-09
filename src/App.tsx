@@ -9,7 +9,7 @@ import { useAnimationStore } from '@/store/animationStore';
 import { useUiStore } from '@/store/uiStore';
 import { CommandPalette } from '@/components/shortcuts/CommandPalette';
 import { ShortcutsOverlay } from '@/components/shortcuts/ShortcutsOverlay';
-import { OnboardingHint } from '@/components/onboarding/OnboardingHint';
+import { OnboardingTour } from '@/components/onboarding/OnboardingTour';
 import { ExportModal } from '@/components/code/ExportModal';
 import { GlobalToast } from '@/components/ui/GlobalToast';
 
@@ -43,7 +43,8 @@ export function App() {
         tag === 'TEXTAREA' ||
         (e.target as HTMLElement | null)?.isContentEditable;
       const ui = useUiStore.getState();
-      const inOverlay = ui.paletteOpen || ui.shortcutsOpen;
+      const inOverlay =
+        ui.paletteOpen || ui.shortcutsOpen || ui.tourOpen || ui.exportOpen;
 
       // Cmd/Ctrl+Z / Cmd/Ctrl+Shift+Z work everywhere except inside text
       // inputs and inside open overlays (the overlay's input has its own
@@ -94,7 +95,7 @@ export function App() {
       <CommandPalette />
       <ShortcutsOverlay />
       <ExportModal />
-      {!loading && <OnboardingHint />}
+      {!loading && <OnboardingTour />}
       <GlobalToast />
     </>
   );

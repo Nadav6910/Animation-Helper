@@ -145,7 +145,9 @@ export function PreviewStage() {
           <PlayButton state={playState} onClick={onPlayClick} />
         </div>
       </div>
-      <TimelinePanel controller={controller} />
+      <div data-tour-anchor="timeline">
+        <TimelinePanel controller={controller} />
+      </div>
     </div>
   );
 }
