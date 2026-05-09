@@ -44,6 +44,11 @@ export function Toggle({
         type="button"
         role="switch"
         aria-checked={checked}
+        // The toggle's accessible name comes from the visible label
+        // when present, otherwise we fall back to a generic "Toggle".
+        // Lighthouse 91 → flagged this as the only remaining
+        // unnamed-button.
+        aria-label={label ?? 'Toggle'}
         onClick={() => onChange(!checked)}
         className={cn(
           'relative shrink-0 rounded-full border transition-colors focus-ring',

@@ -1,7 +1,16 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Shell } from '@/components/layout/Shell';
 import { LoadingScreen } from '@/components/layout/LoadingScreen';
+
+// Shell pulls in ControlsPanel + PreviewStage + CodePanel and ~all
+// their Framer Motion children — parsing it during the splash window
+// is what was driving TBT to 1.15 s. Lazy-load it: while the splash
+// runs, the Shell chunk downloads in parallel; once `loading` flips
+// false the chunk is (usually) already in flight or cached, so the
+// suspense fallback resolves to the rendered Shell within a few ms.
+const Shell = lazy(() =>
+  import('@/components/layout/Shell').then((m) => ({ default: m.Shell }))
+);
 import { useTheme } from '@/hooks/useTheme';
 import { useAccent } from '@/hooks/useAccent';
 import { useUrlState } from '@/hooks/useUrlState';
@@ -46,6 +55,19 @@ export function App() {
   const redo = useAnimationStore((s) => s.redo);
 
   const [loading, setLoading] = useState(true);
+
+  // Prefetch the Shell chunk a moment into the splash so it's parsed
+  // and cached by the time `loading` flips false — avoids a blank
+  // gap between splash exit and Shell mount. Delayed ~600 ms so the
+  // LoadingScreen's first frames get unblocked main-thread time;
+  // the prefetch then runs while the splash is mid-cycle.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const t = window.setTimeout(() => {
+      void import('@/components/layout/Shell');
+    }, 600);
+    return () => window.clearTimeout(t);
+  }, []);
 
   // One-time migration: a previous build persisted slow-mo in localStorage,
   // which meant a stray ½× from a debugging session followed users back on
@@ -113,7 +135,14 @@ export function App() {
 
   return (
     <>
-      <Shell ready={!loading} />
+      {/* Shell is lazy: its chunk downloads in parallel with the
+          splash, then mounts as soon as `loading` flips false. Until
+          then we render nothing in the shell slot — the LoadingScreen
+          owns the viewport. Suspense fallback is null since the
+          splash is already covering anyway. */}
+      <Suspense fallback={null}>
+        {!loading && <Shell ready />}
+      </Suspense>
       <AnimatePresence>
         {loading && <LoadingScreen onDone={() => setLoading(false)} />}
       </AnimatePresence>
