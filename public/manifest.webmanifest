@@ -1,7 +1,11 @@
 {
+  "id": "/",
   "name": "Animation Helper",
   "short_name": "Animation",
   "description": "Design CSS animations visually and copy production-ready code in 12 formats.",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["productivity", "design", "developer", "utilities"],
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -22,6 +26,12 @@
     {
       "src": "/icon-maskable.png",
       "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },

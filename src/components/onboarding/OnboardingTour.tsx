@@ -8,7 +8,12 @@ import {
   useState,
   type ReactElement,
 } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import {
+  motion,
+  AnimatePresence,
+  MotionConfig,
+  useReducedMotion,
+} from 'framer-motion';
 import { ArrowLeft, ArrowRight, Sparkles, X } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { useUiStore } from '@/store/uiStore';
@@ -333,6 +338,13 @@ export function OnboardingTour() {
   }, [anchorRect]);
 
   return (
+    // MotionConfig propagates `reducedMotion: 'user'` to every
+    // descendant `motion.*` component — covers the five
+    // illustration files and the mesh / confetti without each one
+    // having to call `useReducedMotion` individually. With "user"
+    // framer-motion respects the OS-level prefers-reduced-motion
+    // and short-circuits all transition-based loops to first frame.
+    <MotionConfig reducedMotion="user">
     <AnimatePresence>
       {open && (
         <motion.div
@@ -559,6 +571,7 @@ export function OnboardingTour() {
         </motion.div>
       )}
     </AnimatePresence>
+    </MotionConfig>
   );
 }
 

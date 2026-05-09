@@ -134,7 +134,14 @@ export function CodeBlock({ code, lang, theme, explain = false }: Props) {
           <AnimatePresence>
             {hover && (
               <motion.div
-                key={hover.prop + hover.rect.top}
+                // Key on the property name only — tying it to
+                // `rect.top` made the tooltip remount + replay its
+                // entrance animation every time the cursor jumped to
+                // a new row, which read as a flicker. With just the
+                // property name as the key, mounting only happens
+                // when the actual content changes; position updates
+                // are handled by re-rendering the same node.
+                key={hover.prop}
                 initial={{ opacity: 0, y: 4, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 4, scale: 0.96 }}

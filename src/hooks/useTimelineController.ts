@@ -275,9 +275,23 @@ export function useTimelineController(
       }
       return;
     }
+    // Same triple-pin pattern as `play()`: pre-set currentTime,
+    // call play(), then re-pin via startTime to bypass any
+    // pending-pause race or hold-time drift across the transition.
+    // Without the post-play startTime pin, restart had the same
+    // racy-browser failure mode that play() guards against —
+    // currentTime sometimes wouldn't take and the animation
+    // resumed from a stale position.
+    for (const a of anims) a.currentTime = 0;
+    for (const a of anims) a.play();
     for (const a of anims) {
-      a.currentTime = 0;
-      a.play();
+      const tl = a.timeline;
+      const tlNow = tl ? (tl.currentTime as number | null) : null;
+      if (typeof tlNow === 'number') {
+        a.startTime = tlNow;
+      } else {
+        a.currentTime = 0;
+      }
     }
     setCurrentTime(0);
     setIsPlaying(true);

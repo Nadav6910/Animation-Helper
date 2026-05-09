@@ -53,6 +53,18 @@ type FormatRow = {
 // the generator function. New formats add one entry — TypeScript checks
 // the union exhaustively against `Format`, so an out-of-sync row trips
 // the build instead of silently producing a "no matches" path.
+
+// Formats whose generator accepts the cssVars option. Module-level so
+// `.includes()` doesn't allocate a fresh array on every render. Adding
+// a new generator that supports cssVars MUST add it here AND extend
+// the type-cast in the `code` useMemo below.
+const CSS_VARS_CAPABLE: ReadonlyArray<Format> = [
+  'css',
+  'scss',
+  'styled',
+  'animsvg',
+];
+
 const FORMATS: FormatRow[] = [
   { value: 'css', label: 'CSS', lang: 'css', ext: 'css', fn: generateCss },
   { value: 'scss', label: 'SCSS', lang: 'scss', ext: 'scss', fn: generateScss },
@@ -132,12 +144,7 @@ export function CodePanel() {
   const copyRef = useRef<HTMLButtonElement | null>(null);
 
   const meta = FORMATS.find((f) => f.value === format)!;
-  // Only the CSS-flavoured generators understand the cssVars option;
-  // the rest have native idioms (Tailwind keyframes, Framer variants,
-  // WAAPI options, Vue / Svelte scoped styles) where the abstraction
-  // would just add noise.
-  const cssVarsCapable: Format[] = ['css', 'scss', 'styled', 'animsvg'];
-  const cssVarsActive = cssVarsCapable.includes(format) && cssVarsOutput;
+  const cssVarsActive = CSS_VARS_CAPABLE.includes(format) && cssVarsOutput;
   // The HTML export carries the user's chosen font (link tag + body
   // font-family + inline text style) so the downloaded file matches the
   // preview. Other formats are font-agnostic — consumer wires the font
@@ -153,7 +160,7 @@ export function CodePanel() {
       // Cast: the FormatRow type is the lowest-common-denominator
       // (single-arg fn) for the FORMATS table; the CSS-flavoured
       // generators all accept a second options arg with cssVars. Only
-      // routed here when format is in cssVarsCapable.
+      // routed here when format is in CSS_VARS_CAPABLE.
       type CssVarsCapableFn = (
         config: Parameters<typeof generateCss>[0],
         opts: { cssVars: true }
@@ -247,7 +254,7 @@ export function CodePanel() {
             <Film size={12} />
             <span className="hidden sm:inline">Record</span>
           </button>
-          {cssVarsCapable.includes(format) && (
+          {CSS_VARS_CAPABLE.includes(format) && (
             <button
               type="button"
               onClick={() => setCssVarsOutput((v) => !v)}
@@ -289,12 +296,18 @@ export function CodePanel() {
             <Info size={12} />
             <span className="hidden sm:inline">Explain</span>
           </button>
-          <CopyButton
-            ref={copyRef}
-            text={code}
-            onCopied={() => showToast('Code copied to clipboard')}
-          />
         </div>
+        {/* Copy gets its own row + always-visible label. It's the
+            primary action of the whole panel — burying it at the
+            tail of the icon strip made it feel secondary on mobile,
+            and the icon alone wasn't immediately readable as
+            "copy to clipboard". Now it's a full-width primary
+            button that's impossible to miss. */}
+        <CopyButton
+          ref={copyRef}
+          text={code}
+          onCopied={() => showToast('Code copied to clipboard')}
+        />
       </div>
       <div className="flex-1 overflow-auto scrollbar-thin">
         <Suspense

@@ -63,11 +63,15 @@ export function PreviewStage() {
   const animated = useMemo(() => hasMeaningfulAnimation(config), [config]);
   // "At end" only applies to finite-iteration animations. Infinite
   // presets never finish so the play button never goes into replay
-  // mode for them. 16 ms covers typical rAF jitter at the boundary.
+  // mode for them. The boundary is the smaller of 16 ms (typical rAF
+  // jitter) and 5 % of the total — without the cap, a 50 ms preset
+  // would treat 32 % of its run as "finished" and the button would
+  // flicker to replay mid-play.
   const finiteIterations =
     typeof config.iterations === 'number' && config.iterations > 0;
+  const atEndSlack = totalMs > 0 ? Math.min(16, totalMs * 0.05) : 16;
   const atEnd =
-    finiteIterations && controller.currentTime >= Math.max(0, totalMs - 16);
+    finiteIterations && controller.currentTime >= Math.max(0, totalMs - atEndSlack);
 
   const playState: PlayButtonState = !controller.ready || !animated
     ? 'paused'
