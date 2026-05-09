@@ -72,6 +72,16 @@ function liveAnimations(className: string | null): Animation[] {
 export function useTimelineController(
   className: string | null,
   /**
+   * Re-sync trigger. Whenever this value changes the controller
+   * re-detects the live Animation and pulls fresh `playState` +
+   * `currentTime` off it. Pass the generated css string (or any
+   * monotonic token bumped on css regen) so config changes —
+   * preset switches, "start blank", target swaps, slider tweaks —
+   * never leave `isPlaying` and the playhead frozen on the previous
+   * animation while a brand-new one is running underneath.
+   */
+  syncToken?: unknown,
+  /**
    * Called when the controller wants to act on a live Animation but
    * `getAnimations()` returns empty. This happens for finite CSS
    * animations with `fill: none`: once they reach their after-phase
@@ -94,8 +104,15 @@ export function useTimelineController(
     fallbackRef.current = onMissingAnimation;
   }, [onMissingAnimation]);
 
-  // Mark ready once the DOM has an animation we can talk to. Retry for
-  // a short window covering first paint after element mount.
+  // Detect (and re-detect) the underlying Animation, syncing React
+  // state to its real `playState` / `currentTime`. Re-runs whenever
+  // syncToken changes — i.e. whenever the CSS @keyframes is replaced
+  // and a fresh Animation has attached. CSS animations created from
+  // `animation: …` shorthand auto-start in 'running' unless the rule
+  // sets `animation-play-state: paused`, so config changes that
+  // regenerate CSS effectively restart playback; this effect makes
+  // the play button + playhead track that reality instead of staying
+  // stuck on the previous animation's state.
   useEffect(() => {
     if (!className) {
       setReady(false);
@@ -109,9 +126,6 @@ export function useTimelineController(
       const first = anims[0];
       if (first) {
         setReady(true);
-        // Sync initial play state to whatever the animation has — CSS
-        // animations created from `animation: …` start in 'running'
-        // unless the rule sets `animation-play-state: paused`.
         setIsPlaying(first.playState === 'running');
         if (typeof first.currentTime === 'number') {
           setCurrentTime(first.currentTime);
@@ -125,7 +139,7 @@ export function useTimelineController(
     return () => {
       cancelled = true;
     };
-  }, [className]);
+  }, [className, syncToken]);
 
   // While playing, mirror the parent (= first) animation's currentTime
   // onto React state via rAF so the playhead UI tracks live playback.
