@@ -205,6 +205,35 @@ describe('hasMeaningfulAnimation', () => {
     ).toBe(true);
   });
 
+  it('strokeDashoffset diff alone does not animate non-SVG targets', () => {
+    // Switching from SVG back to shape leaves stroke-draw keyframes
+    // behind. With `target: 'shape'` those values render nothing, so
+    // hasMeaningfulAnimation must return false.
+    expect(
+      hasMeaningfulAnimation(
+        cfg({
+          target: 'shape',
+          keyframes: [
+            { id: 'a', at: 0, opacity: 1, strokeDashoffset: 100 },
+            { id: 'b', at: 100, opacity: 1, strokeDashoffset: 0 },
+          ],
+        })
+      )
+    ).toBe(false);
+    // Same keyframes ARE meaningful when target is svg.
+    expect(
+      hasMeaningfulAnimation(
+        cfg({
+          target: 'svg',
+          keyframes: [
+            { id: 'a', at: 0, opacity: 1, strokeDashoffset: 100 },
+            { id: 'b', at: 100, opacity: 1, strokeDashoffset: 0 },
+          ],
+        })
+      )
+    ).toBe(true);
+  });
+
   it('treats different `at` positions but identical values as no animation', () => {
     expect(
       hasMeaningfulAnimation(

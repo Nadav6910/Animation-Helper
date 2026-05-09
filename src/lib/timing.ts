@@ -63,21 +63,24 @@ export function clampTime(ms: number, c: AnimationConfig): number {
 
 /**
  * Whether the config produces a *visibly* animating element. True iff
- * the keyframes carry at least one differing animatable property; if
- * every keyframe has identical values the WAAPI animation still runs
+ * the keyframes carry at least one differing animatable property that
+ * the current target actually renders; if every keyframe has identical
+ * values (or the only diffs are properties the target doesn't honour,
+ * e.g. `strokeDashoffset` on a shape) the WAAPI animation still runs
  * but visually nothing moves, so the timeline UI should reflect "no
  * animation defined" instead of pretending to play.
  *
- * Compared properties are the ones our generators actually emit per
- * keyframe (transform, opacity, colour, blur, hue-rotate, drop-shadow,
- * stroke-dashoffset, offset-distance). The keyframe `id` and `at`
- * are stripped — two frames at different positions but with the same
- * values produce no transition.
+ * Target-aware comparison: `strokeDashoffset` only counts for SVG
+ * paths — shapes / text don't have a stroke-dasharray to offset, so
+ * a strokeDashoffset diff there is silent. Without this gate the
+ * "switch target svg → shape" path leaves stroke-draw keyframes
+ * behind and the timeline lies about playing.
  */
 export function hasMeaningfulAnimation(c: AnimationConfig): boolean {
   if (!c.keyframes || c.keyframes.length < 2) return false;
-  const sig = (k: AnimationConfig['keyframes'][number]): string =>
-    JSON.stringify({
+  const isSvg = c.target === 'svg';
+  const sig = (k: AnimationConfig['keyframes'][number]): string => {
+    const base: Record<string, unknown> = {
       transform: k.transform ?? null,
       opacity: typeof k.opacity === 'number' ? k.opacity : null,
       color: k.color ?? null,
@@ -85,11 +88,15 @@ export function hasMeaningfulAnimation(c: AnimationConfig): boolean {
       blur: typeof k.blur === 'number' ? k.blur : null,
       hueRotate: typeof k.hueRotate === 'number' ? k.hueRotate : null,
       dropShadow: k.dropShadow ?? null,
-      strokeDashoffset:
-        typeof k.strokeDashoffset === 'number' ? k.strokeDashoffset : null,
       offsetDistance:
         typeof k.offsetDistance === 'number' ? k.offsetDistance : null,
-    });
+    };
+    if (isSvg) {
+      base.strokeDashoffset =
+        typeof k.strokeDashoffset === 'number' ? k.strokeDashoffset : null;
+    }
+    return JSON.stringify(base);
+  };
   const first = sig(c.keyframes[0]);
   return c.keyframes.some((k) => sig(k) !== first);
 }

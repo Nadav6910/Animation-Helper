@@ -11,6 +11,7 @@ import type {
   Transform,
 } from '@/types/animation';
 import { createHistoryRecorder } from './middleware/history';
+import { hasMeaningfulAnimation } from '@/lib/timing';
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -39,6 +40,34 @@ const endKeyframe = (): Keyframe => ({
   },
   opacity: 1,
 });
+
+const drawStartKeyframe = (): Keyframe => ({
+  id: uid(),
+  at: 0,
+  transform: { ...blankTransform },
+  opacity: 1,
+  strokeDashoffset: 100,
+});
+
+const drawEndKeyframe = (): Keyframe => ({
+  id: uid(),
+  at: 100,
+  transform: { ...blankTransform },
+  opacity: 1,
+  strokeDashoffset: 0,
+});
+
+/** Default keyframes seeded for a target when the current keyframes
+ *  wouldn't visibly animate it (e.g. switching back to shape from SVG
+ *  leaves stroke-only keyframes behind that don't render anything on
+ *  a shape, so the timeline would falsely claim "Playing" — see the
+ *  setTarget flow below). */
+function defaultKeyframesFor(target: TargetKind): Keyframe[] {
+  if (target === 'svg') {
+    return [drawStartKeyframe(), drawEndKeyframe()];
+  }
+  return [startKeyframe(), endKeyframe()];
+}
 
 const initialConfig: AnimationConfig = {
   target: 'shape',
@@ -121,48 +150,26 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
 
     setTarget: (target) => {
       const c = get().config;
-      // Seed path-draw keyframes the first time the user switches to SVG.
-      // The shape default's translate of 120px is interpreted in SVG
-      // user-space and pushes the path far off the viewBox; replace with
-      // a clean draw pair (strokeDashoffset 100 → 0) with identity
-      // transforms. If the user has already touched strokeDashoffset
-      // anywhere, leave their keyframes alone.
-      if (target !== 'svg') {
-        commit({ ...c, target });
+      if (c.target === target) return;
+      // If the current keyframes still animate visibly under the new
+      // target, keep them (e.g. shape → text preserves transform /
+      // opacity diffs; svg → svg just changes shape glyph). Otherwise
+      // re-seed with target-appropriate defaults so we don't end up
+      // with stroke-only keyframes on a shape (the WAAPI animation
+      // runs but nothing visually moves and the timeline lies about
+      // "Playing"), or transform-only keyframes on an SVG with no
+      // stroke-draw to show.
+      const candidate: AnimationConfig = { ...c, target };
+      if (hasMeaningfulAnimation(candidate)) {
+        commit(candidate);
         return;
       }
-      const hasDashoffset = c.keyframes.some(
-        (k) => typeof k.strokeDashoffset === 'number'
-      );
-      if (hasDashoffset) {
-        commit({ ...c, target });
-        return;
-      }
-      const draw: Keyframe[] = [
-        {
-          id: uid(),
-          at: 0,
-          transform: { ...blankTransform },
-          opacity: 1,
-          strokeDashoffset: 100,
-        },
-        {
-          id: uid(),
-          at: 100,
-          transform: { ...blankTransform },
-          opacity: 1,
-          strokeDashoffset: 0,
-        },
-      ];
-      const updated: AnimationConfig = {
-        ...c,
-        target,
-        keyframes: draw,
-      };
+      const fresh = defaultKeyframesFor(target);
+      const updated: AnimationConfig = { ...c, target, keyframes: fresh };
       history.record(updated);
       set({
         config: updated,
-        selectedKeyframeId: draw[0].id,
+        selectedKeyframeId: fresh[0].id,
         ...refreshHistoryFlags(),
       });
     },
