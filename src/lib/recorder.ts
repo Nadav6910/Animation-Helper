@@ -183,7 +183,21 @@ async function encodeVideo(
   // the canvas ourselves (one frame per 1/fps seconds) so the MediaRecorder
   // sees a real video stream.
   const stream = canvas.captureStream(fps);
-  const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 5_000_000 });
+  // Resolution-aware bitrate. The previous flat 5 Mbps wasted
+  // bandwidth at 256² and undershot quality at 1024². Target ~0.07
+  // bits per pixel per second (a good MP4/WebM general-purpose
+  // baseline) with a 1.5×–2× boost at higher fps where finer motion
+  // benefits from headroom. Clamped to a sensible floor / ceiling.
+  const pixels = canvas.width * canvas.height;
+  const fpsBoost = fps >= 60 ? 2 : fps >= 30 ? 1.5 : 1;
+  const videoBitsPerSecond = Math.max(
+    1_500_000,
+    Math.min(20_000_000, Math.round(pixels * fps * 0.07 * fpsBoost))
+  );
+  const recorder = new MediaRecorder(stream, {
+    mimeType,
+    videoBitsPerSecond,
+  });
   const chunks: Blob[] = [];
   recorder.ondataavailable = (e) => {
     if (e.data.size > 0) chunks.push(e.data);

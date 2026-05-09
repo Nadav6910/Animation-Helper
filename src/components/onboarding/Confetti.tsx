@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 
 const COLORS = ['#7c5cff', '#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#ffffff'];
@@ -27,8 +27,14 @@ type Piece = {
  */
 export function Confetti({ count = 36 }: { count?: number }) {
   const reduced = useReducedMotion();
-  const pieces = useMemo<Piece[]>(() => {
-    return Array.from({ length: count }, (_, i) => {
+  // Generate pieces in a `useState` initializer rather than `useMemo`
+  // — `Math.random()` inside `useMemo` is non-deterministic and would
+  // produce a server / client mismatch under SSR. We're CSR-only
+  // today but the change is free and removes a future SSR footgun.
+  // useState's initializer runs exactly once per mount on the client
+  // only, with no warning if React re-evaluates dependencies.
+  const [pieces] = useState<Piece[]>(() =>
+    Array.from({ length: count }, (_, i) => {
       const angle = Math.random() * Math.PI * 2;
       const distance = 220 + Math.random() * 240;
       return {
@@ -43,8 +49,8 @@ export function Confetti({ count = 36 }: { count?: number }) {
         duration: 1.1 + Math.random() * 0.9,
         shape: Math.random() > 0.5 ? 'rect' : 'circle',
       };
-    });
-  }, [count]);
+    })
+  );
 
   if (reduced) {
     return (

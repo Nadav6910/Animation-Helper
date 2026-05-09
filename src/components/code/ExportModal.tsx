@@ -5,6 +5,7 @@ import { useAnimationStore } from '@/store/animationStore';
 import { useUiStore } from '@/store/uiStore';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { totalDuration, formatTime } from '@/lib/timing';
+import { downloadBlob } from '@/lib/download';
 import { cn } from '@/lib/cn';
 import {
   recordPreview,
@@ -180,16 +181,10 @@ export function ExportModal() {
 
     try {
       const result = await recordPreview(el, anims, config, opts);
-      // Trigger the download with the same deferred-revoke trick CodePanel
-      // uses for text exports.
-      const url = URL.createObjectURL(result.blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = result.filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      // Shared with CodePanel via lib/download.ts so the deferred-
+      // revoke choreography (Firefox / Safari race) lives in one
+      // place.
+      downloadBlob(result.blob, result.filename);
       showToast(
         `Exported ${result.filename} (${result.frameCount} frames)`,
         'info'

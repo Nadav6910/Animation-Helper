@@ -104,14 +104,23 @@ export function generateAnimatedSvg(
     if (shape.kind === 'circle') {
       inner = `<circle class="${className}" cx="${num(half)}" cy="${num(half)}" r="${num(size * 0.35)}" fill="currentColor" />`;
     } else {
-      // For polygon / clip-path-based shapes we fall back to a rect that
-      // the CSS clip-path animates. SVG honours CSS clip-path on rect.
+      // For polygon / clip-path-based shapes (heart, star, hexagon,
+      // etc.) we fall back to a rect that the CSS `clip-path` is
+      // expected to carve. SVG honours `clip-path` on `rect`, but
+      // only when the surrounding consumer keeps the rule active —
+      // GitHub README rendering strips most non-listed CSS, so the
+      // exported file may render as a plain rect instead of the
+      // intended outline. We add an HTML comment in the output
+      // (below) so the user knows what to expect.
       const w = size * 0.7;
       const h = size * 0.7;
-      inner = `<rect class="${className}" x="${num((size - w) / 2)}" y="${num((size - h) / 2)}" width="${num(w)}" height="${num(h)}" rx="${shape.borderRadius === '50%' ? num(w / 2) : '12'}" fill="currentColor" />`;
+      inner = `<!-- Note: this shape relies on CSS clip-path. Some hosts (GitHub README, sanitised CMSes) strip clip-path and render this as a rounded rect. Use the SVG path generator (target=svg) for a polygon outline that's portable. -->\n  <rect class="${className}" x="${num((size - w) / 2)}" y="${num((size - h) / 2)}" width="${num(w)}" height="${num(h)}" rx="${shape.borderRadius === '50%' ? num(w / 2) : '12'}" fill="currentColor" />`;
     }
   }
 
+  // Brand accent — kept in sync with `ACCENT_LOTTIE` in
+  // `generateLottie.ts` so the visual exports look identical.
+  // Bumping the brand colour means updating both constants.
   const accent = '#7c5cff';
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${num(size)} ${num(size)}" width="${num(size)}" height="${num(size)}" color="${accent}" style="overflow:visible">

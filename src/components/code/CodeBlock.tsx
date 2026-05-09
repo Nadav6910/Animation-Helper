@@ -20,11 +20,13 @@ type Hover = {
   rect: DOMRect;
 };
 
-// CSS-flavoured langs are the only ones whose property tokens map onto
-// `cssReference.ts` in a useful way. For Tailwind / Framer / Vue / etc.
-// the tokens are JS / TS values and the lookup would mostly miss; turn
-// the affordance off in those formats so we don't paint underlines on
-// random identifiers.
+// CSS-flavoured langs are the only ones whose property tokens map
+// onto `cssReference.ts` in a useful way. `html` is included because
+// inline `<style>` blocks contain CSS — Shiki tokenises the inner
+// CSS as CSS even though the outer doc is HTML. Tailwind / Framer /
+// Vue / etc. tokens are JS / TS values and the lookup would mostly
+// miss; we turn the affordance off in those formats so we don't
+// underline random identifiers.
 const EXPLAIN_LANGS: ReadonlySet<CodeLang> = new Set([
   'css',
   'scss',

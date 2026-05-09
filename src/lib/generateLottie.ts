@@ -21,6 +21,24 @@ import type { AnimationConfig, Easing, Keyframe, Vec2 } from '@/types/animation'
 
 const FRAMERATE = 60;
 
+/** Default Lottie composition size in user units. The shape sits at
+ *  the centre and translate keyframes offset relative to it; AE-
+ *  imported scenes inherit this composition size unless the consumer
+ *  overrides the canvas. */
+const COMPOSITION_CENTER: [number, number] = [256, 256];
+
+/** Brand accent (RGB 124,92,255 = `#7c5cff`) as a Lottie 0..1 tuple
+ *  with alpha. Mirrored in `generateAnimatedSvg` so the two visual
+ *  exports look identical out of the box. Pulled to a module-level
+ *  constant to make the brand colour single-source — bumping the
+ *  accent in tokens means updating one place per generator. */
+const ACCENT_LOTTIE: [number, number, number, number] = [
+  0.486,
+  0.36,
+  1,
+  1,
+];
+
 type LottieKeyframe = {
   t: number; // frame
   s: number[]; // value at this frame
@@ -99,7 +117,7 @@ function buildLottieKeyframes(
 
 // ---- Channel readers ---------------------------------------------------
 
-const readPosition = (k: Keyframe, base: Vec2 = [256, 256]): number[] | null => {
+const readPosition = (k: Keyframe, base: Vec2 = COMPOSITION_CENTER): number[] | null => {
   const t = k.transform?.translate;
   if (!t) return null;
   return [base[0] + t[0], base[1] + t[1]];
@@ -183,7 +201,7 @@ function shapeLayer(c: AnimationConfig, durationFrames: number, fps: number) {
     ks: {
       o: animOrStatic(opacityFrames, [100]),
       r: animOrStatic(rotationFrames, [0]),
-      p: animOrStatic(positionFrames, [256, 256]),
+      p: animOrStatic(positionFrames, COMPOSITION_CENTER),
       a: { a: 0, k: [0, 0, 0] },
       s: animOrStatic(scaleFrames, [100, 100, 100]),
     },
@@ -204,7 +222,7 @@ function shapeLayer(c: AnimationConfig, durationFrames: number, fps: number) {
           },
           {
             ty: 'fl',
-            c: { a: 0, k: [0.486, 0.36, 1, 1] }, // accent purple
+            c: { a: 0, k: ACCENT_LOTTIE }, // accent purple — see top of file
             o: { a: 0, k: 100 },
             nm: 'Fill',
           },

@@ -124,7 +124,15 @@ export function PresetGallery() {
               key={it.key}
               name={it.name}
               build={it.build}
-              onApply={() => applyPreset(it.build())}
+              // Track every preset application — manual card picks
+              // included — so the next Surprise click won't re-roll
+              // whatever the user just saw. The earlier version only
+              // tracked surprise-issued ids, so picking `wobble` by
+              // hand and then hitting Surprise could re-roll wobble.
+              onApply={() => {
+                setLastSurpriseId(it.key);
+                applyPreset(it.build());
+              }}
               onDelete={it.deletable && it.id ? () => remove(it.id!) : undefined}
             />
           ))}

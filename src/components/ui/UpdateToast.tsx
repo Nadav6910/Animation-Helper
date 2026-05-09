@@ -44,6 +44,30 @@ export function UpdateToast() {
       // eslint-disable-next-line no-console
       console.warn('PWA service worker registration failed:', error);
     },
+    onRegisteredSW(_swUrl, registration) {
+      // Without an explicit poll, a tab left open all day only
+      // discovers a new build when the browser independently
+      // revalidates `sw.js` (which it does on focus / nav). Backgrounded
+      // tabs in particular can sit on stale code for hours. Hourly
+      // `update()` is cheap (one HEAD-style request to a `no-cache`
+      // resource) and means the prompt surfaces within at most an hour
+      // of a deploy even on tabs the user never refreshed.
+      if (!registration) return;
+      const HOUR = 60 * 60 * 1000;
+      const id = window.setInterval(() => {
+        // Only poll when the document is visible — no point hitting
+        // the network while the tab is in the background, the next
+        // visibility-change will trigger an update check anyway.
+        if (document.visibilityState !== 'visible') return;
+        registration.update().catch(() => {
+          /* network blip — try again next interval */
+        });
+      }, HOUR);
+      // Stash on registration so a hot-reload re-run cleans up; the
+      // window object can't easily hold this and we can't return a
+      // cleanup from `onRegisteredSW` (it isn't a hook).
+      (registration as unknown as { _ahPollId?: number })._ahPollId = id;
+    },
   });
 
   const snoozeRef = useRef<number | null>(null);

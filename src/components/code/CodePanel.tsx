@@ -16,6 +16,7 @@ import { generateReactComponent } from '@/lib/generateReactComponent';
 import { generateHtml } from '@/lib/generateHtml';
 import { generateLottie } from '@/lib/generateLottie';
 import { generateAnimatedSvg } from '@/lib/generateAnimatedSvg';
+import { downloadText } from '@/lib/download';
 import { CopyButton } from './CopyButton';
 import { Toast } from '@/components/ui/Toast';
 import { useTheme } from '@/hooks/useTheme';
@@ -80,20 +81,10 @@ const FORMATS: FormatRow[] = [
   { value: 'animsvg', label: 'Animated SVG', lang: 'html', ext: 'svg', fn: generateAnimatedSvg },
 ];
 
-function download(filename: string, contents: string, mime: string) {
-  const blob = new Blob([contents], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  // a.click() schedules the download asynchronously in Firefox / Safari;
-  // revoking the URL on the same tick can abort it. Defer to the next
-  // task so the browser has a chance to start streaming.
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
-}
+// `download` aliases the shared `downloadText` helper so the
+// deferred-revoke behaviour stays in lockstep with ExportModal's
+// binary-blob path. See `lib/download.ts` for the why.
+const download = downloadText;
 
 function openCodePen(html: string, css: string) {
   const data = {
@@ -212,11 +203,20 @@ export function CodePanel() {
             type="button"
             onClick={() => {
               const ext = meta.ext;
-              download(
-                `animation.${ext}`,
-                code,
-                ext === 'html' ? 'text/html' : 'text/plain'
-              );
+              // Pick the right MIME so the OS associates the
+              // download with the right app — `text/plain` was
+              // wrong for the Lottie JSON / Animated-SVG paths
+              // (browsers would save them as `.txt`-feeling
+              // documents on some platforms).
+              const mime =
+                ext === 'html'
+                  ? 'text/html'
+                  : ext === 'svg'
+                    ? 'image/svg+xml'
+                    : ext === 'json'
+                      ? 'application/json'
+                      : 'text/plain';
+              download(`animation.${ext}`, code, mime);
               showToast(`Downloaded animation.${ext}`);
             }}
             title="Download"

@@ -41,6 +41,16 @@ const CSS_ANIMATION_PREFIX = 'ah-anim-';
 function collectUserAnimations(root: Element | null): Animation[] {
   if (!root) return [];
   const out: Animation[] = [];
+  // For browsers that don't expose `animationName` on CSSAnimation
+  // (older Safari) we can't filter by our `ah-anim-` prefix and so
+  // can't reliably distinguish user animations from framer-motion
+  // ones. We instead capture the FIRST unnamed animation we find
+  // PER ELEMENT — that's the CSS-anim attached by the rule, which
+  // gives stagger groups one Animation per letter span. The previous
+  // implementation gated on `out.length === 0` GLOBALLY, which on
+  // such browsers captured only the first letter and silently
+  // dropped every subsequent one.
+  const seenUnnamedFor = new WeakSet<Element>();
   const collectFrom = (el: Element) => {
     const getter = (el as HTMLElement).getAnimations;
     if (typeof getter !== 'function') return;
@@ -48,10 +58,11 @@ function collectUserAnimations(root: Element | null): Animation[] {
       const name = (a as Animation & { animationName?: string }).animationName;
       if (name && name.startsWith(CSS_ANIMATION_PREFIX)) {
         out.push(a);
-      } else if (!name && out.length === 0) {
-        // Fallback for browsers that don't expose `animationName` (older
-        // Safari): include the first animation on the root so seek/pause
-        // still work; later descendants ignored under the same condition.
+      } else if (!name && !seenUnnamedFor.has(el)) {
+        // Take exactly one unnamed animation per element — keeps
+        // stagger groups' per-letter Animations all included on
+        // animationName-less browsers.
+        seenUnnamedFor.add(el);
         out.push(a);
       }
     }
