@@ -200,7 +200,7 @@ export function CodePanel() {
             );
           })}
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-thin">
           <button
             type="button"
             onClick={() => {
@@ -212,9 +212,12 @@ export function CodePanel() {
               );
               showToast(`Downloaded animation.${ext}`);
             }}
-            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border/70 bg-bg-soft px-2.5 text-xs text-fg-muted hover:text-fg focus-ring"
+            title="Download"
+            aria-label="Download"
+            className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-bg-soft px-2.5 text-xs text-fg-muted hover:text-fg focus-ring"
           >
-            <Download size={12} /> Download
+            <Download size={12} />
+            <span className="hidden sm:inline">Download</span>
           </button>
           <button
             type="button"
@@ -227,55 +230,64 @@ export function CodePanel() {
               openCodePen(justHtml, generateCss(config));
               showToast('Opening CodePen…');
             }}
-            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border/70 bg-bg-soft px-2.5 text-xs text-fg-muted hover:text-fg focus-ring"
+            title="Open in CodePen"
+            aria-label="Open in CodePen"
+            className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-bg-soft px-2.5 text-xs text-fg-muted hover:text-fg focus-ring"
           >
-            <ExternalLink size={12} /> CodePen
+            <ExternalLink size={12} />
+            <span className="hidden sm:inline">CodePen</span>
           </button>
           <button
             type="button"
             onClick={() => setExportOpen(true)}
             title="Export as MP4 / WebM / GIF"
-            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-accent/40 bg-accent/10 px-2.5 text-xs text-fg hover:bg-accent/15 focus-ring"
+            aria-label="Record video / GIF"
+            className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-accent/40 bg-accent/10 px-2.5 text-xs text-fg hover:bg-accent/15 focus-ring"
           >
-            <Film size={12} /> Record
+            <Film size={12} />
+            <span className="hidden sm:inline">Record</span>
           </button>
           {cssVarsCapable.includes(format) && (
             <button
               type="button"
               onClick={() => setCssVarsOutput((v) => !v)}
               aria-pressed={cssVarsOutput}
+              aria-label={cssVarsOutput ? 'Inline literal timing values' : 'Emit timing as CSS variables'}
               title={
                 cssVarsOutput
                   ? 'Inline literal timing values'
                   : 'Emit timing as CSS variables (overrideable from your stylesheet)'
               }
               className={
-                'inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs focus-ring transition-colors ' +
+                'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs focus-ring transition-colors ' +
                 (cssVarsOutput
                   ? 'border-accent/40 bg-accent/15 text-fg'
                   : 'border-border/70 bg-bg-soft text-fg-muted hover:text-fg')
               }
             >
-              <Variable size={12} /> CSS vars
+              <Variable size={12} />
+              <span className="hidden sm:inline">CSS vars</span>
             </button>
           )}
           <button
             type="button"
             onClick={() => setExplainCode((v) => !v)}
             aria-pressed={explainCode}
+            aria-label={explainCode ? 'Hide property tooltips' : 'Hover any CSS property for a one-line explanation'}
             title={
               explainCode
                 ? 'Hide property tooltips'
                 : 'Hover any CSS property for a one-line explanation'
             }
             className={
-              'inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs focus-ring transition-colors ' +
+              'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs focus-ring transition-colors ' +
               (explainCode
                 ? 'border-accent/40 bg-accent/15 text-fg'
                 : 'border-border/70 bg-bg-soft text-fg-muted hover:text-fg')
             }
           >
-            <Info size={12} /> Explain
+            <Info size={12} />
+            <span className="hidden sm:inline">Explain</span>
           </button>
           <CopyButton
             ref={copyRef}
