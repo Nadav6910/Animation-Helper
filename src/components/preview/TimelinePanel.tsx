@@ -27,7 +27,6 @@ export function TimelinePanel({ controller }: Props) {
   const config = useAnimationStore((s) => s.config);
   const totalMs = useMemo(() => totalDuration(config), [config]);
   const trackRef = useRef<HTMLDivElement | null>(null);
-  const wasPlayingRef = useRef(false);
   const [scrubbing, setScrubbing] = useState(false);
 
   const step = useMemo(() => tickStep(totalMs), [totalMs]);
@@ -43,9 +42,6 @@ export function TimelinePanel({ controller }: Props) {
     [config.keyframes]
   );
 
-  // Map the scrub head position to a percentage of total. While the
-  // animation iterates inside one cycle the controller's currentTime
-  // wraps; we surface the wall-clock position by including delay.
   const playheadPct = totalMs > 0 ? (controller.currentTime / totalMs) * 100 : 0;
 
   const positionFromPointer = useCallback(
@@ -58,12 +54,16 @@ export function TimelinePanel({ controller }: Props) {
     [config, totalMs]
   );
 
+  // Clicks AND drags pause the animation and seek to the pointer
+  // position. Release leaves the playhead exactly where the user
+  // dropped it — no auto-resume. To start playing again, hit the play
+  // button (or Space). This matches user mental model: tap timeline →
+  // jump to a frame; drag timeline → scrub through frames.
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!controller.ready) return;
       e.preventDefault();
       (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-      wasPlayingRef.current = controller.isPlaying;
       controller.pause();
       setScrubbing(true);
       controller.seek(positionFromPointer(e.clientX));
@@ -88,11 +88,10 @@ export function TimelinePanel({ controller }: Props) {
         /* pointer already released */
       }
       setScrubbing(false);
-      // Resume only if playback was running before the user grabbed the
-      // playhead — otherwise leave the preview frozen at the scrubbed time.
-      if (wasPlayingRef.current) controller.play();
+      // Stay paused — explicit user intent. The play button is the only
+      // affordance for resuming.
     },
-    [controller, scrubbing]
+    [scrubbing]
   );
 
   // Arrow-key nudge support — wired in App.tsx via a custom event so the
@@ -112,12 +111,35 @@ export function TimelinePanel({ controller }: Props) {
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between text-[10px] text-fg-subtle px-1">
-        <span className="tabular-nums">{formatTime(controller.currentTime)}</span>
-        <span className="text-fg-muted">
+      <div className="flex items-center justify-between text-[11px] px-1">
+        <span className="tabular-nums text-fg font-medium">
+          {formatTime(controller.currentTime)}
+        </span>
+        <span
+          className={cn(
+            'flex items-center gap-1.5 text-[10px] uppercase tracking-wider',
+            scrubbing
+              ? 'text-accent'
+              : controller.isPlaying
+                ? 'text-emerald-400'
+                : 'text-fg-subtle'
+          )}
+        >
+          <span
+            className={cn(
+              'h-1.5 w-1.5 rounded-full',
+              scrubbing
+                ? 'bg-accent'
+                : controller.isPlaying
+                  ? 'bg-emerald-400 animate-pulse'
+                  : 'bg-fg-subtle'
+            )}
+          />
           {scrubbing ? 'Scrubbing' : controller.isPlaying ? 'Playing' : 'Paused'}
         </span>
-        <span className="tabular-nums">{formatTime(totalMs)}</span>
+        <span className="tabular-nums text-fg-muted">
+          / {formatTime(totalMs)}
+        </span>
       </div>
       <div
         ref={trackRef}
@@ -139,11 +161,18 @@ export function TimelinePanel({ controller }: Props) {
           else if (e.key === 'ArrowRight') delta = e.shiftKey ? 1000 : 100;
           else if (e.key === 'Home') {
             e.preventDefault();
+            controller.pause();
             controller.seek(0);
             return;
           } else if (e.key === 'End') {
             e.preventDefault();
+            controller.pause();
             controller.seek(totalMs);
+            return;
+          } else if (e.key === ' ' || e.code === 'Space') {
+            e.preventDefault();
+            if (controller.isPlaying) controller.pause();
+            else controller.play();
             return;
           }
           if (delta !== 0) {
@@ -153,9 +182,11 @@ export function TimelinePanel({ controller }: Props) {
           }
         }}
         className={cn(
-          'relative h-9 rounded-lg border border-border/70 bg-bg-soft cursor-pointer focus-ring select-none',
+          'relative h-10 rounded-lg border border-border/70 bg-bg-soft cursor-pointer focus-ring select-none touch-none',
+          scrubbing && 'border-accent/60 ring-2 ring-accent/30',
           !controller.ready && 'opacity-50 cursor-not-allowed'
         )}
+        title="Click or drag to scrub. Hit play to resume."
       >
         {/* tick marks */}
         {ticks.map((t) => {
@@ -175,9 +206,6 @@ export function TimelinePanel({ controller }: Props) {
         })}
         {/* keyframe markers — small chips above the ruler */}
         {sortedKeyframes.map((k) => {
-          // Each keyframe's `at` is a percentage of the duration *within*
-          // one iteration; the ruler shows wall-clock from 0..totalMs, so
-          // multiply by config.duration and add config.delay.
           const wallMs =
             (config.delay > 0 ? config.delay : 0) +
             (k.at / 100) * (config.duration > 0 ? config.duration : 0);
@@ -198,12 +226,13 @@ export function TimelinePanel({ controller }: Props) {
           className="absolute inset-y-0 left-0 bg-accent/15"
           style={{ width: `${playheadPct}%` }}
         />
-        {/* playhead */}
+        {/* playhead — bigger, with a circular grip on top so users
+            recognise it as draggable */}
         <motion.span
           aria-hidden
           className={cn(
-            'absolute top-1/2 h-7 w-1 rounded-full bg-accent shadow-glow',
-            scrubbing && 'h-8 shadow-[0_0_18px_rgb(var(--accent)/0.7)]'
+            'absolute top-1/2 h-9 w-1 rounded-full bg-accent shadow-glow',
+            scrubbing && 'shadow-[0_0_18px_rgb(var(--accent)/0.7)]'
           )}
           style={{
             left: `${playheadPct}%`,
@@ -212,6 +241,24 @@ export function TimelinePanel({ controller }: Props) {
           }}
           transition={{ type: 'spring', stiffness: 600, damping: 32 }}
         />
+        <motion.span
+          aria-hidden
+          className={cn(
+            'absolute top-1/2 h-3.5 w-3.5 rounded-full bg-accent shadow-glow ring-2 ring-bg-panel',
+            scrubbing && 'h-4 w-4 ring-accent/40'
+          )}
+          style={{
+            left: `${playheadPct}%`,
+            x: '-50%',
+            y: '-50%',
+          }}
+          transition={{ type: 'spring', stiffness: 600, damping: 32 }}
+        />
+      </div>
+      <div className="flex justify-between text-[10px] text-fg-subtle/70 px-1 tabular-nums select-none">
+        <span>0ms</span>
+        <span className="text-fg-subtle">click or drag to scrub</span>
+        <span>{formatTime(totalMs)}</span>
       </div>
     </div>
   );

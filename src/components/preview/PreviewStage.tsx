@@ -8,8 +8,8 @@ import { SvgPathTarget } from './SvgPathTarget';
 import { PlayButton, type PlayButtonState } from './PlayButton';
 import { TimelinePanel } from './TimelinePanel';
 import { motion } from 'framer-motion';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { cn } from '@/lib/cn';
+import { useCallback, useEffect, useMemo } from 'react';
+import { totalDuration } from '@/lib/timing';
 
 export function PreviewStage() {
   const config = useAnimationStore((s) => s.config);
@@ -18,8 +18,6 @@ export function PreviewStage() {
   const setPreviewTargetClassName = useUiStore(
     (s) => s.setPreviewTargetClassName
   );
-  const [paused, setPaused] = useState(false);
-  const [finished, setFinished] = useState(false);
 
   // Publish the live target's className so the visual exporter (mounted
   // elsewhere in the tree) can find the same DOM element + animation
@@ -29,59 +27,59 @@ export function PreviewStage() {
     return () => setPreviewTargetClassName(null);
   }, [className, setPreviewTargetClassName]);
 
+  // Single source of truth for play state: the timeline controller. The
+  // play button + the timeline scrubber both talk to it. Earlier
+  // versions kept a separate React `paused` flag toggling an
+  // `ah-paused` CSS class, which raced the controller's WAAPI pause()
+  // and made the play button visibly inert when the controller had
+  // just paused for scrubbing. The controller is the single owner now.
+  const totalMs = useMemo(() => totalDuration(config), [config]);
+  // "At end" is anything within 16 ms of the end — typical rAF jitter.
+  const atEnd =
+    config.iterations !== 'infinite' &&
+    controller.currentTime >= Math.max(0, totalMs - 16);
+
+  const playState: PlayButtonState = !controller.ready
+    ? 'paused'
+    : atEnd && !controller.isPlaying
+      ? 'finished'
+      : controller.isPlaying
+        ? 'playing'
+        : 'paused';
+
   const replay = useCallback(() => {
-    setPaused(false);
-    setFinished(false);
-    restart();
-  }, [restart]);
+    if (!controller.ready) {
+      // Animation not yet attached — fall back to the className-bump
+      // restart and let the controller pick the new one up.
+      restart();
+      return;
+    }
+    controller.restart();
+  }, [controller, restart]);
 
-  // Keep finished/paused in sync with the playback iteration count: any change
-  // to iterations (e.g. the loop-forever toggle) gives the animation a fresh
-  // chance to finish or run forever, so reset our derived state.
-  useEffect(() => {
-    setFinished(false);
-  }, [config.iterations, config.duration, config.delay, tick]);
-
+  // Replay event from `Space`-key handler in App.tsx.
   useEffect(() => {
     const handler = () => replay();
     window.addEventListener('ah:replay', handler as EventListener);
     return () => window.removeEventListener('ah:replay', handler as EventListener);
   }, [replay]);
 
-  const playState: PlayButtonState = finished
-    ? 'finished'
-    : paused
-      ? 'paused'
-      : 'playing';
-
   const onPlayClick = () => {
-    if (finished) {
-      replay();
+    if (!controller.ready) return;
+    if (atEnd) {
+      controller.restart();
       return;
     }
-    setPaused((p) => !p);
+    if (controller.isPlaying) controller.pause();
+    else controller.play();
   };
-
-  const onAnimationEnd = (e: React.AnimationEvent<HTMLDivElement>) => {
-    // animationend bubbles from any descendant CSS animation. Ignore events
-    // that aren't the user's animation (e.g. framer-motion's WAAPI ticks or
-    // small UI accents). Our generator names every user animation
-    // `ah-anim-<id>` via useAnimationStyle.
-    if (!e.animationName.startsWith('ah-anim-')) return;
-    if (config.iterations !== 'infinite') {
-      setFinished(true);
-      setPaused(false);
-    }
-  };
-
-  const elementClassName = cn(className, paused && 'ah-paused');
 
   const targetEl = useMemo(() => {
     if (config.target === 'text') {
       return (
         <TextTarget
           key={tick}
-          className={elementClassName}
+          className={className}
           text={config.text ?? ''}
           stagger={config.stagger}
         />
@@ -91,7 +89,7 @@ export function PreviewStage() {
       return (
         <SvgPathTarget
           key={tick}
-          className={elementClassName}
+          className={className}
           pathId={config.svgPath ?? 'check'}
         />
       );
@@ -99,11 +97,11 @@ export function PreviewStage() {
     return (
       <ShapeTarget
         key={tick}
-        className={elementClassName}
+        className={className}
         shape={config.shape ?? 'square'}
       />
     );
-  }, [config, elementClassName, tick]);
+  }, [config, className, tick]);
 
   return (
     <div className="flex h-full flex-col gap-3">
@@ -126,7 +124,6 @@ export function PreviewStage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
-          onAnimationEnd={onAnimationEnd}
           className="relative z-10 flex h-full lg:min-h-[320px] items-center justify-center px-6 py-8"
           style={{
             perspective: '900px',
