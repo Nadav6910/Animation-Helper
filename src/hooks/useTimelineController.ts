@@ -5,31 +5,30 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * element. Modern browsers expose all running animations via
  * `Element.getAnimations()`, and the returned `Animation` object exposes
  * a writable `currentTime` plus `play()` / `pause()` that work even for
- * animations declared with `animation:` shorthand. This hook wraps that
- * surface so the new TimelinePanel can scrub the preview without
- * re-implementing interpolation in JS.
+ * animations declared with `animation:` shorthand.
  *
- * The hook polls for the animation on every render where a `className`
- * is provided — animations don't always exist on first paint (the
- * element may not be styled yet, or the animation may have been
- * recreated by a `key={tick}` remount in `useAnimationStyle`). The
- * controller simply caches the current `Animation` and refreshes it on
- * demand.
+ * Earlier versions cached an `Animation` ref. That ref went stale when
+ * a config change triggered the CSS rule to regenerate, after which
+ * `pause()` / `play()` calls landed on a defunct Animation and the
+ * play button silently did nothing. The current implementation looks
+ * the live animation up off the DOM at operation time. The cost is one
+ * `querySelector` per call; cheap relative to user input cadence.
  */
 export type TimelineController = {
-  /** Current playhead in milliseconds, mirroring `Animation.currentTime`. */
+  /** Current playhead in milliseconds, mirroring `Animation.currentTime`.
+   *  For infinite-iteration animations this keeps growing — the
+   *  TimelinePanel wraps it modulo for display. */
   currentTime: number;
-  /** True when the underlying animation is in the `'running'` play-state. */
+  /** True when the animation is in the `'running'` play-state. */
   isPlaying: boolean;
-  /** True when the controller has resolved a real Animation. UI should
+  /** True once the controller has resolved a real Animation. UI should
    *  show its scrub head as disabled until this flips. */
   ready: boolean;
   play: () => void;
   pause: () => void;
   /** Move the animation's currentTime; safe to call regardless of play state. */
   seek: (ms: number) => void;
-  /** Jump to the start and resume playback (the equivalent of clicking
-   *  "Replay" in the preview). */
+  /** Jump to the start and resume playback. */
   restart: () => void;
 };
 
@@ -37,14 +36,10 @@ const CSS_ANIMATION_PREFIX = 'ah-anim-';
 
 /** Pull the user-animation off an element. We name every preview animation
  *  `ah-anim-<id>` in `useAnimationStyle`, so we can ignore Framer Motion's
- *  WAAPI ticks and other UI animations on the same element.
- *
- *  `animationName` only lives on `CSSAnimation` (a subclass of `Animation`),
- *  hence the duck-typed access — TypeScript's lib.dom doesn't always ship
- *  the subclass type. */
-function findUserAnimation(el: HTMLElement | SVGElement | null): Animation | null {
-  if (!el || typeof el.getAnimations !== 'function') return null;
-  const animations = el.getAnimations();
+ *  WAAPI ticks and other UI animations on the same element. */
+function findUserAnimation(el: Element | null): Animation | null {
+  if (!el || typeof (el as HTMLElement).getAnimations !== 'function') return null;
+  const animations = (el as HTMLElement).getAnimations();
   for (const a of animations) {
     const name = (a as Animation & { animationName?: string }).animationName;
     if (name && name.startsWith(CSS_ANIMATION_PREFIX)) {
@@ -57,21 +52,22 @@ function findUserAnimation(el: HTMLElement | SVGElement | null): Animation | nul
   return animations[0] ?? null;
 }
 
+function liveAnimation(className: string | null): Animation | null {
+  if (!className || typeof document === 'undefined') return null;
+  const el = document.querySelector(`.${className}`);
+  return findUserAnimation(el);
+}
+
 export function useTimelineController(className: string | null): TimelineController {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [ready, setReady] = useState(false);
-  const animRef = useRef<Animation | null>(null);
   const rafRef = useRef<number | null>(null);
 
-  // Resolve the underlying Animation. Re-runs whenever className changes
-  // (e.g. after `useAnimationStyle.restart()` increments the tick and the
-  // target component remounts). A short retry loop covers the case where
-  // the element is in the DOM but the browser hasn't attached the
-  // animation yet.
+  // Mark ready once the DOM has an animation we can talk to. Retry for
+  // a short window covering first paint after element mount.
   useEffect(() => {
     if (!className) {
-      animRef.current = null;
       setReady(false);
       return;
     }
@@ -79,20 +75,20 @@ export function useTimelineController(className: string | null): TimelineControl
     let attempts = 0;
     const tryFind = () => {
       if (cancelled) return;
-      const el = document.querySelector<HTMLElement>(`.${className}`);
-      const anim = findUserAnimation(el);
+      const anim = liveAnimation(className);
       if (anim) {
-        animRef.current = anim;
         setReady(true);
+        // Sync initial play state to whatever the animation has — CSS
+        // animations created from `animation: …` start in 'running'
+        // unless the rule sets `animation-play-state: paused`.
         setIsPlaying(anim.playState === 'running');
+        if (typeof anim.currentTime === 'number') {
+          setCurrentTime(anim.currentTime);
+        }
         return;
       }
       attempts += 1;
-      if (attempts < 20) {
-        // up to ~333 ms of retries — covers slow first paint without
-        // pinning the main thread.
-        window.setTimeout(tryFind, 16);
-      }
+      if (attempts < 30) window.setTimeout(tryFind, 16);
     };
     tryFind();
     return () => {
@@ -101,23 +97,23 @@ export function useTimelineController(className: string | null): TimelineControl
   }, [className]);
 
   // While the animation is running, mirror its currentTime onto React
-  // state via rAF so the playhead UI tracks live playback. When paused
-  // we don't need to tick — `seek()` updates the state directly.
+  // state via rAF so the playhead UI tracks live playback. We re-fetch
+  // the animation on every tick — cheap, and fully insulates us from
+  // any CSS regeneration that swapped the underlying Animation out.
   useEffect(() => {
-    if (!isPlaying) {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-      return;
-    }
+    if (!isPlaying || !className) return;
     const tick = () => {
-      const anim = animRef.current;
+      const anim = liveAnimation(className);
       if (anim && typeof anim.currentTime === 'number') {
         setCurrentTime(anim.currentTime);
-        // If the animation finished naturally, stop polling and reflect
-        // the final state.
         if (anim.playState === 'finished') {
           setIsPlaying(false);
-          rafRef.current = null;
+          return;
+        }
+        if (anim.playState === 'paused') {
+          // Something else paused us (browser tab background, devtools,
+          // etc.). Reflect that in the controller state.
+          setIsPlaying(false);
           return;
         }
       }
@@ -128,38 +124,46 @@ export function useTimelineController(className: string | null): TimelineControl
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [isPlaying]);
+  }, [isPlaying, className]);
 
   const play = useCallback(() => {
-    const anim = animRef.current;
+    const anim = liveAnimation(className);
     if (!anim) return;
     anim.play();
     setIsPlaying(true);
-  }, []);
+  }, [className]);
 
   const pause = useCallback(() => {
-    const anim = animRef.current;
+    const anim = liveAnimation(className);
     if (!anim) return;
     anim.pause();
     setIsPlaying(false);
     if (typeof anim.currentTime === 'number') setCurrentTime(anim.currentTime);
-  }, []);
+  }, [className]);
 
-  const seek = useCallback((ms: number) => {
-    const anim = animRef.current;
-    if (!anim) return;
-    anim.currentTime = ms;
-    setCurrentTime(ms);
-  }, []);
+  const seek = useCallback(
+    (ms: number) => {
+      const anim = liveAnimation(className);
+      if (!anim) {
+        // Even without a live animation, surface the requested time so
+        // the UI reflects the user's intent immediately.
+        setCurrentTime(ms);
+        return;
+      }
+      anim.currentTime = ms;
+      setCurrentTime(ms);
+    },
+    [className]
+  );
 
   const restart = useCallback(() => {
-    const anim = animRef.current;
+    const anim = liveAnimation(className);
     if (!anim) return;
     anim.currentTime = 0;
     anim.play();
     setCurrentTime(0);
     setIsPlaying(true);
-  }, []);
+  }, [className]);
 
   return { currentTime, isPlaying, ready, play, pause, seek, restart };
 }

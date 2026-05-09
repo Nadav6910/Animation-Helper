@@ -34,10 +34,13 @@ export function PreviewStage() {
   // and made the play button visibly inert when the controller had
   // just paused for scrubbing. The controller is the single owner now.
   const totalMs = useMemo(() => totalDuration(config), [config]);
-  // "At end" is anything within 16 ms of the end — typical rAF jitter.
+  // "At end" only applies to finite-iteration animations. Infinite
+  // presets never finish so the play button never goes into replay
+  // mode for them. 16 ms covers typical rAF jitter at the boundary.
+  const finiteIterations =
+    typeof config.iterations === 'number' && config.iterations > 0;
   const atEnd =
-    config.iterations !== 'infinite' &&
-    controller.currentTime >= Math.max(0, totalMs - 16);
+    finiteIterations && controller.currentTime >= Math.max(0, totalMs - 16);
 
   const playState: PlayButtonState = !controller.ready
     ? 'paused'

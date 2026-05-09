@@ -42,7 +42,20 @@ export function TimelinePanel({ controller }: Props) {
     [config.keyframes]
   );
 
-  const playheadPct = totalMs > 0 ? (controller.currentTime / totalMs) * 100 : 0;
+  // For infinite animations, the WAAPI Animation.currentTime keeps
+  // accumulating forever — wrap it modulo one iteration so the playhead
+  // stays inside the ruler. For finite animations the timeline shows
+  // every iteration end-to-end, so we just clamp to totalMs.
+  const displayTime = useMemo(() => {
+    if (!Number.isFinite(controller.currentTime)) return 0;
+    if (config.iterations === 'infinite' && totalMs > 0) {
+      const t = ((controller.currentTime % totalMs) + totalMs) % totalMs;
+      return t;
+    }
+    return Math.max(0, Math.min(controller.currentTime, totalMs));
+  }, [controller.currentTime, config.iterations, totalMs]);
+
+  const playheadPct = totalMs > 0 ? (displayTime / totalMs) * 100 : 0;
 
   const positionFromPointer = useCallback(
     (clientX: number): number => {
@@ -113,7 +126,7 @@ export function TimelinePanel({ controller }: Props) {
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between text-[11px] px-1">
         <span className="tabular-nums text-fg font-medium">
-          {formatTime(controller.currentTime)}
+          {formatTime(displayTime)}
         </span>
         <span
           className={cn(
@@ -147,8 +160,8 @@ export function TimelinePanel({ controller }: Props) {
         aria-label="Timeline scrub"
         aria-valuemin={0}
         aria-valuemax={Math.round(totalMs)}
-        aria-valuenow={Math.round(controller.currentTime)}
-        aria-valuetext={formatTime(controller.currentTime)}
+        aria-valuenow={Math.round(displayTime)}
+        aria-valuetext={formatTime(displayTime)}
         tabIndex={controller.ready ? 0 : -1}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
