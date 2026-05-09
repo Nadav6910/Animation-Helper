@@ -265,43 +265,9 @@ export class ErrorBoundary extends Component<Props, State> {
             )}
           </div>
 
-          {!isChunk && (
-            <details
-              style={{
-                marginTop: '1.5rem',
-                fontSize: '0.75rem',
-                opacity: 0.5,
-                textAlign: 'left',
-              }}
-            >
-              <summary
-                style={{
-                  cursor: 'pointer',
-                  userSelect: 'none',
-                  outline: 'none',
-                }}
-              >
-                Technical details
-              </summary>
-              <pre
-                style={{
-                  marginTop: '0.5rem',
-                  padding: '0.75rem',
-                  borderRadius: 8,
-                  background: 'rgba(0,0,0,0.3)',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  fontFamily:
-                    'JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace',
-                  fontSize: '0.6875rem',
-                  lineHeight: 1.5,
-                  color: '#c2c2cc',
-                }}
-              >
-                {this.state.error.message}
-              </pre>
-            </details>
-          )}
+          {/* No raw error message exposed — full details are logged
+              to console for devs via componentDidCatch above. The
+              user gets a friendly recovery flow, not a stack trace. */}
         </div>
 
         {/* Inline keyframes — keeps the boundary self-sufficient
