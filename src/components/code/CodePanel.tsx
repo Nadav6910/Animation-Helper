@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, ExternalLink, Film, Variable } from 'lucide-react';
+import { Download, ExternalLink, Film, Info, Variable } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
 import { useFontStore } from '@/store/fontStore';
 import { useUiStore } from '@/store/uiStore';
@@ -118,6 +118,14 @@ export function CodePanel() {
   // toggle every session. Only meaningful for CSS-flavoured outputs.
   const [cssVarsOutput, setCssVarsOutput] = useLocalStorage(
     'ah:css-vars-output',
+    false
+  );
+  // Hover-explain mode also persists — it's noisy enough that we want
+  // a clear opt-in, but worth remembering when the user has turned it
+  // on. Only effective for CSS-flavoured langs (the CodeBlock filters
+  // by lang internally too).
+  const [explainCode, setExplainCode] = useLocalStorage(
+    'ah:explain-code',
     false
   );
   const { theme } = useTheme();
@@ -251,6 +259,24 @@ export function CodePanel() {
               <Variable size={12} /> CSS vars
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setExplainCode((v) => !v)}
+            aria-pressed={explainCode}
+            title={
+              explainCode
+                ? 'Hide property tooltips'
+                : 'Hover any CSS property for a one-line explanation'
+            }
+            className={
+              'inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs focus-ring transition-colors ' +
+              (explainCode
+                ? 'border-accent/40 bg-accent/15 text-fg'
+                : 'border-border/70 bg-bg-soft text-fg-muted hover:text-fg')
+            }
+          >
+            <Info size={12} /> Explain
+          </button>
           <CopyButton
             ref={copyRef}
             text={code}
@@ -266,7 +292,12 @@ export function CodePanel() {
             </pre>
           }
         >
-          <CodeBlock code={code} lang={meta.lang} theme={theme} />
+          <CodeBlock
+            code={code}
+            lang={meta.lang}
+            theme={theme}
+            explain={explainCode}
+          />
         </Suspense>
       </div>
       <Toast visible={!!toast} message={toast ?? ''} />

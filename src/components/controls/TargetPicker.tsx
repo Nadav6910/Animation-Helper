@@ -1,10 +1,15 @@
-import { useState } from 'react';
-import { Type, Shapes, Spline, Plus, X, Pencil } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Type, Shapes, Spline, Plus, X, Pencil, Search } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
 import { useCustomPathsStore } from '@/store/customPathsStore';
 import { Tabs } from '@/components/ui/Tabs';
 import { SHAPES, SHAPE_BY_KIND, type ShapeDef } from '@/lib/shapes';
-import { SVG_PATHS, type SvgPathDef } from '@/lib/svgPaths';
+import {
+  SVG_PATHS,
+  SVG_PATH_CATEGORIES,
+  type SvgPathCategory,
+  type SvgPathDef,
+} from '@/lib/svgPaths';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/cn';
 import { CustomSvgForm } from './CustomSvgForm';
@@ -37,7 +42,9 @@ function PathGlyph({
   def,
   className,
 }: {
-  def: SvgPathDef;
+  // Only the geometry matters here — accepts both SvgPathDef and the
+  // user's stored CustomPath (which has no category field).
+  def: Pick<SvgPathDef, 'viewBox' | 'd'>;
   className?: string;
 }) {
   return (
@@ -185,6 +192,23 @@ export function TargetPicker() {
   const removeCustom = useCustomPathsStore((s) => s.remove);
   const [showCustomForm, setShowCustomForm] = useState(false);
 
+  // SVG path picker state — category filter + free-text search. Search
+  // overrides category when non-empty so "arrow" finds the arrow icons
+  // even on the Shapes tab. 'all' shows everything (good landing tab
+  // when the user knows what they want and just wants to scan).
+  const [pathCategory, setPathCategory] = useState<SvgPathCategory | 'all'>(
+    'all'
+  );
+  const [pathQuery, setPathQuery] = useState('');
+
+  const filteredPaths = useMemo(() => {
+    const q = pathQuery.trim().toLowerCase();
+    return SVG_PATHS.filter((p) => {
+      if (q) return p.label.toLowerCase().includes(q) || p.id.includes(q);
+      return pathCategory === 'all' || p.category === pathCategory;
+    });
+  }, [pathCategory, pathQuery]);
+
   const currentShape = config.shape ? SHAPE_BY_KIND[config.shape] : null;
 
   return (
@@ -241,8 +265,67 @@ export function TargetPicker() {
 
       {config.target === 'svg' && (
         <div className="flex flex-col gap-2">
-          <div className="grid grid-cols-3 gap-2">
-            {SVG_PATHS.map((p) => {
+          {/* Search + category tabs. Search has priority — typing in
+              it ignores the active tab so users can find icons across
+              groups without click-juggling. */}
+          <div className="relative">
+            <Search
+              size={13}
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-subtle"
+              aria-hidden
+            />
+            <input
+              type="search"
+              value={pathQuery}
+              onChange={(e) => setPathQuery(e.target.value)}
+              placeholder="Search icons…"
+              aria-label="Search SVG icons"
+              className="w-full rounded-lg border border-border/70 bg-bg-soft py-1.5 pl-8 pr-2.5 text-xs focus-ring placeholder:text-fg-subtle/70 focus:border-accent/60"
+            />
+          </div>
+          <div
+            className="-mx-3 overflow-x-auto scrollbar-thin sm:mx-0"
+            role="tablist"
+            aria-label="Icon categories"
+          >
+            <div className="flex w-max gap-1 px-3 pb-1 sm:px-0">
+              {(
+                [
+                  { id: 'all', label: 'All' },
+                  ...SVG_PATH_CATEGORIES,
+                ] as { id: SvgPathCategory | 'all'; label: string }[]
+              ).map((c) => {
+                const active = pathCategory === c.id && !pathQuery;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => {
+                      setPathCategory(c.id);
+                      setPathQuery('');
+                    }}
+                    className={cn(
+                      'h-7 rounded-md px-2.5 text-xs whitespace-nowrap focus-ring transition-colors',
+                      active
+                        ? 'bg-accent/15 text-fg border border-accent/40'
+                        : 'text-fg-muted hover:text-fg border border-transparent'
+                    )}
+                  >
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {filteredPaths.length === 0 && (
+            <p className="px-1 py-3 text-center text-xs text-fg-subtle">
+              No icons match “{pathQuery}”.
+            </p>
+          )}
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+            {filteredPaths.map((p) => {
               const active = config.svgPath === p.id;
               return (
                 <motion.button
