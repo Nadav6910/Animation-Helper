@@ -64,7 +64,12 @@ async function captureFrames(
   const { toCanvas } = await import('html-to-image');
 
   animation.pause();
-  const wasCurrentTime = animation.currentTime;
+  // Snapshot via Number() — Animation.currentTime's spec type is
+  // CSSNumberish | null and writing the raw value back can throw on
+  // browsers exposing the new typed-OM shape (a CSSNumericValue
+  // instance). Coerce to a plain number; null becomes 0 which is the
+  // safe restore point if the animation hadn't played yet.
+  const wasCurrentTime = Number(animation.currentTime ?? 0);
 
   const frames: HTMLCanvasElement[] = [];
   try {
@@ -73,21 +78,44 @@ async function captureFrames(
       const t = (i * totalMs) / frameCount;
       // Loop the Animation's time within one cycle; iterations are baked
       // into the captured frame sequence by re-traversing the cycle.
-      animation.currentTime = oneCycle > 0 ? t % oneCycle : 0;
+      // Coerce via Number() — Animation.currentTime's type is
+      // CSSNumberish | null, and writing the raw object back would
+      // throw on browsers exposing the new typed-OM shape.
+      const currentTime = oneCycle > 0 ? t % oneCycle : 0;
+      animation.currentTime = currentTime;
       // Yield to the browser so the new style is applied before capture.
+      // Two rAFs — Safari needs the second one for filter / offset-path
+      // changes to actually paint into the captured canvas; one is
+      // enough on Chrome but doesn't hurt.
       await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => resolve())
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => resolve())
+        )
       );
-      const canvas = await toCanvas(element as HTMLElement, {
-        width: targetWidth,
-        height: targetHeight,
-        pixelRatio: 1,
-        backgroundColor:
-          opts.background === undefined || opts.background === null
-            ? undefined
-            : opts.background,
-        cacheBust: true,
-      });
+      let canvas: HTMLCanvasElement;
+      try {
+        canvas = await toCanvas(element as HTMLElement, {
+          width: targetWidth,
+          height: targetHeight,
+          pixelRatio: 1,
+          backgroundColor:
+            opts.background === undefined || opts.background === null
+              ? undefined
+              : opts.background,
+          cacheBust: true,
+        });
+      } catch (err) {
+        // html-to-image throws when the captured element references a
+        // tainted resource (cross-origin image without CORS headers,
+        // a font from an opaque origin). Surface a clear message so
+        // the user knows to swap the asset rather than seeing the
+        // generic toCanvas stack trace.
+        const reason =
+          err instanceof Error ? err.message : 'unknown rasterisation error';
+        throw new Error(
+          `Couldn't capture frame ${i + 1}/${frameCount}: ${reason}. Cross-origin images or fonts without CORS headers can't be rasterised — try swapping them for same-origin assets.`
+        );
+      }
       frames.push(canvas);
       opts.onProgress?.((i + 1) / frameCount / 2); // first half = capture
     }
@@ -193,17 +221,59 @@ async function encodeGif(
       workerScript: workerUrl,
     });
     const delay = 1000 / fps;
-    for (const frame of frames) {
+
+    // Memory: gif.js with `copy:true` retains every frame canvas
+    // until render finishes. 60 fps × 5s × 1024² ≈ 1.2 GB peak,
+    // which OOMs lower-end mobile. Pass `copy:false` (gif.js reads
+    // the canvas straight) and aggressively drop our reference to
+    // each frame after handing it off so the original captured
+    // canvases can be GC'd as the encoder progresses.
+    for (let i = 0; i < frames.length; i++) {
       if (signal?.aborted) {
         gif.abort();
         reject(new RecorderAbortError());
         return;
       }
-      gif.addFrame(frame, { delay, copy: true });
+      gif.addFrame(frames[i], { delay, copy: false });
+      // Detach our reference. gif.js has already pulled the pixel
+      // data internally during addFrame; the original canvas is
+      // safe to release.
+      frames[i] = null as unknown as HTMLCanvasElement;
     }
-    gif.on('progress', (p) => onProgress?.(0.5 + p * 0.5));
-    gif.on('finished', (blob) => resolve(blob));
-    gif.render();
+
+    gif.on('progress', (p: number) => onProgress?.(0.5 + p * 0.5));
+    gif.on('finished', (blob: Blob) => resolve(blob));
+    // gif.js silently swallows worker failures (CSP `worker-src 'self'`
+    // blocking the blob worker, OOM, etc.) — without these handlers the
+    // promise hangs forever and the modal sits at "Recording…". `abort`
+    // also fires when our cancel path calls `gif.abort()`, so guard
+    // against double-rejection by keeping the AbortError mapping local
+    // to the `signal.aborted` check above.
+    gif.on('abort', () => {
+      if (!signal?.aborted) {
+        reject(new Error('GIF encoder aborted unexpectedly.'));
+      }
+    });
+    // The runtime gif.js Emitter exposes `error` even though the type
+    // file we ship doesn't declare it; cast through unknown.
+    (gif as unknown as { on: (e: string, h: (err: Error) => void) => void }).on(
+      'error',
+      (err: Error) => reject(err ?? new Error('GIF encoding failed'))
+    );
+
+    // Wrap render() too — synchronous worker construction can throw on
+    // strict CSP before any 'error' event fires.
+    try {
+      gif.render();
+    } catch (err) {
+      reject(
+        err instanceof Error
+          ? err
+          : new Error(
+              'GIF worker failed to start (the host may block blob: workers via CSP).'
+            )
+      );
+    }
   });
 }
 

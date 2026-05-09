@@ -95,6 +95,7 @@ export function PresetGallery() {
           <button
             type="button"
             onClick={resetAll}
+            aria-label="Clear and start with a blank canvas"
             className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border/70 bg-bg-soft px-2.5 text-xs text-fg-muted hover:text-fg focus-ring transition-colors"
             title="Clear and start with a blank canvas"
           >
@@ -104,6 +105,7 @@ export function PresetGallery() {
           <button
             type="button"
             onClick={onSurprise}
+            aria-label="Apply a random preset"
             className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border/70 bg-bg-soft px-2.5 text-xs text-fg-muted hover:text-fg focus-ring transition-colors"
             title="Apply a random preset"
           >

@@ -335,7 +335,15 @@ export function ExportModal() {
               </div>
 
               {recording && (
-                <div className="space-y-1">
+                <div
+                  className="space-y-1"
+                  role="progressbar"
+                  aria-label="Recording progress"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(progress * 100)}
+                  aria-valuetext={`${Math.round(progress * 100)} percent`}
+                >
                   <div className="h-2 w-full overflow-hidden rounded-full bg-bg-soft">
                     <motion.div
                       className="h-full bg-accent"
@@ -346,6 +354,14 @@ export function ExportModal() {
                   <div className="text-[10px] text-fg-subtle text-center tabular-nums">
                     {Math.round(progress * 100)}%
                   </div>
+                  {/* Coarse-grained polite live region — every 10%
+                      bucket — so screen readers hear "10 percent
+                      complete", "20 percent complete", … without
+                      being spammed every render. The visible percent
+                      above stays smooth. */}
+                  <span className="sr-only" aria-live="polite">
+                    {Math.round(progress * 10) * 10} percent complete
+                  </span>
                 </div>
               )}
 

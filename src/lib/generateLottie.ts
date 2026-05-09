@@ -58,6 +58,7 @@ const easingHold = (e: Easing): boolean => e.kind === 'steps';
 function buildLottieKeyframes(
   sorted: Keyframe[],
   duration: number,
+  fps: number,
   fallbackEasing: Easing,
   read: (k: Keyframe) => number[] | null
 ): LottieKeyframe[] {
@@ -66,14 +67,29 @@ function buildLottieKeyframes(
     const k = sorted[i];
     const value = read(k);
     if (value === null) continue;
-    const t = msToFrames((k.at / 100) * duration);
-    const easing = sorted[i + 1]?.easing ?? k.easing ?? fallbackEasing;
+    const t = msToFrames((k.at / 100) * duration, fps);
+    // Lottie's `i` (in tangent) and `o` (out tangent) on a keyframe
+    // describe the curve LEAVING this keyframe toward the next — so
+    // segment i→i+1 takes its easing from sorted[i], not sorted[i+1].
+    // The previous code looked one ahead and shifted every easing by
+    // a frame, which made the first segment use the fallback and the
+    // last segment use a value never reached.
+    const easing = k.easing ?? fallbackEasing;
     const [x1, y1, x2, y2] = easingToBezier(easing);
+    // Bodymovin convention for the bezier handles:
+    //   o = the OUT tangent of THIS keyframe = the curve's first
+    //       control point relative to (0,0)–(1,1) progress space
+    //       → uses (x1, y1) directly.
+    //   i = the IN tangent of the NEXT keyframe = the curve's
+    //       second control point, mirrored about (1, 1) so it's
+    //       expressed as an offset from the destination
+    //       → uses (1 - x2, 1 - y2).
+    // Without the mirror the curve looks subtly inverted on import.
     const frame: LottieKeyframe = {
       t,
       s: value,
-      i: { x: [x2], y: [y2] },
       o: { x: [x1], y: [y1] },
+      i: { x: [1 - x2], y: [1 - y2] },
     };
     if (easingHold(easing)) frame.h = 1;
     frames.push(frame);
@@ -94,12 +110,23 @@ const readScale = (k: Keyframe): number[] | null => {
   return [s[0] * 100, s[1] * 100, 100];
 };
 const readRotation = (k: Keyframe): number[] | null => {
-  // Lottie 2D rotation uses a single Z-axis number. Use rotate.y as the
-  // closest analogue (the in-app preview's "rotateY" reads as in-plane
-  // spin for shape / text targets).
+  // Lottie 2D rotation is a single Z-axis number — there's no 3D
+  // rotation primitive in the basic shape layer. We collapse rotateX
+  // and rotateY into a Z-equivalent (best-effort visual match for a
+  // 2D player), favouring whichever axis the user actually animated.
+  // The `cm` notice in `generateLottie` warns that this is not a true
+  // 3D rotation, so playback in After Effects / lottie-web will look
+  // 2D regardless of what the WAAPI preview shows.
   const r = k.transform?.rotate;
   if (!r) return null;
-  return [r[1] || r[0]];
+  // Pick the non-zero axis; if both are non-zero, sum them (lossy but
+  // closer to the perceptual amount than picking one).
+  const rx = r[0] || 0;
+  const ry = r[1] || 0;
+  if (rx === 0 && ry === 0) return [0];
+  if (rx === 0) return [ry];
+  if (ry === 0) return [rx];
+  return [rx + ry];
 };
 const readOpacity = (k: Keyframe): number[] | null => {
   if (typeof k.opacity !== 'number') return null;
@@ -108,30 +135,34 @@ const readOpacity = (k: Keyframe): number[] | null => {
 
 // ---- Top-level shape factory -------------------------------------------
 
-function shapeLayer(c: AnimationConfig, durationFrames: number) {
+function shapeLayer(c: AnimationConfig, durationFrames: number, fps: number) {
   const sorted = [...c.keyframes].sort((a, b) => a.at - b.at);
 
   const positionFrames = buildLottieKeyframes(
     sorted,
     c.duration,
+    fps,
     c.easing,
     (k) => readPosition(k)
   );
   const scaleFrames = buildLottieKeyframes(
     sorted,
     c.duration,
+    fps,
     c.easing,
     readScale
   );
   const rotationFrames = buildLottieKeyframes(
     sorted,
     c.duration,
+    fps,
     c.easing,
     readRotation
   );
   const opacityFrames = buildLottieKeyframes(
     sorted,
     c.duration,
+    fps,
     c.easing,
     readOpacity
   );
@@ -227,10 +258,31 @@ export function generateLottie(
   if (c.target === 'svg') dropped.push('SVG path geometry (replace the rect shape with your <path>)');
   if (c.keyframes.some((k) => k.easing?.kind === 'steps'))
     dropped.push('steps() easing (serialised as a hold keyframe)');
+  // Flag 3D rotation collapse — the WAAPI preview spins around X/Y
+  // axes, but the basic Lottie shape layer only carries a single Z
+  // rotation, so we render the spin as Z-only (sum of axes). Users
+  // expecting a perspective-style flip in lottie-web will see flat
+  // rotation and should switch to a 3D-capable layer.
+  if (c.keyframes.some((k) => k.transform?.rotate3d?.deg))
+    dropped.push('rotate3d (collapsed to Z-rotation)');
+  if (
+    c.keyframes.some(
+      (k) => (k.transform?.rotate?.[0] ?? 0) !== 0 ||
+        (k.transform?.rotate?.[1] ?? 0) !== 0
+    ) &&
+    c.keyframes.some(
+      (k) => (k.transform?.rotate?.[0] ?? 0) !== 0
+    ) &&
+    c.keyframes.some(
+      (k) => (k.transform?.rotate?.[1] ?? 0) !== 0
+    )
+  ) {
+    dropped.push('rotateX / rotateY (collapsed to Z-rotation)');
+  }
 
   const cm = dropped.length
-    ? `Lottie subset — translate / rotate / scale / opacity supported. Dropped: ${dropped.join(', ')}.`
-    : 'Lottie subset — translate / rotate / scale / opacity supported.';
+    ? `Lottie subset — translate / rotate-Z / scale / opacity supported. Dropped: ${dropped.join(', ')}.`
+    : 'Lottie subset — translate / rotate-Z / scale / opacity supported.';
 
   const lottie = {
     v: '5.7.4', // schema version
@@ -243,7 +295,7 @@ export function generateLottie(
     ddd: 0,
     cm,
     assets: [],
-    layers: [shapeLayer(c, durationFrames)],
+    layers: [shapeLayer(c, durationFrames, fps)],
     markers: [],
   };
 

@@ -461,7 +461,14 @@ export function OnboardingTour() {
                   id={titleId}
                   className="font-display text-xl font-semibold tracking-tight text-fg"
                 >
-                  <Typewriter text={current.heading} key={current.id} />
+                  {/* SR-only static heading so screen readers see the
+                      full title in one go; the visible typewriter is
+                      hidden from AT to avoid partial / re-announce
+                      churn as characters land. */}
+                  <span className="sr-only">{current.heading}</span>
+                  <span aria-hidden>
+                    <Typewriter text={current.heading} key={current.id} />
+                  </span>
                 </h2>
                 <p
                   id={bodyId}
@@ -470,6 +477,20 @@ export function OnboardingTour() {
                   {current.body}
                 </p>
               </div>
+              {/* Polite live region: announces the full step title +
+                  body whenever the active step changes. The visible
+                  heading is typewritten + aria-hidden, the body is
+                  static — without this region, screen readers heard
+                  only the step counter ("Step 3 of 5") on next/back. */}
+              <span
+                key={`live-${current.id}`}
+                className="sr-only"
+                role="status"
+                aria-live="polite"
+              >
+                Step {step + 1} of {STEPS.length}: {current.heading}.{' '}
+                {current.body}
+              </span>
 
               {/* Step indicator + nav */}
               <div className="flex items-center justify-between gap-2 border-t border-border/60 px-5 py-3">
