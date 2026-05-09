@@ -13,15 +13,14 @@ import { totalDuration } from '@/lib/timing';
 
 export function PreviewStage() {
   const config = useAnimationStore((s) => s.config);
-  const { className, restart, tick, css } = useAnimationStyle(config);
-  // `css` doubles as the controller's re-sync token: every config
-  // change (preset, start-blank, target swap, slider) regenerates css,
-  // which replaces the underlying WAAPI Animation. Threading css here
-  // lets the controller refresh `isPlaying` + `currentTime` against
-  // the new Animation instead of staying stuck on the old one's state.
-  // `restart` is the controller's recovery path for when
-  // getAnimations() comes back empty (finite + fill:none after-phase).
-  const controller = useTimelineController(className, css, restart);
+  const { className, restart, tick } = useAnimationStyle(config);
+  // The controller now mirrors the live WAAPI Animation's state every
+  // frame, so it sees config-driven Animation replacements (preset,
+  // start-blank, target swap, slider) without needing a sync token.
+  // `restart` is the missing-animation fallback: when getAnimations()
+  // is empty (finite + fill:none after-phase), play / restart bump
+  // the className so a fresh Animation attaches and the tick follows.
+  const controller = useTimelineController(className, restart);
   const setPreviewTargetClassName = useUiStore(
     (s) => s.setPreviewTargetClassName
   );

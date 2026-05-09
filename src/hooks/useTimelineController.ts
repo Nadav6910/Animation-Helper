@@ -72,16 +72,6 @@ function liveAnimations(className: string | null): Animation[] {
 export function useTimelineController(
   className: string | null,
   /**
-   * Re-sync trigger. Whenever this value changes the controller
-   * re-detects the live Animation and pulls fresh `playState` +
-   * `currentTime` off it. Pass the generated css string (or any
-   * monotonic token bumped on css regen) so config changes —
-   * preset switches, "start blank", target swaps, slider tweaks —
-   * never leave `isPlaying` and the playhead frozen on the previous
-   * animation while a brand-new one is running underneath.
-   */
-  syncToken?: unknown,
-  /**
    * Called when the controller wants to act on a live Animation but
    * `getAnimations()` returns empty. This happens for finite CSS
    * animations with `fill: none`: once they reach their after-phase
@@ -95,7 +85,6 @@ export function useTimelineController(
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [ready, setReady] = useState(false);
-  const rafRef = useRef<number | null>(null);
   // Latest fallback in a ref so play / restart's identities don't
   // depend on it — otherwise every tick increment in useAnimationStyle
   // would recreate these callbacks downstream.
@@ -104,91 +93,69 @@ export function useTimelineController(
     fallbackRef.current = onMissingAnimation;
   }, [onMissingAnimation]);
 
-  // Detect (and re-detect) the underlying Animation, syncing React
-  // state to its real `playState` / `currentTime`. Re-runs whenever
-  // syncToken changes — i.e. whenever the CSS @keyframes is replaced
-  // and a fresh Animation has attached. CSS animations created from
-  // `animation: …` shorthand auto-start in 'running' unless the rule
-  // sets `animation-play-state: paused`, so config changes that
-  // regenerate CSS effectively restart playback; this effect makes
-  // the play button + playhead track that reality instead of staying
-  // stuck on the previous animation's state.
+  // Continuously mirror the live Animation's state to React state.
+  //
+  // Earlier designs ran a one-shot detection effect on syncToken
+  // changes plus an rAF loop only while playing. That layered scheme
+  // had two structural failure modes:
+  //   1. Detection ran once after a config change, so any timing edge
+  //      case (fresh Animation hadn't materialised yet, missed
+  //      retry, dropped setState) left the UI permanently desynced.
+  //   2. While paused, the rAF loop was off — so if a config change
+  //      replaced the paused Animation with a fresh running one, the
+  //      controller didn't notice. Result: play button stuck on
+  //      "Play", playhead frozen at the previous time, while the new
+  //      animation visibly ran.
+  //
+  // The always-on tick below makes the live Animation authoritative.
+  // Whatever `playState` and `currentTime` it reports each frame,
+  // that's what the UI reflects. No timing windows, no missed
+  // sync — pause the path animation, switch presets, hit Start
+  // blank, drag a slider: the very next frame brings React state in
+  // line with reality. React's setState bailout makes redundant
+  // updates free (same primitive value → no re-render), so the cost
+  // is one querySelector + getAnimations() per frame.
   useEffect(() => {
-    if (!className) {
+    if (!className || typeof window === 'undefined') {
       setReady(false);
       return;
     }
-    let cancelled = false;
-    let attempts = 0;
-    const tryFind = () => {
-      if (cancelled) return;
-      const anims = liveAnimations(className);
-      const first = anims[0];
-      if (first) {
-        setReady(true);
-        setIsPlaying(first.playState === 'running');
-        if (typeof first.currentTime === 'number') {
-          setCurrentTime(first.currentTime);
-        }
-        return;
-      }
-      attempts += 1;
-      if (attempts < 30) window.setTimeout(tryFind, 16);
-    };
-    tryFind();
-    return () => {
-      cancelled = true;
-    };
-  }, [className, syncToken]);
-
-  // While playing, mirror the parent (= first) animation's currentTime
-  // onto React state via rAF so the playhead UI tracks live playback.
-  // Re-fetch every tick so a CSS regeneration that swapped the
-  // underlying Animation out can't leave the controller stale.
-  useEffect(() => {
-    if (!isPlaying || !className) return;
+    let raf = 0;
     let missingFrames = 0;
     const tick = () => {
       const anims = liveAnimations(className);
       const first = anims[0];
       if (first && typeof first.currentTime === 'number') {
         missingFrames = 0;
+        setReady(true);
         setCurrentTime(first.currentTime);
         // For staggered groups (one Animation per letter) every letter
         // shares the same wall-clock currentTime but enters its
         // after-phase at a different time because of its
-        // animation-delay. Only stop the playhead when EVERY animation
-        // has finished — otherwise the late letters would freeze
-        // mid-frame the moment the first one completes.
-        if (anims.every((a) => a.playState === 'finished')) {
-          setIsPlaying(false);
-          return;
-        }
-        if (first.playState === 'paused') {
-          // Something else paused us (browser tab background, devtools).
-          setIsPlaying(false);
-          return;
-        }
+        // animation-delay. Only count the group as "all stopped" when
+        // EVERY Animation reports finished; otherwise the late letters
+        // would freeze mid-frame the instant the first completes.
+        const allFinished = anims.every((a) => a.playState === 'finished');
+        const paused = first.playState === 'paused';
+        setIsPlaying(!allFinished && !paused);
       } else {
         // Animation reaped — finite CSS animations with fill:none get
         // removed from getAnimations() in their after-phase. Tolerate
-        // a few empty frames (covers the brief gap of a className-bump
-        // remount) before declaring playback finished; otherwise we'd
-        // race the remount and prematurely flip isPlaying off.
+        // a few empty frames (covers the brief gap during a className-
+        // bump remount) before flagging not-playing, so we don't race
+        // the remount.
         missingFrames += 1;
         if (missingFrames > 6) {
           setIsPlaying(false);
-          return;
         }
       }
-      rafRef.current = requestAnimationFrame(tick);
+      raf = requestAnimationFrame(tick);
     };
-    rafRef.current = requestAnimationFrame(tick);
+    raf = requestAnimationFrame(tick);
     return () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
+      cancelAnimationFrame(raf);
     };
-  }, [isPlaying, className]);
+  }, [className]);
 
   const play = useCallback(() => {
     const anims = liveAnimations(className);
