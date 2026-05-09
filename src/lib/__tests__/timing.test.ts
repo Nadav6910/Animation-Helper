@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { clampTime, formatTime, totalDuration } from '@/lib/timing';
+import {
+  clampTime,
+  formatTime,
+  hasMeaningfulAnimation,
+  totalDuration,
+} from '@/lib/timing';
 import type { AnimationConfig } from '@/types/animation';
 
 const cfg = (overrides: Partial<AnimationConfig> = {}): AnimationConfig => ({
@@ -149,5 +154,68 @@ describe('formatTime', () => {
   it('rejects non-finite / negative inputs', () => {
     expect(formatTime(NaN)).toBe('0ms');
     expect(formatTime(-5)).toBe('0ms');
+  });
+});
+
+describe('hasMeaningfulAnimation', () => {
+  it('returns false when keyframes are identical (only opacity defaults)', () => {
+    expect(
+      hasMeaningfulAnimation(
+        cfg({
+          keyframes: [
+            { id: 'a', at: 0, opacity: 1 },
+            { id: 'b', at: 100, opacity: 1 },
+          ],
+        })
+      )
+    ).toBe(false);
+  });
+
+  it('returns true when at least one keyframe property differs', () => {
+    expect(
+      hasMeaningfulAnimation(
+        cfg({
+          keyframes: [
+            { id: 'a', at: 0, opacity: 0 },
+            { id: 'b', at: 100, opacity: 1 },
+          ],
+        })
+      )
+    ).toBe(true);
+  });
+
+  it('returns false with fewer than two keyframes', () => {
+    expect(
+      hasMeaningfulAnimation(
+        cfg({ keyframes: [{ id: 'a', at: 0, opacity: 1 }] })
+      )
+    ).toBe(false);
+  });
+
+  it('detects transform diffs', () => {
+    expect(
+      hasMeaningfulAnimation(
+        cfg({
+          keyframes: [
+            { id: 'a', at: 0, transform: { translate: [0, 0] } },
+            { id: 'b', at: 100, transform: { translate: [40, 0] } },
+          ],
+        })
+      )
+    ).toBe(true);
+  });
+
+  it('treats different `at` positions but identical values as no animation', () => {
+    expect(
+      hasMeaningfulAnimation(
+        cfg({
+          keyframes: [
+            { id: 'a', at: 0, opacity: 1 },
+            { id: 'b', at: 50, opacity: 1 },
+            { id: 'c', at: 100, opacity: 1 },
+          ],
+        })
+      )
+    ).toBe(false);
   });
 });

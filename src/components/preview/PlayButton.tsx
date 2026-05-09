@@ -6,6 +6,11 @@ export type PlayButtonState = 'playing' | 'paused' | 'finished';
 type Props = {
   state: PlayButtonState;
   onClick: () => void;
+  /** When true, button is muted and inert — used when the config has
+   *  no meaningful keyframe diffs and there's nothing to play. The
+   *  visual change tells the user the animation is empty rather than
+   *  paused. */
+  disabled?: boolean;
 };
 
 const COPY: Record<PlayButtonState, { aria: string; title: string }> = {
@@ -14,19 +19,32 @@ const COPY: Record<PlayButtonState, { aria: string; title: string }> = {
   finished: { aria: 'Replay animation', title: 'Replay (Space)' },
 };
 
-export function PlayButton({ state, onClick }: Props) {
+export function PlayButton({ state, onClick, disabled }: Props) {
   const { aria, title } = COPY[state];
   return (
     <motion.button
-      onClick={onClick}
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.92 }}
+      onClick={disabled ? undefined : onClick}
+      whileHover={disabled ? undefined : { scale: 1.05 }}
+      whileTap={disabled ? undefined : { scale: 0.92 }}
       transition={{ type: 'spring', stiffness: 400, damping: 26 }}
-      className="group relative grid h-12 w-12 place-items-center rounded-full bg-accent text-accent-contrast shadow-glow focus-ring lg:h-14 lg:w-14"
-      aria-label={aria}
-      title={title}
+      className={
+        'group relative grid h-12 w-12 place-items-center rounded-full text-accent-contrast shadow-glow focus-ring lg:h-14 lg:w-14 ' +
+        (disabled
+          ? 'bg-bg-soft text-fg-subtle cursor-not-allowed shadow-none'
+          : 'bg-accent')
+      }
+      aria-label={disabled ? 'No animation defined — edit keyframes to play' : aria}
+      aria-disabled={disabled}
+      title={disabled ? 'No animation defined' : title}
     >
-      <span className="absolute inset-0 rounded-full bg-accent/40 blur-xl group-hover:bg-accent/60 transition-colors" />
+      <span
+        className={
+          'absolute inset-0 rounded-full blur-xl transition-colors ' +
+          (disabled
+            ? 'bg-transparent'
+            : 'bg-accent/40 group-hover:bg-accent/60')
+        }
+      />
       <AnimatePresence mode="wait" initial={false}>
         <motion.span
           key={state}

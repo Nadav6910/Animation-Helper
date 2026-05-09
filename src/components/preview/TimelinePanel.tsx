@@ -6,6 +6,11 @@ import { cn } from '@/lib/cn';
 
 type Props = {
   controller: TimelineController;
+  /** False when the config has no keyframe diffs (= nothing to
+   *  animate). The track is dimmed and inert in that state, with a
+   *  hint replacing the live status, so the timeline doesn't pretend
+   *  to be playing through a silent animation. */
+  animated?: boolean;
 };
 
 /**
@@ -22,7 +27,7 @@ function tickStep(totalMs: number): number {
   return candidates[candidates.length - 1];
 }
 
-export function TimelinePanel({ controller }: Props) {
+export function TimelinePanel({ controller, animated = true }: Props) {
   const config = useAnimationStore((s) => s.config);
   const totalMs = useMemo(() => totalDuration(config), [config]);
   const trackRef = useRef<HTMLDivElement | null>(null);
@@ -92,14 +97,14 @@ export function TimelinePanel({ controller }: Props) {
   // jump to a frame; drag timeline → scrub through frames.
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (!controller.ready) return;
+      if (!controller.ready || !animated) return;
       e.preventDefault();
       (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
       controller.pause();
       setScrubbing(true);
       controller.seek(positionFromPointer(e.clientX));
     },
-    [controller, positionFromPointer]
+    [controller, positionFromPointer, animated]
   );
 
   const onPointerMove = useCallback(
@@ -143,30 +148,45 @@ export function TimelinePanel({ controller }: Props) {
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between text-[11px] px-1">
-        <span className="tabular-nums text-fg font-medium">
+        <span
+          className={cn(
+            'tabular-nums font-medium',
+            animated ? 'text-fg' : 'text-fg-subtle'
+          )}
+        >
           {formatTime(displayTime)}
         </span>
         <span
           className={cn(
             'flex items-center gap-1.5 text-[10px] uppercase tracking-wider',
-            scrubbing
-              ? 'text-accent'
-              : controller.isPlaying
-                ? 'text-emerald-400'
-                : 'text-fg-subtle'
+            !animated
+              ? 'text-fg-subtle'
+              : scrubbing
+                ? 'text-accent'
+                : controller.isPlaying
+                  ? 'text-emerald-400'
+                  : 'text-fg-subtle'
           )}
         >
           <span
             className={cn(
               'h-1.5 w-1.5 rounded-full',
-              scrubbing
-                ? 'bg-accent'
-                : controller.isPlaying
-                  ? 'bg-emerald-400 animate-pulse'
-                  : 'bg-fg-subtle'
+              !animated
+                ? 'bg-fg-subtle/60'
+                : scrubbing
+                  ? 'bg-accent'
+                  : controller.isPlaying
+                    ? 'bg-emerald-400 animate-pulse'
+                    : 'bg-fg-subtle'
             )}
           />
-          {scrubbing ? 'Scrubbing' : controller.isPlaying ? 'Playing' : 'Paused'}
+          {!animated
+            ? 'No animation'
+            : scrubbing
+              ? 'Scrubbing'
+              : controller.isPlaying
+                ? 'Playing'
+                : 'Paused'}
         </span>
         <span className="tabular-nums text-fg-muted">
           / {formatTime(totalMs)}
@@ -180,13 +200,13 @@ export function TimelinePanel({ controller }: Props) {
         aria-valuemax={Math.round(totalMs)}
         aria-valuenow={Math.round(displayTime)}
         aria-valuetext={formatTime(displayTime)}
-        tabIndex={controller.ready ? 0 : -1}
+        tabIndex={controller.ready && animated ? 0 : -1}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endScrub}
         onPointerCancel={endScrub}
         onKeyDown={(e) => {
-          if (!controller.ready) return;
+          if (!controller.ready || !animated) return;
           let delta = 0;
           if (e.key === 'ArrowLeft') delta = e.shiftKey ? -1000 : -100;
           else if (e.key === 'ArrowRight') delta = e.shiftKey ? 1000 : 100;
@@ -215,11 +235,17 @@ export function TimelinePanel({ controller }: Props) {
         className={cn(
           // overflow-hidden so the playhead clips at the track's edge
           // even if a future bug pushed playheadPct outside [0, 100].
-          'relative h-10 rounded-lg border border-border/70 bg-bg-soft cursor-pointer focus-ring select-none touch-none overflow-hidden',
+          'relative h-10 rounded-lg border border-border/70 bg-bg-soft focus-ring select-none touch-none overflow-hidden',
+          animated ? 'cursor-pointer' : 'cursor-not-allowed opacity-50',
           scrubbing && 'border-accent/60 ring-2 ring-accent/30',
           !controller.ready && 'opacity-50 cursor-not-allowed'
         )}
-        title="Click or drag to scrub. Hit play to resume."
+        title={
+          animated
+            ? 'Click or drag to scrub. Hit play to resume.'
+            : 'No animation defined — edit keyframes to bring the timeline to life.'
+        }
+        aria-disabled={!animated}
       >
         {/* tick marks */}
         {ticks.map((t) => {
@@ -253,37 +279,52 @@ export function TimelinePanel({ controller }: Props) {
             />
           );
         })}
-        {/* progress fill */}
-        <span
-          aria-hidden
-          className="absolute inset-y-0 left-0 bg-accent/15"
-          style={{ width: `${playheadPct}%` }}
-        />
-        {/* playhead — bigger, with a circular grip on top so users
-            recognise it as draggable. We render plain spans (not
-            motion.span) so the position snaps to wherever the rAF tick
-            put it — a spring transition was visibly overshooting on
-            every iteration wrap (99% → 0% playing through ~−5%). */}
-        <span
-          aria-hidden
-          className={cn(
-            'absolute top-1/2 h-9 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-glow',
-            scrubbing && 'shadow-[0_0_18px_rgb(var(--accent)/0.7)]'
-          )}
-          style={{ left: `${playheadPct}%` }}
-        />
-        <span
-          aria-hidden
-          className={cn(
-            'absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-glow ring-2 ring-bg-panel',
-            scrubbing && 'h-4 w-4 ring-accent/40'
-          )}
-          style={{ left: `${playheadPct}%` }}
-        />
+        {/* progress fill + playhead — only render when there's
+            something to play. Without keyframe diffs the WAAPI
+            animation still ticks but the visible element stays put,
+            so showing a moving playhead would lie to the user. */}
+        {animated && (
+          <>
+            <span
+              aria-hidden
+              className="absolute inset-y-0 left-0 bg-accent/15"
+              style={{ width: `${playheadPct}%` }}
+            />
+            {/* playhead — bigger, with a circular grip on top so users
+                recognise it as draggable. We render plain spans (not
+                motion.span) so the position snaps to wherever the rAF
+                tick put it — a spring transition was visibly
+                overshooting on every iteration wrap (99% → 0% playing
+                through ~−5%). */}
+            <span
+              aria-hidden
+              className={cn(
+                'absolute top-1/2 h-9 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-glow',
+                scrubbing && 'shadow-[0_0_18px_rgb(var(--accent)/0.7)]'
+              )}
+              style={{ left: `${playheadPct}%` }}
+            />
+            <span
+              aria-hidden
+              className={cn(
+                'absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-glow ring-2 ring-bg-panel',
+                scrubbing && 'h-4 w-4 ring-accent/40'
+              )}
+              style={{ left: `${playheadPct}%` }}
+            />
+          </>
+        )}
+        {!animated && (
+          <span className="absolute inset-0 grid place-items-center text-[11px] font-medium text-fg-subtle">
+            Edit keyframes to animate
+          </span>
+        )}
       </div>
       <div className="flex justify-between text-[10px] text-fg-subtle/70 px-1 tabular-nums select-none">
         <span>0ms</span>
-        <span className="text-fg-subtle">click or drag to scrub</span>
+        <span className="text-fg-subtle">
+          {animated ? 'click or drag to scrub' : 'no animation to play'}
+        </span>
         <span>{formatTime(totalMs)}</span>
       </div>
     </div>

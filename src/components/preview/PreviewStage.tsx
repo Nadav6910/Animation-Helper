@@ -11,7 +11,7 @@ import { TimelinePanel } from './TimelinePanel';
 import { AnimatePresence, motion } from 'framer-motion';
 import { PanelBottomClose, PanelBottomOpen } from 'lucide-react';
 import { useCallback, useEffect, useMemo } from 'react';
-import { totalDuration } from '@/lib/timing';
+import { hasMeaningfulAnimation, totalDuration } from '@/lib/timing';
 
 export function PreviewStage() {
   const config = useAnimationStore((s) => s.config);
@@ -54,6 +54,13 @@ export function PreviewStage() {
   // and made the play button visibly inert when the controller had
   // just paused for scrubbing. The controller is the single owner now.
   const totalMs = useMemo(() => totalDuration(config), [config]);
+  // True when the config defines an actual visible animation (i.e.
+  // at least one keyframe property differs). When false, the WAAPI
+  // animation still runs but nothing moves, so playing it is a
+  // no-op that just makes the timeline look misleading. We use this
+  // to disable the play button + freeze the timeline UI in that
+  // state, so the user gets a clear "nothing to play" affordance.
+  const animated = useMemo(() => hasMeaningfulAnimation(config), [config]);
   // "At end" only applies to finite-iteration animations. Infinite
   // presets never finish so the play button never goes into replay
   // mode for them. 16 ms covers typical rAF jitter at the boundary.
@@ -62,7 +69,7 @@ export function PreviewStage() {
   const atEnd =
     finiteIterations && controller.currentTime >= Math.max(0, totalMs - 16);
 
-  const playState: PlayButtonState = !controller.ready
+  const playState: PlayButtonState = !controller.ready || !animated
     ? 'paused'
     : atEnd && !controller.isPlaying
       ? 'finished'
@@ -89,6 +96,10 @@ export function PreviewStage() {
 
   const onPlayClick = () => {
     if (!controller.ready) return;
+    // Nothing to play — keyframes don't differ. The button visually
+    // reads as disabled (gray "paused" with a muted hint elsewhere)
+    // so this guard mostly stops keyboard / programmatic activations.
+    if (!animated) return;
     if (atEnd) {
       controller.restart();
       return;
@@ -183,7 +194,11 @@ export function PreviewStage() {
               <PanelBottomClose size={15} />
             )}
           </motion.button>
-          <PlayButton state={playState} onClick={onPlayClick} />
+          <PlayButton
+            state={playState}
+            onClick={onPlayClick}
+            disabled={!animated}
+          />
         </div>
       </div>
       {/* Timeline collapses into the stage with a smooth height +
@@ -207,7 +222,7 @@ export function PreviewStage() {
               transition={{ duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
               style={{ overflow: 'hidden' }}
             >
-              <TimelinePanel controller={controller} />
+              <TimelinePanel controller={controller} animated={animated} />
             </motion.div>
           )}
         </AnimatePresence>

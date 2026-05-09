@@ -61,6 +61,39 @@ export function clampTime(ms: number, c: AnimationConfig): number {
   return Math.max(0, Math.min(totalDuration(c), Math.round(ms)));
 }
 
+/**
+ * Whether the config produces a *visibly* animating element. True iff
+ * the keyframes carry at least one differing animatable property; if
+ * every keyframe has identical values the WAAPI animation still runs
+ * but visually nothing moves, so the timeline UI should reflect "no
+ * animation defined" instead of pretending to play.
+ *
+ * Compared properties are the ones our generators actually emit per
+ * keyframe (transform, opacity, colour, blur, hue-rotate, drop-shadow,
+ * stroke-dashoffset, offset-distance). The keyframe `id` and `at`
+ * are stripped — two frames at different positions but with the same
+ * values produce no transition.
+ */
+export function hasMeaningfulAnimation(c: AnimationConfig): boolean {
+  if (!c.keyframes || c.keyframes.length < 2) return false;
+  const sig = (k: AnimationConfig['keyframes'][number]): string =>
+    JSON.stringify({
+      transform: k.transform ?? null,
+      opacity: typeof k.opacity === 'number' ? k.opacity : null,
+      color: k.color ?? null,
+      bg: k.bg ?? null,
+      blur: typeof k.blur === 'number' ? k.blur : null,
+      hueRotate: typeof k.hueRotate === 'number' ? k.hueRotate : null,
+      dropShadow: k.dropShadow ?? null,
+      strokeDashoffset:
+        typeof k.strokeDashoffset === 'number' ? k.strokeDashoffset : null,
+      offsetDistance:
+        typeof k.offsetDistance === 'number' ? k.offsetDistance : null,
+    });
+  const first = sig(c.keyframes[0]);
+  return c.keyframes.some((k) => sig(k) !== first);
+}
+
 /** Format milliseconds for the timeline ruler / scrub label. Sub-second
  *  values stay in `ms` so a 700 ms preset reads naturally; ≥ 1 second
  *  uses one decimal place of seconds. */

@@ -106,8 +106,24 @@ export function CodeBlock({ code, lang, theme, explain = false }: Props) {
     );
   }
 
+  const explainActive = explain && EXPLAIN_LANGS.has(lang);
+
   return (
     <>
+      {explainActive && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="sticky top-0 z-10 flex items-center gap-2 border-b border-accent/30 bg-accent/10 px-4 py-1.5 text-[11px] text-fg backdrop-blur-md"
+        >
+          <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-accent/30 text-[10px] text-accent-contrast">
+            i
+          </span>
+          <span className="text-fg-muted">
+            Hover any CSS property below to see what it does.
+          </span>
+        </div>
+      )}
       <div
         ref={containerRef}
         className="ah-shiki text-xs font-mono leading-relaxed [&_pre]:!bg-transparent [&_pre]:p-4 [&_pre]:overflow-x-auto"
