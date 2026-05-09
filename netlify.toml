@@ -4,3 +4,45 @@
 
 [build.environment]
   NODE_VERSION = "20"
+
+# Cache-Control rules. Without explicit headers, Netlify's defaults
+# can leave the service worker + index.html cached at the HTTP layer
+# for longer than we want — meaning a freshly deployed SW doesn't
+# reach users until the browser's stale heuristic happens to expire.
+# With these headers the SW + HTML are always revalidated on each
+# request, so `registerType: 'prompt'` + UpdateToast surface the new
+# version on the next page load instead of "eventually".
+
+# Service worker — never cache at the HTTP layer. The whole upgrade
+# story depends on the browser noticing a byte-different sw.js on the
+# very next request.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+# Workbox companion — same revalidate contract as sw.js so it stays in
+# lockstep.
+[[headers]]
+  for = "/workbox-*.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+# Manifest + entry HTML — revalidate. They're tiny.
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
+# Hashed JS / CSS chunks under /assets/* are content-addressed (their
+# filename changes whenever the bytes change), so a one-year immutable
+# cache is correct and saves repeat downloads on every visit.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
