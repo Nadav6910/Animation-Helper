@@ -1,7 +1,7 @@
 import type { AnimationConfig, Easing, Keyframe, Transform } from '@/types/animation';
 import { easingToCss } from './easings';
 import { sanitisePathD } from './svgPathSafety';
-import { firstColorStop, GRADIENT_RE, num } from './css-helpers';
+import { cssValueSafe, firstColorStop, GRADIENT_RE, num } from './css-helpers';
 
 type ChannelKey =
   | 'x'
@@ -45,27 +45,38 @@ function readChannel(k: Keyframe, ch: ChannelKey): string | number | undefined {
       return k.opacity;
     case 'color': {
       if (!k.color) return undefined;
+      // Defensive: Framer's `color` channel ultimately serialises into
+      // CSS in the consumer's app. Strip declaration-breakout chars so
+      // a tampered share URL can't inject rules at the consumer's
+      // host site. Same rationale as the other generators.
+      const safe = cssValueSafe(k.color);
       // Gradient text-fill needs background-clip + transparent color, which
       // is a static style rather than an animatable channel — fall back to
       // the gradient's first stop so Framer Motion's color interpolation
       // still produces a meaningful tween.
-      if (GRADIENT_RE.test(k.color)) {
-        const stop = firstColorStop(k.color);
+      if (GRADIENT_RE.test(safe)) {
+        const stop = firstColorStop(safe);
         return stop === 'inherit' ? undefined : stop;
       }
-      return k.color;
+      return safe;
     }
-    case 'backgroundColor':
-      return k.bg && !GRADIENT_RE.test(k.bg) ? k.bg : undefined;
-    case 'background':
-      return k.bg && GRADIENT_RE.test(k.bg) ? k.bg : undefined;
+    case 'backgroundColor': {
+      if (!k.bg) return undefined;
+      const safe = cssValueSafe(k.bg);
+      return safe && !GRADIENT_RE.test(safe) ? safe : undefined;
+    }
+    case 'background': {
+      if (!k.bg) return undefined;
+      const safe = cssValueSafe(k.bg);
+      return safe && GRADIENT_RE.test(safe) ? safe : undefined;
+    }
     case 'filter': {
       const parts: string[] = [];
       if (typeof k.blur === 'number' && k.blur > 0)
         parts.push(`blur(${num(k.blur)}px)`);
       if (typeof k.hueRotate === 'number' && k.hueRotate !== 0)
         parts.push(`hue-rotate(${num(k.hueRotate)}deg)`);
-      if (k.dropShadow) parts.push(`drop-shadow(${k.dropShadow})`);
+      if (k.dropShadow) parts.push(`drop-shadow(${cssValueSafe(k.dropShadow)})`);
       return parts.length ? parts.join(' ') : undefined;
     }
     case 'offsetDistance':

@@ -231,8 +231,18 @@ export function CommandPalette() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        const ui = useUiStore.getState();
+        // Don't open the palette underneath another modal — the tour,
+        // shortcuts overlay, and export modal each have their own
+        // focus traps and click-blocking layers, and Cmd+K opening
+        // the palette beneath them strands focus and visually does
+        // nothing. Toggling the palette closed when it's already
+        // open is fine regardless.
+        if (!ui.paletteOpen && (ui.tourOpen || ui.shortcutsOpen || ui.exportOpen)) {
+          return;
+        }
         e.preventDefault();
-        setOpen(!useUiStore.getState().paletteOpen);
+        setOpen(!ui.paletteOpen);
       } else if (e.key === 'Escape' && useUiStore.getState().paletteOpen) {
         setOpen(false);
       }

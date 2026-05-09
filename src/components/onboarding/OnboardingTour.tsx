@@ -119,6 +119,11 @@ export function OnboardingTour() {
     return () => setTourStepId(null);
   }, [open, current.id, setTourStepId]);
 
+  // Track export-modal openness so the dismiss effect (after `finish`
+  // is declared, below) can react to the user clicking Record while
+  // the tour is up.
+  const exportOpen = useUiStore((s) => s.exportOpen);
+
   // -------- Open / close lifecycle --------------------------------------
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -164,6 +169,19 @@ export function OnboardingTour() {
     finish();
     setOpen(false);
   }, [finish]);
+
+  // If the user opens the export modal while the tour is up — most
+  // likely by clicking the Record button that the export step is
+  // spotlighting — auto-dismiss the tour. The tour's dim panels sit
+  // at z-120, the export modal at z-105, so without dismissing the
+  // modal would be visible-ish but unclickable and both focus traps
+  // would fight. Treat it as "tour served its purpose" and step out.
+  useEffect(() => {
+    if (open && exportOpen) {
+      finish();
+      setOpen(false);
+    }
+  }, [open, exportOpen, finish]);
 
   const next = useCallback(() => {
     if (step < STEPS.length - 1) {

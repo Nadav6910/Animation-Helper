@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import LZString from 'lz-string';
 import { useAnimationStore } from '@/store/animationStore';
+import { validateAnimationConfig } from '@/lib/validateConfig';
 import type { AnimationConfig } from '@/types/animation';
 
 const NEW_PREFIX = '#c=';
@@ -15,29 +16,39 @@ function encode(config: AnimationConfig): string {
   }
 }
 
+/**
+ * Decode an `AnimationConfig` from a URL hash. Pipes the JSON through
+ * `validateAnimationConfig` so a malicious share URL can't seed
+ * arbitrary CSS values into generators that interpolate untrusted
+ * config fields into `<style>` rules (`easing.value`, `direction`,
+ * `fill`, `offsetPath.rotate`). Per-field allow-listing happens there;
+ * here we only handle the transport.
+ */
 function decode(hash: string): AnimationConfig | null {
+  let raw: unknown = null;
   if (hash.startsWith(NEW_PREFIX)) {
     try {
       const json = LZString.decompressFromEncodedURIComponent(
         hash.slice(NEW_PREFIX.length)
       );
       if (!json) return null;
-      return JSON.parse(json) as AnimationConfig;
+      raw = JSON.parse(json);
     } catch {
       return null;
     }
-  }
-  if (hash.startsWith(LEGACY_PREFIX)) {
+  } else if (hash.startsWith(LEGACY_PREFIX)) {
     try {
       const json = decodeURIComponent(
         escape(atob(hash.slice(LEGACY_PREFIX.length)))
       );
-      return JSON.parse(json) as AnimationConfig;
+      raw = JSON.parse(json);
     } catch {
       return null;
     }
+  } else {
+    return null;
   }
-  return null;
+  return validateAnimationConfig(raw);
 }
 
 /**

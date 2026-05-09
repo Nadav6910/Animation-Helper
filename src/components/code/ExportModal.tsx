@@ -121,6 +121,20 @@ export function ExportModal() {
       setError('Preview not ready yet — try again in a moment.');
       return;
     }
+    // Snapshot slowMo to 1× for the duration of the capture. The live
+    // WAAPI Animation runs over `config.duration / slowMo` ms but the
+    // recorder computes its cycle from clean `config`, so anything
+    // other than 1× truncates the output to `1/slowMo` of the visual
+    // motion. Forcing slowMo=1 + waiting one rAF for the css regen to
+    // re-attach gives us a clean 1:1 capture.
+    const ui = useUiStore.getState();
+    const prevSlowMo = ui.slowMo;
+    if (prevSlowMo !== 1) {
+      ui.setSlowMo(1);
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      );
+    }
     const el = document.querySelector<HTMLElement>(`.${targetClassName}`);
     if (!el) {
       setError('Could not find the preview element.');
@@ -200,6 +214,12 @@ export function ExportModal() {
     } finally {
       setRecording(false);
       abortRef.current = null;
+      // Restore the user's slow-mo preference once the capture is
+      // done — they likely want to keep tweaking at the same speed
+      // they were before opening the export modal.
+      if (prevSlowMo !== 1) {
+        useUiStore.getState().setSlowMo(prevSlowMo);
+      }
     }
   }, [
     targetClassName,

@@ -5,6 +5,17 @@
 [build.environment]
   NODE_VERSION = "20"
 
+# SPA fallback: any non-asset path resolves to index.html so
+# Workbox's `navigateFallback` can take over once the SW is
+# installed, AND first-time visitors who land on `/anything` (a
+# stray path-style share URL, a misclick, etc.) don't 404 before the
+# SW gets a chance to register. The hashed-asset routes already
+# match real files, so this only affects misses.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
 # Cache-Control rules. Without explicit headers, Netlify's defaults
 # can leave the service worker + index.html cached at the HTTP layer
 # for longer than we want — meaning a freshly deployed SW doesn't

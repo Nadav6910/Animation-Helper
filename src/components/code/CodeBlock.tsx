@@ -50,9 +50,18 @@ export function CodeBlock({ code, lang, theme, explain = false }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    highlight(code, lang, theme).then((h) => {
-      if (!cancelled) setHtml(h);
-    });
+    // `highlight` lazy-loads grammar chunks on first view per lang;
+    // a network blip or stale chunk hash post-deploy can reject. We
+    // swallow the rejection (the unhighlighted-code fallback below
+    // still renders the raw text) so a transient failure doesn't
+    // surface as an unhandled-promise warning in users' DevTools.
+    highlight(code, lang, theme)
+      .then((h) => {
+        if (!cancelled) setHtml(h);
+      })
+      .catch(() => {
+        /* fall through to the raw-code fallback */
+      });
     return () => {
       cancelled = true;
     };
