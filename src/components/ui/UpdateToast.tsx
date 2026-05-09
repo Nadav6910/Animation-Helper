@@ -1,6 +1,17 @@
+import { useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Sparkles, X } from 'lucide-react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+
+/**
+ * How long to suppress the update prompt after the user clicks Dismiss.
+ * After this window the prompt re-surfaces automatically, so a tab
+ * that's been left open all day doesn't stay stuck on a stale build
+ * just because the user accidentally hit X. The SW itself is also
+ * re-checked on every page load (registerSW does an `update()` on
+ * mount), so reloading at any point also brings the prompt back.
+ */
+const SNOOZE_MS = 15 * 60 * 1000; // 15 minutes
 
 /**
  * Surfaces a "New version available" prompt whenever the PWA service
@@ -13,9 +24,12 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
  * skipWaitings the new SW and reloads the page so the latest build
  * actually loads instead of staying behind the old in-memory bundle.
  *
+ * Dismissing snoozes the prompt for SNOOZE_MS instead of permanently
+ * hiding it — guarantees the user eventually sees the new build even
+ * if they never reload the tab.
+ *
  * The toast lives bottom-right so it doesn't collide with the app-
- * level GlobalToast (which is bottom-centre and short-lived). The
- * dismiss `X` lets the user defer; the prompt re-appears next reload.
+ * level GlobalToast (which is bottom-centre and short-lived).
  */
 export function UpdateToast() {
   const {
@@ -31,6 +45,36 @@ export function UpdateToast() {
       console.warn('PWA service worker registration failed:', error);
     },
   });
+
+  const snoozeRef = useRef<number | null>(null);
+
+  // Cancel any pending snooze when the component unmounts (tab close
+  // or navigation tears the timeout down anyway, but this keeps the
+  // hook contract clean and avoids the "setState on unmounted" warning
+  // if React unmounts us mid-snooze).
+  useEffect(
+    () => () => {
+      if (snoozeRef.current !== null) {
+        window.clearTimeout(snoozeRef.current);
+        snoozeRef.current = null;
+      }
+    },
+    []
+  );
+
+  // Re-bring-up the prompt after the snooze window. We only schedule
+  // when the user explicitly dismisses; an Update click never queues
+  // a snooze (that path navigates away). If a fresh `needRefresh =
+  // true` arrives before the timer fires (e.g., the SW publishes a
+  // newer-still build), we cancel + re-schedule from scratch.
+  const dismiss = () => {
+    setNeedRefresh(false);
+    if (snoozeRef.current !== null) window.clearTimeout(snoozeRef.current);
+    snoozeRef.current = window.setTimeout(() => {
+      snoozeRef.current = null;
+      setNeedRefresh(true);
+    }, SNOOZE_MS);
+  };
 
   return (
     <AnimatePresence>
@@ -69,9 +113,9 @@ export function UpdateToast() {
             </button>
             <button
               type="button"
-              onClick={() => setNeedRefresh(false)}
+              onClick={dismiss}
               aria-label="Dismiss update prompt"
-              title="Dismiss"
+              title="Dismiss for now (we'll remind you in 15 minutes)"
               className="grid h-7 w-7 place-items-center rounded-full text-fg-muted hover:text-fg focus-ring"
             >
               <X size={14} />
