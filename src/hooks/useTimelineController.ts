@@ -85,6 +85,14 @@ export function useTimelineController(
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [ready, setReady] = useState(false);
+  // Latest mirrored currentTime in a ref so play() can re-pin the
+  // WAAPI Animation to whatever the user last scrubbed to without
+  // adding `currentTime` to play()'s deps (that would re-create the
+  // callback on every rAF tick).
+  const currentTimeRef = useRef(currentTime);
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
   // Latest fallback in a ref so play / restart's identities don't
   // depend on it — otherwise every tick increment in useAnimationStyle
   // would recreate these callbacks downstream.
@@ -172,8 +180,20 @@ export function useTimelineController(
       }
       return;
     }
-    // Calling play() on a finished Animation rewinds to 0 and replays,
-    // so this also covers "click play after finish but before reap".
+    // Re-pin the WAAPI Animation to the React-mirrored playhead before
+    // resuming. Background: pause() + currentTime=ms in rapid sequence
+    // (which is exactly what scrub-while-playing does) leaves the
+    // browser with a pending pause task. Some browsers compute the
+    // hold time from the pre-seek timeline state when that task runs,
+    // overriding the immediate currentTime set we did during seek().
+    // Result: a.play() resumes from the pre-drag position, not where
+    // the user dropped the playhead. Re-pinning here at play time is
+    // a no-op for the well-behaved case (mirror is already current)
+    // and a guaranteed fix for the racy case.
+    const target = currentTimeRef.current;
+    if (typeof target === 'number' && Number.isFinite(target)) {
+      for (const a of anims) a.currentTime = target;
+    }
     for (const a of anims) a.play();
     setIsPlaying(true);
   }, [className]);
