@@ -1,7 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Sparkles, Wand2, Palette, Gauge, Undo2, Redo2, RefreshCw, Heart } from 'lucide-react';
+import { Search, Sparkles, Wand2, Palette, Gauge, Undo2, Redo2, RefreshCw, Heart, Compass, Film, X } from 'lucide-react';
 import { useUiStore } from '@/store/uiStore';
+import { SHOW_TOUR_EVENT } from '@/lib/events';
 import { useAnimationStore } from '@/store/animationStore';
 import { useSavedPresetsStore } from '@/store/savedPresetsStore';
 import { useTheme } from '@/hooks/useTheme';
@@ -83,6 +84,20 @@ export function CommandPalette() {
         run: () => {
           save('Untitled', config);
         },
+      },
+      {
+        id: 'export',
+        label: 'Export as video / GIF',
+        group: 'Editor',
+        icon: <Film size={14} />,
+        run: () => useUiStore.getState().setExportOpen(true),
+      },
+      {
+        id: 'show-tour',
+        label: 'Show onboarding tour',
+        group: 'Editor',
+        icon: <Compass size={14} />,
+        run: () => window.dispatchEvent(new CustomEvent(SHOW_TOUR_EVENT)),
       },
       {
         id: 'theme',
@@ -179,11 +194,55 @@ export function CommandPalette() {
     if (!open) setQuery('');
   }, [open]);
 
+  // Lock body scroll while the palette is open. iOS lets touches that
+  // don't scroll a child (or that start outside the scrollable list)
+  // chain into the document scroll, which is exactly what people see
+  // as "the page scrolls instead of the command list" on phones.
+  // position: fixed on the body is the only iOS-reliable way to fully
+  // disable that — overflow:hidden alone is ignored by Safari for
+  // momentum touches. We restore the previous scroll position on
+  // close so opening the palette doesn't reset the page.
+  useEffect(() => {
+    if (!open) return;
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const prev = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+    };
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.width = '100%';
+    return () => {
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.left = prev.left;
+      body.style.right = prev.right;
+      body.style.width = prev.width;
+      window.scrollTo(0, scrollY);
+    };
+  }, [open]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        const ui = useUiStore.getState();
+        // Don't open the palette underneath another modal — the tour,
+        // shortcuts overlay, and export modal each have their own
+        // focus traps and click-blocking layers, and Cmd+K opening
+        // the palette beneath them strands focus and visually does
+        // nothing. Toggling the palette closed when it's already
+        // open is fine regardless.
+        if (!ui.paletteOpen && (ui.tourOpen || ui.shortcutsOpen || ui.exportOpen)) {
+          return;
+        }
         e.preventDefault();
-        setOpen(!useUiStore.getState().paletteOpen);
+        setOpen(!ui.paletteOpen);
       } else if (e.key === 'Escape' && useUiStore.getState().paletteOpen) {
         setOpen(false);
       }
@@ -192,9 +251,20 @@ export function CommandPalette() {
     return () => window.removeEventListener('keydown', handler);
   }, [setOpen]);
 
+  // Only auto-scroll the active row into view for KEYBOARD-driven
+  // navigation (arrow keys, Home, End). Pointer / hover-driven active
+  // changes must NOT trigger scrollIntoView, otherwise on touch the
+  // user's drag-to-scroll fires mouse-move-equivalents along the way,
+  // each one re-points `active` at the item under the finger, and the
+  // scrollIntoView snaps the list back to that item — killing scroll.
+  const keyboardNav = useRef(false);
   useEffect(() => {
     if (!open) return;
-    const el = listRef.current?.querySelector<HTMLElement>(`[data-idx="${active}"]`);
+    if (!keyboardNav.current) return;
+    keyboardNav.current = false;
+    const el = listRef.current?.querySelector<HTMLElement>(
+      `[data-idx="${active}"]`
+    );
     el?.scrollIntoView({ block: 'nearest' });
   }, [active, open]);
 
@@ -213,7 +283,13 @@ export function CommandPalette() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-[100] grid place-items-start justify-items-center bg-bg/70 backdrop-blur-md p-4 pt-[14vh]"
+          // Modal-style palette on every viewport — centred card with
+          // a comfortable top inset. Body scroll lock + keyboardNav-
+          // gated scrollIntoView (above) + overscroll-contain on the
+          // list (below) is what actually makes the inner list
+          // scrollable on iOS, so we don't need a full-screen layout
+          // to get reliable scroll.
+          className="fixed inset-0 z-[100] grid place-items-start justify-items-center bg-bg/70 backdrop-blur-md p-4 pt-[8vh] sm:pt-[14vh]"
           onClick={() => setOpen(false)}
         >
           <motion.div
@@ -226,16 +302,21 @@ export function CommandPalette() {
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: -10, opacity: 0, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-            className="w-full max-w-xl rounded-2xl border border-border/70 bg-bg-panel/95 shadow-2xl backdrop-blur-xl overflow-hidden focus:outline-none"
+            // Card capped at the available viewport (less the top
+            // inset and a small bottom margin) and uses flex-col so
+            // the listbox below can claim every leftover pixel and
+            // scroll inside.
+            className="flex w-full max-w-xl flex-col rounded-2xl border border-border/70 bg-bg-panel/95 shadow-2xl backdrop-blur-xl overflow-hidden focus:outline-none max-h-[calc(100vh-12vh)] sm:max-h-[80vh]"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id={titleId} className="sr-only">
               Command palette
             </h2>
-            <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
+            <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
               <Search size={16} className="text-fg-subtle" aria-hidden />
               <input
                 ref={inputRef}
+                aria-label="Search commands, presets, and easings"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 role="combobox"
@@ -251,15 +332,19 @@ export function CommandPalette() {
                   if (e.nativeEvent.isComposing || e.keyCode === 229) return;
                   if (e.key === 'ArrowDown') {
                     e.preventDefault();
+                    keyboardNav.current = true;
                     setActive((i) => Math.min(filtered.length - 1, i + 1));
                   } else if (e.key === 'ArrowUp') {
                     e.preventDefault();
+                    keyboardNav.current = true;
                     setActive((i) => Math.max(0, i - 1));
                   } else if (e.key === 'Home') {
                     e.preventDefault();
+                    keyboardNav.current = true;
                     setActive(0);
                   } else if (e.key === 'End') {
                     e.preventDefault();
+                    keyboardNav.current = true;
                     setActive(Math.max(0, filtered.length - 1));
                   } else if (e.key === 'Enter') {
                     e.preventDefault();
@@ -272,13 +357,35 @@ export function CommandPalette() {
               <span className="hidden sm:inline rounded-md border border-border/70 bg-bg-soft px-1.5 py-0.5 text-[10px] text-fg-subtle">
                 Esc
               </span>
+              {/* Visible close button — required for touch users
+                  who can't hit Esc and may not realise tapping the
+                  backdrop dismisses the palette. */}
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close command palette"
+                title="Close"
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-fg-muted hover:bg-bg-soft hover:text-fg focus-ring transition-colors"
+              >
+                <X size={14} />
+              </button>
             </div>
             <div
               ref={listRef}
               role="listbox"
               id={listboxId}
               aria-label="Command results"
-              className="max-h-[55vh] overflow-y-auto scrollbar-thin py-1.5"
+              // flex-1 + min-h-0 makes this region size to the leftover
+              // height (mobile: viewport minus header / footer; desktop:
+              // up to max-h-80vh on the card minus header / footer),
+              // and overflow-y-auto scrolls inside that. min-h-0 is
+              // critical — without it the flex child insists on its
+              // intrinsic content height and the scroll never engages.
+              // overscroll-contain stops iOS from chaining the touch
+              // momentum out to the page underneath when the user
+              // reaches the top or bottom of the list.
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain scrollbar-thin py-1.5"
+              style={{ WebkitOverflowScrolling: 'touch' }}
             >
               {filtered.length === 0 ? (
                 <div className="px-4 py-6 text-center text-sm text-fg-subtle">
@@ -294,7 +401,7 @@ export function CommandPalette() {
                 />
               )}
             </div>
-            <div className="flex items-center justify-between border-t border-border/60 px-3 py-1.5 text-[10px] text-fg-subtle">
+            <div className="flex shrink-0 items-center justify-between border-t border-border/60 px-3 py-1.5 text-[10px] text-fg-subtle">
               <span>↑↓ navigate · Enter to run</span>
               <span>{filtered.length} commands</span>
             </div>

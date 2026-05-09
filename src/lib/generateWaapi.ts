@@ -2,17 +2,22 @@ import type { AnimationConfig, Keyframe } from '@/types/animation';
 import { easingToCss } from './easings';
 import { transformToCss, filterToCss } from './generateCss';
 import { sanitisePathD } from './svgPathSafety';
-import { GRADIENT_RE, num } from './css-helpers';
+import { cssValueSafe, GRADIENT_RE, num } from './css-helpers';
 
 function keyframeObj(k: Keyframe): Record<string, string | number> {
   const out: Record<string, string | number> = {};
   const t = transformToCss(k.transform);
   if (t) out.transform = t;
   if (typeof k.opacity === 'number') out.opacity = k.opacity;
-  if (k.color) out.color = k.color;
+  // WAAPI keyframe values become real CSS at runtime in the consumer's
+  // page, so the same value-side sanitisation as the other generators
+  // applies — strip declaration-breakout chars from user-controlled
+  // colour / gradient strings.
+  if (k.color) out.color = cssValueSafe(k.color);
   if (k.bg) {
-    if (GRADIENT_RE.test(k.bg)) out.background = k.bg;
-    else out.backgroundColor = k.bg;
+    const safeBg = cssValueSafe(k.bg);
+    if (GRADIENT_RE.test(safeBg)) out.background = safeBg;
+    else out.backgroundColor = safeBg;
   }
   const f = filterToCss(k);
   if (f) out.filter = f;

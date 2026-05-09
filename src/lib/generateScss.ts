@@ -4,6 +4,7 @@ import { buildKeyframesBody, buildRuleDeclLines } from './generateCss';
 export type GenerateScssOptions = {
   name?: string;
   mixinName?: string;
+  cssVars?: boolean;
 };
 
 /**
@@ -17,7 +18,11 @@ export function generateScss(
 ): string {
   const name = opts.name ?? 'play';
   const mixin = opts.mixinName ?? `${name}-anim`;
-  const decls = buildRuleDeclLines(c, { name, indent: '  ' });
+  const decls = buildRuleDeclLines(c, {
+    name,
+    indent: '  ',
+    cssVars: opts.cssVars,
+  });
   const keyframesBody = buildKeyframesBody(c, { indent: '  ' });
 
   return `@mixin ${mixin} {

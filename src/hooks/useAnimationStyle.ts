@@ -36,9 +36,10 @@ export function useAnimationStyle(config: AnimationConfig) {
   useEffect(() => {
     const styleEl = document.createElement('style');
     styleEl.setAttribute('data-ah-style', className);
-    // Append the pause rule so toggling `ah-paused` on the animated element
-    // freezes it at its current frame without rewriting the @keyframes.
-    styleEl.textContent = `${css}\n.${className}.ah-paused { animation-play-state: paused; }`;
+    // The timeline controller (`useTimelineController`) drives play /
+    // pause / seek via the Web Animations API directly on the running
+    // CSS animation, so a CSS-class pause rule is no longer needed.
+    styleEl.textContent = css;
     document.head.appendChild(styleEl);
     return () => {
       styleEl.remove();

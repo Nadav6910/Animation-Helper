@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import type { AnimationConfig } from '@/types/animation';
 import { uid } from '@/lib/uid';
+import { validateAnimationConfig } from '@/lib/validateConfig';
 
 const STORAGE_KEY = 'ah:saved-presets';
+const SCHEMA_VERSION = 1;
 
 export type SavedPreset = {
   id: string;
@@ -11,23 +13,27 @@ export type SavedPreset = {
   config: AnimationConfig;
 };
 
+type StoredPayload = {
+  version: number;
+  entries: SavedPreset[];
+};
+
 /**
- * Per-entry validation. We accept anything Array.isArray returns — so a
- * tampered storage blob doesn't crash the gallery — but each entry is
- * checked individually. Bad entries are skipped, not coerced, so a half-
- * corrupt store still loads the good half.
+ * Per-entry validation. Beyond the structural shape (id / name /
+ * createdAt / config object), the inner `config` is now sent through
+ * `validateAnimationConfig` so a tampered storage blob can't smuggle
+ * CSS-injection payloads back into the app on reload — same defence
+ * that `useUrlState` applies to `#c=` URL hashes.
  */
-const isValidEntry = (e: unknown): e is SavedPreset => {
-  if (!e || typeof e !== 'object') return false;
+const validateEntry = (e: unknown): SavedPreset | null => {
+  if (!e || typeof e !== 'object') return null;
   const o = e as Partial<SavedPreset>;
-  if (typeof o.id !== 'string' || !o.id) return false;
-  if (typeof o.name !== 'string') return false;
-  if (typeof o.createdAt !== 'number') return false;
-  if (!o.config || typeof o.config !== 'object') return false;
-  const cfg = o.config as Partial<AnimationConfig>;
-  if (!Array.isArray(cfg.keyframes) || cfg.keyframes.length < 1) return false;
-  if (typeof cfg.duration !== 'number') return false;
-  return true;
+  if (typeof o.id !== 'string' || !o.id) return null;
+  if (typeof o.name !== 'string') return null;
+  if (typeof o.createdAt !== 'number') return null;
+  const config = validateAnimationConfig(o.config);
+  if (!config) return null;
+  return { id: o.id, name: o.name, createdAt: o.createdAt, config };
 };
 
 const loadInitial = (): SavedPreset[] => {
@@ -36,8 +42,27 @@ const loadInitial = (): SavedPreset[] => {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isValidEntry);
+    // Accept both the legacy bare-array shape and the versioned
+    // wrapper, so existing users don't lose their presets when they
+    // upgrade to the schema-versioned write format.
+    let entries: unknown[];
+    if (Array.isArray(parsed)) {
+      entries = parsed;
+    } else if (
+      parsed &&
+      typeof parsed === 'object' &&
+      Array.isArray((parsed as StoredPayload).entries)
+    ) {
+      entries = (parsed as StoredPayload).entries;
+    } else {
+      return [];
+    }
+    const out: SavedPreset[] = [];
+    for (const e of entries) {
+      const valid = validateEntry(e);
+      if (valid) out.push(valid);
+    }
+    return out;
   } catch {
     return [];
   }
@@ -57,7 +82,11 @@ export function onSavedPresetsPersistError(fn: PersistFailureListener) {
 const persist = (entries: SavedPreset[]) => {
   if (typeof window === 'undefined') return true;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    // Versioned wrapper so future schema changes can migrate cleanly
+    // — the loader already accepts both bare-array and wrapper shapes
+    // for back-compat, so flipping write format here is safe.
+    const payload: StoredPayload = { version: SCHEMA_VERSION, entries };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     return true;
   } catch (err) {
     persistListeners.forEach((fn) => fn(err));

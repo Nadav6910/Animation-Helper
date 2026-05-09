@@ -1,24 +1,123 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { highlight, type CodeLang } from '@/lib/highlight';
+import { explainProperty, type CssExplanation } from '@/lib/cssReference';
 
 type Props = {
   code: string;
   lang: CodeLang;
   theme: 'dark' | 'light';
+  /** When true, hovering a CSS property name surfaces a tooltip with
+   *  a short prose explanation. Off by default to avoid hover-noise
+   *  for power users. */
+  explain?: boolean;
 };
 
-export function CodeBlock({ code, lang, theme }: Props) {
+type Hover = {
+  prop: string;
+  explanation: CssExplanation;
+  rect: DOMRect;
+};
+
+// CSS-flavoured langs are the only ones whose property tokens map
+// onto `cssReference.ts` in a useful way. `html` is included because
+// inline `<style>` blocks contain CSS — Shiki tokenises the inner
+// CSS as CSS even though the outer doc is HTML. Tailwind / Framer /
+// Vue / etc. tokens are JS / TS values and the lookup would mostly
+// miss; we turn the affordance off in those formats so we don't
+// underline random identifiers.
+const EXPLAIN_LANGS: ReadonlySet<CodeLang> = new Set([
+  'css',
+  'scss',
+  'html',
+] as const);
+
+export function CodeBlock({ code, lang, theme, explain = false }: Props) {
   const [html, setHtml] = useState<string>('');
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [hover, setHover] = useState<Hover | null>(null);
+  // Tooltip ref + measured height so the vertical-flip decision is
+  // based on the actual rendered tooltip size, not a hard-coded
+  // threshold. Re-measured every time hover changes.
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const [tooltipHeight, setTooltipHeight] = useState(140);
+  useEffect(() => {
+    if (!hover || !tooltipRef.current) return;
+    const h = tooltipRef.current.getBoundingClientRect().height;
+    if (h > 0 && Math.abs(h - tooltipHeight) > 2) setTooltipHeight(h);
+  }, [hover, tooltipHeight]);
 
   useEffect(() => {
     let cancelled = false;
-    highlight(code, lang, theme).then((h) => {
-      if (!cancelled) setHtml(h);
-    });
+    // `highlight` lazy-loads grammar chunks on first view per lang;
+    // a network blip or stale chunk hash post-deploy can reject. We
+    // swallow the rejection (the unhighlighted-code fallback below
+    // still renders the raw text) so a transient failure doesn't
+    // surface as an unhandled-promise warning in users' DevTools.
+    highlight(code, lang, theme)
+      .then((h) => {
+        if (!cancelled) setHtml(h);
+      })
+      .catch(() => {
+        /* fall through to the raw-code fallback */
+      });
     return () => {
       cancelled = true;
     };
   }, [code, lang, theme]);
+
+  // Mouseover delegation: when explain is on, every span inside the
+  // code block gets checked. If its trimmed text matches a known
+  // property, show the tooltip; otherwise clear. Single listener on
+  // the container so the cost is independent of token count.
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root || !explain || !EXPLAIN_LANGS.has(lang)) {
+      setHover(null);
+      return;
+    }
+    const onOver = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (!t) return;
+      // Only inspect leaf spans — anything with element children is
+      // typically a line wrapper, not a token.
+      if (t.tagName !== 'SPAN' || t.children.length > 0) {
+        return;
+      }
+      const text = t.textContent?.trim() ?? '';
+      // CSS property names are short identifiers. Skip anything that
+      // looks like a value (numbers, parentheses, quotes) so the
+      // lookup doesn't run on every cursor move.
+      if (!text || text.length > 40 || /[\s(){}";']/.test(text)) {
+        if (hover) setHover(null);
+        return;
+      }
+      const explanation = explainProperty(text);
+      if (!explanation) {
+        if (hover) setHover(null);
+        return;
+      }
+      setHover({
+        prop: text,
+        explanation,
+        rect: t.getBoundingClientRect(),
+      });
+    };
+    const onOut = (e: MouseEvent) => {
+      // Hide when the cursor leaves the container entirely; per-token
+      // out events fire too aggressively when sweeping across spans.
+      const next = e.relatedTarget as Node | null;
+      if (next && root.contains(next)) return;
+      setHover(null);
+    };
+    root.addEventListener('mouseover', onOver);
+    root.addEventListener('mouseout', onOut);
+    return () => {
+      root.removeEventListener('mouseover', onOver);
+      root.removeEventListener('mouseout', onOut);
+    };
+  }, [explain, lang, hover]);
 
   if (!html) {
     return (
@@ -27,10 +126,88 @@ export function CodeBlock({ code, lang, theme }: Props) {
       </pre>
     );
   }
+
+  const explainActive = explain && EXPLAIN_LANGS.has(lang);
+
   return (
-    <div
-      className="ah-shiki text-xs font-mono leading-relaxed [&_pre]:!bg-transparent [&_pre]:p-4 [&_pre]:overflow-x-auto"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
+    <>
+      {explainActive && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="sticky top-0 z-10 flex items-center gap-2 border-b border-accent/30 bg-accent/10 px-4 py-1.5 text-[11px] text-fg backdrop-blur-md"
+        >
+          <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-accent/30 text-[10px] text-accent-contrast">
+            i
+          </span>
+          <span className="text-fg-muted">
+            Hover any CSS property below to see what it does.
+          </span>
+        </div>
+      )}
+      <div
+        ref={containerRef}
+        className="ah-shiki text-xs font-mono leading-relaxed [&_pre]:!bg-transparent [&_pre]:p-4 [&_pre]:overflow-x-auto"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+      {typeof document !== 'undefined' &&
+        createPortal(
+          <AnimatePresence>
+            {hover && (
+              <motion.div
+                // Key on the property name only — tying it to
+                // `rect.top` made the tooltip remount + replay its
+                // entrance animation every time the cursor jumped to
+                // a new row, which read as a flicker. With just the
+                // property name as the key, mounting only happens
+                // when the actual content changes; position updates
+                // are handled by re-rendering the same node.
+                key={hover.prop}
+                ref={tooltipRef}
+                initial={{ opacity: 0, y: 4, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 4, scale: 0.96 }}
+                transition={{ duration: 0.14, ease: [0.2, 0.8, 0.2, 1] }}
+                role="tooltip"
+                className="pointer-events-none fixed z-[140] w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-accent/40 bg-bg-panel/95 p-3 shadow-[0_24px_64px_-16px_rgb(0_0_0_/_0.55)] backdrop-blur-xl"
+                style={{
+                  // Place above the token by default. Flip below when
+                  // there isn't enough headroom — measured against the
+                  // tooltip's own height (captured via tooltipRef on
+                  // the previous frame) plus a margin, instead of a
+                  // hard-coded 140 px that could clip on long-detail
+                  // tooltips or short viewports.
+                  top: hover.rect.top > tooltipHeight + 16
+                    ? hover.rect.top - 8
+                    : hover.rect.bottom + 8,
+                  left: Math.max(
+                    8,
+                    Math.min(
+                      window.innerWidth - 296,
+                      hover.rect.left + hover.rect.width / 2 - 144
+                    )
+                  ),
+                  transform: hover.rect.top > tooltipHeight + 16
+                    ? 'translateY(-100%)'
+                    : undefined,
+                }}
+              >
+                <div className="text-[10px] uppercase tracking-wider text-accent font-semibold">
+                  CSS · {hover.prop}
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-fg">
+                  {hover.explanation.what}
+                </p>
+                {hover.explanation.detail && (
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-fg-muted">
+                    {hover.explanation.detail}
+                  </p>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+    </>
   );
 }

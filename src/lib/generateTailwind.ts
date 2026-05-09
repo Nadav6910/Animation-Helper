@@ -3,6 +3,7 @@ import { easingToCss } from './easings';
 import { transformToCss, filterToCss } from './generateCss';
 import {
   GRADIENT_RE,
+  cssValueSafe,
   durationStr,
   firstColorStop,
   num,
@@ -14,21 +15,27 @@ function decls(k: Keyframe, target: AnimationConfig['target']): Record<string, s
   if (t) out.transform = t;
   if (typeof k.opacity === 'number') out.opacity = num(k.opacity);
   if (k.color) {
-    if (GRADIENT_RE.test(k.color) && target === 'text') {
-      // Gradient text via background-clip: text trick.
-      out.background = k.color;
+    // Same value-side sanitisation as the CSS generator — Tailwind
+    // emits these inside JS string literals so they can't break out
+    // of JS, but the consumer's project re-emits them as CSS
+    // declarations, where unsanitised `;` / `}` would inject
+    // arbitrary rules into the host stylesheet.
+    const safeColor = cssValueSafe(k.color);
+    if (GRADIENT_RE.test(safeColor) && target === 'text') {
+      out.background = safeColor;
       out.backgroundClip = 'text';
       out.WebkitBackgroundClip = 'text';
       out.color = 'transparent';
-    } else if (GRADIENT_RE.test(k.color)) {
-      out.color = firstColorStop(k.color);
+    } else if (GRADIENT_RE.test(safeColor)) {
+      out.color = firstColorStop(safeColor);
     } else {
-      out.color = k.color;
+      out.color = safeColor;
     }
   }
   if (k.bg) {
-    if (GRADIENT_RE.test(k.bg)) out.background = k.bg;
-    else out.backgroundColor = k.bg;
+    const safeBg = cssValueSafe(k.bg);
+    if (GRADIENT_RE.test(safeBg)) out.background = safeBg;
+    else out.backgroundColor = safeBg;
   }
   const f = filterToCss(k);
   if (f) out.filter = f;

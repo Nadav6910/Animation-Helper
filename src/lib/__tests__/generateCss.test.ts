@@ -367,3 +367,76 @@ describe('generateCss — bug regression snapshot', () => {
     `);
   });
 });
+
+describe('generateCss — cssVars output', () => {
+  it('emits timing slots as CSS variables and references them via animation-* longhands', () => {
+    const css = generateCss(makeConfig(), { cssVars: true });
+    // Variable declarations land before the animation longhands.
+    expect(css).toContain('--ah-duration: 2s;');
+    expect(css).toContain('--ah-easing: cubic-bezier(0.2, 0.8, 0.2, 1);');
+    expect(css).toContain('--ah-delay: 100ms;');
+    expect(css).toContain('--ah-iterations: 2;');
+    // Each timing slot has its own one-slot longhand referencing its
+    // var. Using the `animation:` shorthand with positional `var()`
+    // refs is off-spec — browsers can't bind by type at parse time
+    // and the result is brittle. Longhands are unambiguous.
+    expect(css).toContain('animation-name: play;');
+    expect(css).toContain('animation-duration: var(--ah-duration);');
+    expect(css).toContain('animation-timing-function: var(--ah-easing);');
+    expect(css).toContain('animation-delay: var(--ah-delay);');
+    expect(css).toContain('animation-iteration-count: var(--ah-iterations);');
+    // Direction / fill stay literal (categorical, rarely tuned).
+    expect(css).toContain('animation-direction: alternate;');
+    expect(css).toContain('animation-fill-mode: forwards;');
+    // No `animation:` shorthand line at all in cssVars mode.
+    expect(css).not.toMatch(/^\s*animation:\s/m);
+    // Keyframes body unchanged from the literal mode.
+    expect(css).toContain('transform: translate3d(80px, 0px, 0px)');
+  });
+
+  it('omits direction / fill longhands when at defaults under cssVars', () => {
+    const css = generateCss(
+      makeConfig({ direction: 'normal', fill: 'none' }),
+      { cssVars: true }
+    );
+    expect(css).not.toContain('animation-direction:');
+    expect(css).not.toContain('animation-fill-mode:');
+    // Timing longhands still emitted.
+    expect(css).toContain('animation-name: play;');
+    expect(css).toContain('animation-duration: var(--ah-duration);');
+  });
+
+  it('every preset round-trips through cssVars-on output without throwing', () => {
+    // Sanity check: the cssVars option is keyframes-agnostic, so any
+    // valid preset config should produce a parseable CSS rule.
+    const cfg = makeConfig({ iterations: 'infinite', direction: 'normal' });
+    expect(() => generateCss(cfg, { cssVars: true })).not.toThrow();
+    expect(generateCss(cfg, { cssVars: true })).toContain(
+      '--ah-iterations: infinite;'
+    );
+  });
+
+  it('stagger > span rule emits longhands referencing the inherited vars', () => {
+    const css = generateCss(
+      makeConfig({
+        target: 'text',
+        text: 'Hi',
+        stagger: { step: 50 },
+        direction: 'normal',
+        fill: 'none',
+      }),
+      { cssVars: true }
+    );
+    // The span rule must repeat animation longhands (animation
+    // properties don't inherit) but the `--ah-*` CSS vars cascade
+    // from the parent rule. Per-letter delay overrides the parent's
+    // `var(--ah-delay)` with the calc(var(--i) * step) offset.
+    expect(css).toMatch(/> span\s*\{[^}]*animation-name: play;/);
+    expect(css).toMatch(
+      /> span\s*\{[^}]*animation-duration: var\(--ah-duration\);/
+    );
+    expect(css).toMatch(
+      /> span\s*\{[^}]*animation-delay: calc\(var\(--i\) \* 50ms\);/
+    );
+  });
+});

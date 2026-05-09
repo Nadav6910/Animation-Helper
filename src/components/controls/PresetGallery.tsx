@@ -23,6 +23,9 @@ const TABS: { id: TabId; label: string }[] = [
 
 export function PresetGallery() {
   const [tab, setTab] = useState<TabId>('entrance');
+  // Track the last preset Surprise-me dished out so we never roll the
+  // same one two clicks in a row — feels broken when it happens.
+  const [lastSurpriseId, setLastSurpriseId] = useState<string | null>(null);
   const applyPreset = useAnimationStore((s) => s.applyPreset);
   const resetAll = useAnimationStore((s) => s.resetAll);
   const saved = useSavedPresetsStore((s) => s.saved);
@@ -47,7 +50,8 @@ export function PresetGallery() {
     }, [tab, saved]);
 
   const onSurprise = () => {
-    const p = randomPreset();
+    const p = randomPreset(lastSurpriseId ?? undefined);
+    setLastSurpriseId(p.id);
     applyPreset(p.build());
   };
 
@@ -91,6 +95,7 @@ export function PresetGallery() {
           <button
             type="button"
             onClick={resetAll}
+            aria-label="Clear and start with a blank canvas"
             className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border/70 bg-bg-soft px-2.5 text-xs text-fg-muted hover:text-fg focus-ring transition-colors"
             title="Clear and start with a blank canvas"
           >
@@ -100,6 +105,7 @@ export function PresetGallery() {
           <button
             type="button"
             onClick={onSurprise}
+            aria-label="Apply a random preset"
             className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border/70 bg-bg-soft px-2.5 text-xs text-fg-muted hover:text-fg focus-ring transition-colors"
             title="Apply a random preset"
           >
@@ -118,7 +124,15 @@ export function PresetGallery() {
               key={it.key}
               name={it.name}
               build={it.build}
-              onApply={() => applyPreset(it.build())}
+              // Track every preset application — manual card picks
+              // included — so the next Surprise click won't re-roll
+              // whatever the user just saw. The earlier version only
+              // tracked surprise-issued ids, so picking `wobble` by
+              // hand and then hitting Surprise could re-roll wobble.
+              onApply={() => {
+                setLastSurpriseId(it.key);
+                applyPreset(it.build());
+              }}
               onDelete={it.deletable && it.id ? () => remove(it.id!) : undefined}
             />
           ))}

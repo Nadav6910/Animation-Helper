@@ -40,6 +40,34 @@ const endKeyframe = (): Keyframe => ({
   opacity: 1,
 });
 
+const drawStartKeyframe = (): Keyframe => ({
+  id: uid(),
+  at: 0,
+  transform: { ...blankTransform },
+  opacity: 1,
+  strokeDashoffset: 100,
+});
+
+const drawEndKeyframe = (): Keyframe => ({
+  id: uid(),
+  at: 100,
+  transform: { ...blankTransform },
+  opacity: 1,
+  strokeDashoffset: 0,
+});
+
+/** Default keyframes seeded for a target when the current keyframes
+ *  wouldn't visibly animate it (e.g. switching back to shape from SVG
+ *  leaves stroke-only keyframes behind that don't render anything on
+ *  a shape, so the timeline would falsely claim "Playing" — see the
+ *  setTarget flow below). */
+function defaultKeyframesFor(target: TargetKind): Keyframe[] {
+  if (target === 'svg') {
+    return [drawStartKeyframe(), drawEndKeyframe()];
+  }
+  return [startKeyframe(), endKeyframe()];
+}
+
 const initialConfig: AnimationConfig = {
   target: 'shape',
   selector: '.animated',
@@ -63,6 +91,13 @@ export type AnimationState = {
   canUndo: boolean;
   canRedo: boolean;
   isDirty: boolean;
+  /** Per-target snapshot of the keyframes the user last had under each
+   *  target. Repopulated on every setTarget so swapping shape ↔ svg ↔
+   *  text restores the customised animation for the destination
+   *  instead of dragging keyframes that don't apply visually. Not
+   *  history-tracked — this is UI ergonomics, not part of the
+   *  canonical config. */
+  keyframesByTarget: Partial<Record<TargetKind, Keyframe[]>>;
   // setters
   setTarget: (t: TargetKind) => void;
   setShape: (s: ShapeKind) => void;
@@ -118,51 +153,39 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
     canUndo: false,
     canRedo: false,
     isDirty: false,
+    keyframesByTarget: {},
 
     setTarget: (target) => {
       const c = get().config;
-      // Seed path-draw keyframes the first time the user switches to SVG.
-      // The shape default's translate of 120px is interpreted in SVG
-      // user-space and pushes the path far off the viewBox; replace with
-      // a clean draw pair (strokeDashoffset 100 → 0) with identity
-      // transforms. If the user has already touched strokeDashoffset
-      // anywhere, leave their keyframes alone.
-      if (target !== 'svg') {
-        commit({ ...c, target });
-        return;
+      if (c.target === target) return;
+      // Per-target keyframe memory: snapshot the OUTGOING target's
+      // keyframes so we can restore them when the user comes back,
+      // then load whatever was previously under the INCOMING target
+      // (or the target's default if this is the first time visiting
+      // it). Result: shape → svg seeds the draw animation, svg → shape
+      // restores the shape animation, and any tweaks the user made on
+      // each target survive the round-trip independently.
+      const prevSnapshots = get().keyframesByTarget;
+      const snapshots = { ...prevSnapshots, [c.target]: c.keyframes };
+      const restored = snapshots[target];
+      const fresh =
+        restored && restored.length >= 2
+          ? restored
+          : defaultKeyframesFor(target);
+      const updated: AnimationConfig = { ...c, target, keyframes: fresh };
+      // Stagger is text-only. When swapping AWAY from text, drop any
+      // lingering stagger object so it can't survive into a shape /
+      // svg config — recorder + future generators that respect
+      // stagger on those targets would otherwise walk descendants
+      // for per-letter animations that don't exist.
+      if (target !== 'text' && updated.stagger) {
+        delete updated.stagger;
       }
-      const hasDashoffset = c.keyframes.some(
-        (k) => typeof k.strokeDashoffset === 'number'
-      );
-      if (hasDashoffset) {
-        commit({ ...c, target });
-        return;
-      }
-      const draw: Keyframe[] = [
-        {
-          id: uid(),
-          at: 0,
-          transform: { ...blankTransform },
-          opacity: 1,
-          strokeDashoffset: 100,
-        },
-        {
-          id: uid(),
-          at: 100,
-          transform: { ...blankTransform },
-          opacity: 1,
-          strokeDashoffset: 0,
-        },
-      ];
-      const updated: AnimationConfig = {
-        ...c,
-        target,
-        keyframes: draw,
-      };
       history.record(updated);
       set({
         config: updated,
-        selectedKeyframeId: draw[0].id,
+        keyframesByTarget: snapshots,
+        selectedKeyframeId: fresh[0].id,
         ...refreshHistoryFlags(),
       });
     },
@@ -176,10 +199,19 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
     setFill: (fill) => update((c) => ({ ...c, fill })),
     setEasing: (easing) => update((c) => ({ ...c, easing })),
     setStagger: (step) =>
-      update((c) => ({
-        ...c,
-        stagger: step === null ? undefined : { step },
-      })),
+      update((c) => {
+        // Stagger only renders for text targets — generateCss gates
+        // the `> span` rule on `c.target === 'text'`, and the
+        // stagger UI is hidden for shape / svg. Guard the setter
+        // anyway so a future caller (URL hash, command palette,
+        // a hypothetical new generator) can't lodge a stagger value
+        // on a non-text config that the recorder would then walk
+        // descendants for, looking for per-letter Animations that
+        // don't exist. No-op on non-text — the user's intent is
+        // captured next time they switch back to text.
+        if (c.target !== 'text') return c;
+        return { ...c, stagger: step === null ? undefined : { step } };
+      }),
     setOffsetPath: (op) =>
       update((c) => {
         if (!op) {
@@ -302,6 +334,10 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
       history.reset(fresh);
       set({
         config: fresh,
+        // Drop per-target snapshots — "Reset everything" should mean
+        // exactly that, including any keyframes the user had stashed
+        // under non-active targets.
+        keyframesByTarget: {},
         selectedKeyframeId: fresh.keyframes[0].id,
         ...refreshHistoryFlags(),
       });
@@ -316,6 +352,12 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
       }
       set({
         config: cloned,
+        // Drop per-target snapshots — the inbound config is a fresh
+        // starting point (URL load, undo restore, etc.), and a
+        // subsequent target swap should re-seed defaults rather than
+        // restore stashed keyframes from before this `applyConfig`
+        // ran. Same rationale as `resetAll` and `applyPreset` above.
+        keyframesByTarget: {},
         selectedKeyframeId: cloned.keyframes[0]?.id ?? get().selectedKeyframeId,
         ...refreshHistoryFlags(),
       });
@@ -335,6 +377,10 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
       history.record(cloned);
       set({
         config: cloned,
+        // A preset is a "start fresh" gesture. Wipe per-target
+        // snapshots so a subsequent target swap can't restore stale
+        // pre-preset keyframes from another target.
+        keyframesByTarget: {},
         selectedKeyframeId: cloned.keyframes[0]?.id ?? get().selectedKeyframeId,
         ...refreshHistoryFlags(),
       });
@@ -345,6 +391,15 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
       if (!prev) return;
       set({
         config: prev,
+        // Clear per-target snapshots on undo / redo. The history
+        // recorder only walks `config`, but `keyframesByTarget`
+        // accumulated edits from before the undo point — restoring
+        // it would silently overwrite an undo's "go back to text"
+        // with the post-edit shape keyframes the user typed in
+        // afterwards. Easier and safer to drop the cache entirely
+        // and let target swaps re-seed defaults until the user
+        // edits again.
+        keyframesByTarget: {},
         selectedKeyframeId: prev.keyframes[0]?.id ?? get().selectedKeyframeId,
         ...refreshHistoryFlags(),
       });
@@ -355,6 +410,7 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
       if (!next) return;
       set({
         config: next,
+        keyframesByTarget: {},
         selectedKeyframeId: next.keyframes[0]?.id ?? get().selectedKeyframeId,
         ...refreshHistoryFlags(),
       });

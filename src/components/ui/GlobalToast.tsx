@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Check, AlertTriangle } from 'lucide-react';
 import { useUiStore } from '@/store/uiStore';
 import { onSavedPresetsPersistError } from '@/store/savedPresetsStore';
+import { onCustomPathsPersistError } from '@/store/customPathsStore';
 
 /**
  * App-level toast surface. Components dispatch via
@@ -18,14 +19,21 @@ export function GlobalToast() {
   const showToast = useUiStore((s) => s.showToast);
 
   useEffect(() => {
-    const off = onSavedPresetsPersistError(() => {
+    const offPresets = onSavedPresetsPersistError(() => {
       showToast(
         "Couldn't save preset — local storage is full or unavailable.",
         'error'
       );
     });
+    const offPaths = onCustomPathsPersistError(() => {
+      showToast(
+        "Couldn't save custom path — local storage is full or unavailable.",
+        'error'
+      );
+    });
     return () => {
-      off();
+      offPresets();
+      offPaths();
     };
   }, [showToast]);
 

@@ -31,7 +31,11 @@ const ORBIT_SHAPES = [
     id: 'circle',
     d: 'M12 3 A 9 9 0 1 1 11.99 3 Z',
     radius: 150,
-    angle: 180,
+    // Was 180° (straight left) — that put the circle right at title-
+    // top level, sitting on top of the "An" of "Animation Helper".
+    // 200° lifts the orbit position to up-left so the title reads
+    // cleanly while keeping the four-shape compass arrangement.
+    angle: 200,
     delay: 0.44,
     color: '#22d3ee',
   },
@@ -49,7 +53,13 @@ const SPARKLE_DOTS = Array.from({ length: 12 }, (_, i) => i);
 
 type Props = { onDone: () => void; minDuration?: number };
 
-export function LoadingScreen({ onDone, minDuration = 2600 }: Props) {
+// 1800 ms is the sweet spot: long enough for the orbital shapes to
+// finish drawing, the title to letter-stagger fully, and the splash
+// to feel intentional rather than rushed; short enough that
+// Lighthouse's TTI measurement isn't held hostage by an otherwise
+// idle main thread. The original 2600 ms felt cinematic but dropped
+// the perf score by ~15 points on its own.
+export function LoadingScreen({ onDone, minDuration = 1800 }: Props) {
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {

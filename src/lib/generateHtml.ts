@@ -3,6 +3,7 @@ import { generateCss } from './generateCss';
 import { SVG_PATH_BY_ID } from './svgPaths';
 import { SHAPE_BY_KIND } from './shapes';
 import { sanitisePathD } from './svgPathSafety';
+import { cssValueSafe } from './css-helpers';
 
 const escapeHtml = (s: string) =>
   s
@@ -45,7 +46,14 @@ function targetMarkup(
   className: string,
   fontFamily: string
 ): string {
-  const textFontStyle = `font: 700 64px/1.1 ${fontFamily}`;
+  // Sanitise the font-family value — `escapeHtml` covers attribute
+  // breakout but doesn't strip CSS terminators (`;` / `}`), so a
+  // tampered `ah:font` localStorage entry whose family contains
+  // `Inter; } body{display:none} a{` would otherwise inject sibling
+  // rules into both the inline `style=` and the document `<style>`
+  // block. Same value-side sanitiser the CSS / SVG generators use.
+  const safeFamily = cssValueSafe(fontFamily) || 'system-ui, sans-serif';
+  const textFontStyle = `font: 700 64px/1.1 ${safeFamily}`;
   if (c.target === 'text') {
     const text = escapeHtml(c.text ?? 'Animate');
     if (c.stagger) {
@@ -104,9 +112,14 @@ export function generateHtml(
   const fontLink = fontHref
     ? `\n  <link rel="stylesheet" href="${escapeHtml(fontHref)}">`
     : '';
-  // Body inherits the font-family so non-text targets still pick it up if
-  // the user adds extra content around the export later.
-  const safeBodyFontFamily = escapeHtml(fontFamily);
+  // Body inherits the font-family so non-text targets still pick it up
+  // if the user adds extra content around the export later. Sanitise
+  // first via cssValueSafe (strips CSS terminators that escapeHtml
+  // misses) — then escapeHtml as belt-and-suspenders for the
+  // surrounding HTML context.
+  const safeBodyFontFamily = escapeHtml(
+    cssValueSafe(fontFamily) || 'system-ui, sans-serif'
+  );
 
   return `<!doctype html>
 <html lang="en">

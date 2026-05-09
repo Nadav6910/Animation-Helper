@@ -3,6 +3,7 @@ import { easingToCss } from './easings';
 import { sanitisePathD } from './svgPathSafety';
 import {
   GRADIENT_RE,
+  cssValueSafe,
   durationStr,
   deg,
   firstColorStop,
@@ -60,7 +61,13 @@ export function filterToCss(k: Keyframe): string | null {
   if (typeof k.hueRotate === 'number' && k.hueRotate !== 0) {
     parts.push(`hue-rotate(${num(k.hueRotate)}deg)`);
   }
-  if (k.dropShadow) parts.push(`drop-shadow(${k.dropShadow})`);
+  if (k.dropShadow) {
+    // Same security rationale as `color` / `bg` — strip declaration-
+    // breakout characters before embedding the user string inside the
+    // `drop-shadow(…)` functional. cssValueSafe preserves parens /
+    // commas so a real shadow like "0 4px 8px rgba(0,0,0,.3)" survives.
+    parts.push(`drop-shadow(${cssValueSafe(k.dropShadow)})`);
+  }
   return parts.length ? parts.join(' ') : null;
 }
 
@@ -73,25 +80,34 @@ function declarationsForKeyframe(
   if (transform) decls.push(`transform: ${transform};`);
   if (typeof k.opacity === 'number') decls.push(`opacity: ${num(k.opacity)};`);
   if (k.color) {
-    if (GRADIENT_RE.test(k.color) && target === 'text') {
+    // User-supplied colour / gradient strings flow straight into rule
+    // bodies — sanitise via `cssValueSafe` so a value like
+    // `"red; } body{display:none}"` can't break out of its
+    // declaration and inject sibling rules into the host stylesheet.
+    // Especially load-bearing for the animated-SVG export path which
+    // can be inlined into HTML where `</style>` would otherwise let
+    // a script tag escape into the document.
+    const safeColor = cssValueSafe(k.color);
+    if (GRADIENT_RE.test(safeColor) && target === 'text') {
       // CSS doesn't allow gradients on `color` directly; the
       // background-clip: text trick clips a gradient background to the
       // text glyphs while making the actual color transparent.
-      decls.push(`background: ${k.color};`);
+      decls.push(`background: ${safeColor};`);
       decls.push(`background-clip: text;`);
       decls.push(`-webkit-background-clip: text;`);
       decls.push(`color: transparent;`);
-    } else if (GRADIENT_RE.test(k.color)) {
+    } else if (GRADIENT_RE.test(safeColor)) {
       // Gradient fill is text-only; for shapes / SVG fall back to the
       // first stop so the element still renders.
-      decls.push(`color: ${firstColorStop(k.color)};`);
+      decls.push(`color: ${firstColorStop(safeColor)};`);
     } else {
-      decls.push(`color: ${k.color};`);
+      decls.push(`color: ${safeColor};`);
     }
   }
   if (k.bg) {
-    const prop = GRADIENT_RE.test(k.bg) ? 'background' : 'background-color';
-    decls.push(`${prop}: ${k.bg};`);
+    const safeBg = cssValueSafe(k.bg);
+    const prop = GRADIENT_RE.test(safeBg) ? 'background' : 'background-color';
+    decls.push(`${prop}: ${safeBg};`);
   }
   const filter = filterToCss(k);
   if (filter) decls.push(`filter: ${filter};`);
@@ -114,21 +130,39 @@ function sortedKeyframes(kfs: Keyframe[]): Keyframe[] {
 export type GenerateCssOptions = {
   name?: string;
   indent?: string;
+  /** When true, emit timing slots (duration / easing / delay /
+   *  iterations) as CSS variables on the rule and reference them via
+   *  `var(--ah-...)` in the animation shorthand, so consumers can
+   *  override timing without editing the @keyframes. Defaults to
+   *  literal values. */
+  cssVars?: boolean;
 };
 
 /** The `animation: ...` shorthand value (everything after `animation:`),
- *  ready to drop into a CSS rule body or a styled-components template. */
+ *  ready to drop into a CSS rule body or a styled-components template.
+ *  In `cssVars` mode this returns just the animation-name — the timing
+ *  slots are emitted as separate `animation-*` longhands by
+ *  `buildRuleDeclLines`, which reference the `--ah-*` variables. The
+ *  shorthand can't carry `var()` in positional slots because the CSS
+ *  parser would have to bind by type at compute-time and inter-slot
+ *  ambiguity (e.g. `var(--ah-iterations)` resolving to a duration)
+ *  makes the result browser-dependent. Longhands have one slot per
+ *  property, so the binding is unambiguous. */
 export function buildAnimationShorthand(
   c: AnimationConfig,
-  name = 'play'
+  name = 'play',
+  opts: { cssVars?: boolean } = {}
 ): string {
+  if (opts.cssVars) {
+    return name;
+  }
+  const dirLit = c.direction !== 'normal' ? ` ${c.direction}` : '';
+  const fillLit = c.fill !== 'none' ? ` ${c.fill}` : '';
   const easing = easingToCss(c.easing);
   const dur = durationStr(c.duration);
   const delay = c.delay ? ` ${durationStr(c.delay)}` : ' 0s';
   const iter = ` ${iterationsStr(c.iterations)}`;
-  const dir = c.direction !== 'normal' ? ` ${c.direction}` : '';
-  const fill = c.fill !== 'none' ? ` ${c.fill}` : '';
-  return `${name} ${dur} ${easing}${delay}${iter}${dir}${fill}`.trim();
+  return `${name} ${dur} ${easing}${delay}${iter}${dirLit}${fillLit}`.trim();
 }
 
 /** Lines that belong inside the animated element's rule body (without
@@ -136,12 +170,42 @@ export function buildAnimationShorthand(
  *  by the SCSS @mixin / styled-components / Vue / Svelte wrappers. */
 export function buildRuleDeclLines(
   c: AnimationConfig,
-  opts: { name?: string; indent?: string } = {}
+  opts: { name?: string; indent?: string; cssVars?: boolean } = {}
 ): string[] {
   const indent = opts.indent ?? '  ';
   const name = opts.name ?? 'play';
   const lines: string[] = [];
-  lines.push(`${indent}animation: ${buildAnimationShorthand(c, name)};`);
+  if (opts.cssVars) {
+    // Timing slots as CSS variables — overrideable per-element from
+    // the consumer's stylesheet without touching the @keyframes.
+    lines.push(`${indent}--ah-duration: ${durationStr(c.duration)};`);
+    lines.push(`${indent}--ah-easing: ${easingToCss(c.easing)};`);
+    lines.push(
+      `${indent}--ah-delay: ${c.delay ? durationStr(c.delay) : '0s'};`
+    );
+    lines.push(`${indent}--ah-iterations: ${iterationsStr(c.iterations)};`);
+    // Emit longhands referencing each variable in its own one-slot
+    // property. This is the unambiguous form — the shorthand path
+    // (animation: name var(--a) var(--b) …) makes the parser guess
+    // which longhand each var() binds to, and browsers disagree.
+    lines.push(
+      `${indent}animation-name: ${buildAnimationShorthand(c, name, { cssVars: true })};`
+    );
+    lines.push(`${indent}animation-duration: var(--ah-duration);`);
+    lines.push(`${indent}animation-timing-function: var(--ah-easing);`);
+    lines.push(`${indent}animation-delay: var(--ah-delay);`);
+    lines.push(`${indent}animation-iteration-count: var(--ah-iterations);`);
+    if (c.direction !== 'normal') {
+      lines.push(`${indent}animation-direction: ${c.direction};`);
+    }
+    if (c.fill !== 'none') {
+      lines.push(`${indent}animation-fill-mode: ${c.fill};`);
+    }
+  } else {
+    lines.push(
+      `${indent}animation: ${buildAnimationShorthand(c, name)};`
+    );
+  }
   if (c.target === 'svg') {
     lines.push(`${indent}stroke-dasharray: 100;`);
   }
@@ -190,17 +254,44 @@ export function generateCss(
     );
   }
   lines.push(`${ruleSelector} {`);
-  for (const ln of buildRuleDeclLines(c, { name, indent })) lines.push(ln);
+  for (const ln of buildRuleDeclLines(c, {
+    name,
+    indent,
+    cssVars: opts.cssVars,
+  })) {
+    lines.push(ln);
+  }
   lines.push('}');
   lines.push('');
 
   if (c.stagger && c.target === 'text') {
-    const animationValue = buildAnimationShorthand(c, name);
     lines.push(`${ruleSelector} > span {`);
-    lines.push(`${indent}animation: ${animationValue};`);
-    lines.push(
-      `${indent}animation-delay: calc(var(--i) * ${num(c.stagger.step)}ms);`
-    );
+    if (opts.cssVars) {
+      // Animation properties don't inherit, so the spans need their
+      // own animation longhands. The `--ah-*` variables DO cascade
+      // from the parent rule, so we just reference them — and the
+      // per-letter `animation-delay` overrides the parent's
+      // `var(--ah-delay)` with the staggered offset.
+      lines.push(`${indent}animation-name: ${name};`);
+      lines.push(`${indent}animation-duration: var(--ah-duration);`);
+      lines.push(`${indent}animation-timing-function: var(--ah-easing);`);
+      lines.push(
+        `${indent}animation-delay: calc(var(--i) * ${num(c.stagger.step)}ms);`
+      );
+      lines.push(`${indent}animation-iteration-count: var(--ah-iterations);`);
+      if (c.direction !== 'normal') {
+        lines.push(`${indent}animation-direction: ${c.direction};`);
+      }
+      if (c.fill !== 'none') {
+        lines.push(`${indent}animation-fill-mode: ${c.fill};`);
+      }
+    } else {
+      const animationValue = buildAnimationShorthand(c, name);
+      lines.push(`${indent}animation: ${animationValue};`);
+      lines.push(
+        `${indent}animation-delay: calc(var(--i) * ${num(c.stagger.step)}ms);`
+      );
+    }
     lines.push(`${indent}display: inline-block;`);
     lines.push('}');
     lines.push('');

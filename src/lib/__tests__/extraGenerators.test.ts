@@ -132,7 +132,7 @@ describe('generateHtml', () => {
     expect(out).toContain('Hello');
   });
 
-  it('neutralises </style> inside CSS values to prevent breakout', () => {
+  it('strips angle brackets from CSS values so </style> can\'t break out', () => {
     // Imagine a tampered share URL that injected </style><script>alert(1)
     // into the bg gradient string.
     const out = generateHtml({
@@ -147,18 +147,66 @@ describe('generateHtml', () => {
       ],
     });
     // The output's CSS block sits between the opening <style> and the
-    // single legitimate </style>. Anything inside that block must not
-    // contain a literal </style.
+    // single legitimate </style>. The breakout sequence must not
+    // appear inside that block in any form.
     const cssBlock = out.slice(out.indexOf('<style>'), out.lastIndexOf('</style>'));
     expect(cssBlock).not.toMatch(/<\/style/i);
-    // The neutralised marker is present so we know the input reached the
-    // generator and was rewritten rather than dropped.
-    expect(cssBlock).toContain('<\\/style');
+    expect(cssBlock).not.toContain('<script');
+    // The user's bg DID reach the generator (the `linear-gradient(`
+    // wrapper survives) — but every `<` and `>` inside the value has
+    // been stripped by the value-side CSS sanitiser, defanging the
+    // breakout entirely. No encoded marker, no original — just gone.
+    expect(cssBlock).toContain('linear-gradient(45deg, red 0%');
   });
 
   it('strips invalid characters from custom selector / className', () => {
     const out = generateHtml(cfg, { className: '"><img src=x onerror=alert(1)' });
     expect(out).toContain('class="animated"');
     expect(out).not.toContain('onerror=');
+  });
+});
+
+describe('cssVars round-trip — non-CSS generators', () => {
+  // The cssVars option is wired through SCSS, styled-components, and
+  // animated-SVG (the four CSS-flavoured outputs). This suite asserts
+  // each one emits the longhand animation-* properties + the
+  // --ah-* declarations, mirroring the generateCss test coverage so
+  // any future drift (a generator that quietly stops accepting
+  // cssVars) trips a test instead of silently shipping the literal
+  // form.
+
+  it('generateScss emits the longhand animation properties + --ah-* vars', async () => {
+    const { generateScss } = await import('@/lib/generateScss');
+    const out = generateScss(cfg, { cssVars: true });
+    expect(out).toContain('--ah-duration:');
+    expect(out).toContain('--ah-easing:');
+    expect(out).toContain('--ah-iterations:');
+    expect(out).toContain('animation-name: play;');
+    expect(out).toContain('animation-duration: var(--ah-duration);');
+    expect(out).toContain('animation-iteration-count: var(--ah-iterations);');
+    expect(out).not.toMatch(/^\s*animation:\s/m);
+  });
+
+  it('generateStyledComponents replaces the name token with ${play} on cssVars longhand', async () => {
+    const { generateStyledComponents } = await import(
+      '@/lib/generateStyledComponents'
+    );
+    const out = generateStyledComponents(cfg, { cssVars: true });
+    expect(out).toContain('--ah-duration:');
+    // Crucial: the keyframes ref is interpolated even on the
+    // longhand animation-name property — the rewrite has to handle
+    // both `animation:` and `animation-name:` shapes.
+    expect(out).toContain('animation-name: ${play};');
+    expect(out).toContain('animation-duration: var(--ah-duration);');
+  });
+
+  it('generateAnimatedSvg embeds the longhands inside the SVG style block', async () => {
+    const { generateAnimatedSvg } = await import('@/lib/generateAnimatedSvg');
+    const out = generateAnimatedSvg(cfg, { cssVars: true });
+    // Vars + longhands live inside the inline <style>. The CDATA
+    // wrapper is irrelevant to property correctness here.
+    expect(out).toContain('--ah-duration:');
+    expect(out).toContain('animation-name: play;');
+    expect(out).toContain('animation-duration: var(--ah-duration);');
   });
 });
