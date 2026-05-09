@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, ExternalLink, Film } from 'lucide-react';
+import { Download, ExternalLink, Film, Variable } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
 import { useFontStore } from '@/store/fontStore';
 import { useUiStore } from '@/store/uiStore';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { generateCss } from '@/lib/generateCss';
 import { generateScss } from '@/lib/generateScss';
 import { generateTailwind } from '@/lib/generateTailwind';
@@ -113,10 +114,22 @@ export function CodePanel() {
   const setExportOpen = useUiStore((s) => s.setExportOpen);
   const [format, setFormat] = useState<Format>('css');
   const [toast, setToast] = useState<string | null>(null);
+  // Persisted across reloads so power users don't have to re-flip the
+  // toggle every session. Only meaningful for CSS-flavoured outputs.
+  const [cssVarsOutput, setCssVarsOutput] = useLocalStorage(
+    'ah:css-vars-output',
+    false
+  );
   const { theme } = useTheme();
   const copyRef = useRef<HTMLButtonElement | null>(null);
 
   const meta = FORMATS.find((f) => f.value === format)!;
+  // Only the CSS-flavoured generators understand the cssVars option;
+  // the rest have native idioms (Tailwind keyframes, Framer variants,
+  // WAAPI options, Vue / Svelte scoped styles) where the abstraction
+  // would just add noise.
+  const cssVarsCapable: Format[] = ['css', 'scss', 'styled', 'animsvg'];
+  const cssVarsActive = cssVarsCapable.includes(format) && cssVarsOutput;
   // The HTML export carries the user's chosen font (link tag + body
   // font-family + inline text style) so the downloaded file matches the
   // preview. Other formats are font-agnostic — consumer wires the font
@@ -128,8 +141,19 @@ export function CodePanel() {
         fontHref: font.href,
       });
     }
+    if (cssVarsActive) {
+      // Cast: the FormatRow type is the lowest-common-denominator
+      // (single-arg fn) for the FORMATS table; the CSS-flavoured
+      // generators all accept a second options arg with cssVars. Only
+      // routed here when format is in cssVarsCapable.
+      type CssVarsCapableFn = (
+        config: Parameters<typeof generateCss>[0],
+        opts: { cssVars: true }
+      ) => string;
+      return (meta.fn as unknown as CssVarsCapableFn)(config, { cssVars: true });
+    }
     return meta.fn(config);
-  }, [meta, config, font]);
+  }, [meta, config, font, cssVarsActive]);
 
   useEffect(() => {
     const handler = () => copyRef.current?.click();
@@ -207,6 +231,26 @@ export function CodePanel() {
           >
             <Film size={12} /> Record
           </button>
+          {cssVarsCapable.includes(format) && (
+            <button
+              type="button"
+              onClick={() => setCssVarsOutput((v) => !v)}
+              aria-pressed={cssVarsOutput}
+              title={
+                cssVarsOutput
+                  ? 'Inline literal timing values'
+                  : 'Emit timing as CSS variables (overrideable from your stylesheet)'
+              }
+              className={
+                'inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs focus-ring transition-colors ' +
+                (cssVarsOutput
+                  ? 'border-accent/40 bg-accent/15 text-fg'
+                  : 'border-border/70 bg-bg-soft text-fg-muted hover:text-fg')
+              }
+            >
+              <Variable size={12} /> CSS vars
+            </button>
+          )}
           <CopyButton
             ref={copyRef}
             text={code}

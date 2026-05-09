@@ -23,6 +23,9 @@ const TABS: { id: TabId; label: string }[] = [
 
 export function PresetGallery() {
   const [tab, setTab] = useState<TabId>('entrance');
+  // Track the last preset Surprise-me dished out so we never roll the
+  // same one two clicks in a row — feels broken when it happens.
+  const [lastSurpriseId, setLastSurpriseId] = useState<string | null>(null);
   const applyPreset = useAnimationStore((s) => s.applyPreset);
   const resetAll = useAnimationStore((s) => s.resetAll);
   const saved = useSavedPresetsStore((s) => s.saved);
@@ -47,7 +50,8 @@ export function PresetGallery() {
     }, [tab, saved]);
 
   const onSurprise = () => {
-    const p = randomPreset();
+    const p = randomPreset(lastSurpriseId ?? undefined);
+    setLastSurpriseId(p.id);
     applyPreset(p.build());
   };
 

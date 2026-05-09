@@ -27,6 +27,9 @@ export type GenerateAnimatedSvgOptions = {
   /** Pixel width / height of the resulting SVG. Defaults to 240×240 to
    *  match the live preview's intrinsic size. */
   size?: number;
+  /** Mirror of generateCss's cssVars flag — emit timing slots as CSS
+   *  variables on the rule and reference them from the shorthand. */
+  cssVars?: boolean;
 };
 
 /**
@@ -49,7 +52,11 @@ export function generateAnimatedSvg(
   // Build the rule body and keyframes via the canonical IR helpers so a
   // future generator change ripples through this output too. The selector
   // `.${className}` matches the actual rendered element below.
-  const ruleLines = buildRuleDeclLines(c, { name: animationName, indent: '  ' });
+  const ruleLines = buildRuleDeclLines(c, {
+    name: animationName,
+    indent: '  ',
+    cssVars: opts.cssVars,
+  });
   const keyframesBody = buildKeyframesBody(c, { indent: '    ' });
   const ruleCss = `.${className} {\n${ruleLines.join('\n')}\n}\n@keyframes ${animationName} {\n${keyframesBody}\n}`;
   const css = cssBlockSafe(ruleCss);

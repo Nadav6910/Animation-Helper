@@ -7,6 +7,7 @@ import {
 
 export type GenerateStyledComponentsOptions = {
   componentName?: string;
+  cssVars?: boolean;
 };
 
 /**
@@ -26,8 +27,12 @@ export function generateStyledComponents(
   // so the styled-components keyframes ref (`${play}`) lands in place of
   // the static name. Everything else (offset-path, stroke-dasharray) is
   // untouched.
-  const decls = buildRuleDeclLines(c, { name: animationName, indent: '  ' });
-  const animationLine = `  animation: ${buildAnimationShorthand(c, animationName)};`;
+  const decls = buildRuleDeclLines(c, {
+    name: animationName,
+    indent: '  ',
+    cssVars: opts.cssVars,
+  });
+  const animationLine = `  animation: ${buildAnimationShorthand(c, animationName, { cssVars: opts.cssVars })};`;
   const ruleBody = decls
     .map((line) =>
       line === animationLine

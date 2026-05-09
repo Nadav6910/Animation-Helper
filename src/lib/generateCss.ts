@@ -114,21 +114,35 @@ function sortedKeyframes(kfs: Keyframe[]): Keyframe[] {
 export type GenerateCssOptions = {
   name?: string;
   indent?: string;
+  /** When true, emit timing slots (duration / easing / delay /
+   *  iterations) as CSS variables on the rule and reference them via
+   *  `var(--ah-...)` in the animation shorthand, so consumers can
+   *  override timing without editing the @keyframes. Defaults to
+   *  literal values. */
+  cssVars?: boolean;
 };
 
 /** The `animation: ...` shorthand value (everything after `animation:`),
  *  ready to drop into a CSS rule body or a styled-components template. */
 export function buildAnimationShorthand(
   c: AnimationConfig,
-  name = 'play'
+  name = 'play',
+  opts: { cssVars?: boolean } = {}
 ): string {
+  const dirLit = c.direction !== 'normal' ? ` ${c.direction}` : '';
+  const fillLit = c.fill !== 'none' ? ` ${c.fill}` : '';
+  if (opts.cssVars) {
+    // Reference the rule-level CSS variables emitted by
+    // buildRuleDeclLines. Direction / fill stay literal — they're
+    // categorical and rarely tuned at runtime, and var() in those
+    // positions makes the shorthand harder to scan.
+    return `${name} var(--ah-duration) var(--ah-easing) var(--ah-delay) var(--ah-iterations)${dirLit}${fillLit}`.trim();
+  }
   const easing = easingToCss(c.easing);
   const dur = durationStr(c.duration);
   const delay = c.delay ? ` ${durationStr(c.delay)}` : ' 0s';
   const iter = ` ${iterationsStr(c.iterations)}`;
-  const dir = c.direction !== 'normal' ? ` ${c.direction}` : '';
-  const fill = c.fill !== 'none' ? ` ${c.fill}` : '';
-  return `${name} ${dur} ${easing}${delay}${iter}${dir}${fill}`.trim();
+  return `${name} ${dur} ${easing}${delay}${iter}${dirLit}${fillLit}`.trim();
 }
 
 /** Lines that belong inside the animated element's rule body (without
@@ -136,12 +150,24 @@ export function buildAnimationShorthand(
  *  by the SCSS @mixin / styled-components / Vue / Svelte wrappers. */
 export function buildRuleDeclLines(
   c: AnimationConfig,
-  opts: { name?: string; indent?: string } = {}
+  opts: { name?: string; indent?: string; cssVars?: boolean } = {}
 ): string[] {
   const indent = opts.indent ?? '  ';
   const name = opts.name ?? 'play';
   const lines: string[] = [];
-  lines.push(`${indent}animation: ${buildAnimationShorthand(c, name)};`);
+  if (opts.cssVars) {
+    // Timing slots as CSS variables — overrideable per-element from
+    // the consumer's stylesheet without touching the @keyframes.
+    lines.push(`${indent}--ah-duration: ${durationStr(c.duration)};`);
+    lines.push(`${indent}--ah-easing: ${easingToCss(c.easing)};`);
+    lines.push(
+      `${indent}--ah-delay: ${c.delay ? durationStr(c.delay) : '0s'};`
+    );
+    lines.push(`${indent}--ah-iterations: ${iterationsStr(c.iterations)};`);
+  }
+  lines.push(
+    `${indent}animation: ${buildAnimationShorthand(c, name, { cssVars: opts.cssVars })};`
+  );
   if (c.target === 'svg') {
     lines.push(`${indent}stroke-dasharray: 100;`);
   }
@@ -190,12 +216,20 @@ export function generateCss(
     );
   }
   lines.push(`${ruleSelector} {`);
-  for (const ln of buildRuleDeclLines(c, { name, indent })) lines.push(ln);
+  for (const ln of buildRuleDeclLines(c, {
+    name,
+    indent,
+    cssVars: opts.cssVars,
+  })) {
+    lines.push(ln);
+  }
   lines.push('}');
   lines.push('');
 
   if (c.stagger && c.target === 'text') {
-    const animationValue = buildAnimationShorthand(c, name);
+    const animationValue = buildAnimationShorthand(c, name, {
+      cssVars: opts.cssVars,
+    });
     lines.push(`${ruleSelector} > span {`);
     lines.push(`${indent}animation: ${animationValue};`);
     lines.push(

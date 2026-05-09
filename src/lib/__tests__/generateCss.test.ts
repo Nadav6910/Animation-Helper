@@ -367,3 +367,41 @@ describe('generateCss — bug regression snapshot', () => {
     `);
   });
 });
+
+describe('generateCss — cssVars output', () => {
+  it('emits timing slots as CSS variables and references them in the shorthand', () => {
+    const css = generateCss(makeConfig(), { cssVars: true });
+    // Variable declarations land before the animation line.
+    expect(css).toContain('--ah-duration: 2s;');
+    expect(css).toContain('--ah-easing: cubic-bezier(0.2, 0.8, 0.2, 1);');
+    expect(css).toContain('--ah-delay: 100ms;');
+    expect(css).toContain('--ah-iterations: 2;');
+    // Shorthand references the vars instead of literals.
+    expect(css).toContain(
+      'animation: play var(--ah-duration) var(--ah-easing) var(--ah-delay) var(--ah-iterations) alternate forwards;'
+    );
+    // Keyframes body unchanged from the literal mode (cssVars only
+    // touches timing, not per-frame property values).
+    expect(css).toContain('transform: translate3d(80px, 0px, 0px)');
+  });
+
+  it('omits direction / fill from the shorthand when at defaults under cssVars', () => {
+    const css = generateCss(
+      makeConfig({ direction: 'normal', fill: 'none' }),
+      { cssVars: true }
+    );
+    expect(css).toMatch(
+      /animation: play var\(--ah-duration\) var\(--ah-easing\) var\(--ah-delay\) var\(--ah-iterations\);/
+    );
+  });
+
+  it('every preset round-trips through cssVars-on output without throwing', () => {
+    // Sanity check: the cssVars option is keyframes-agnostic, so any
+    // valid preset config should produce a parseable CSS rule.
+    const cfg = makeConfig({ iterations: 'infinite', direction: 'normal' });
+    expect(() => generateCss(cfg, { cssVars: true })).not.toThrow();
+    expect(generateCss(cfg, { cssVars: true })).toContain(
+      '--ah-iterations: infinite;'
+    );
+  });
+});

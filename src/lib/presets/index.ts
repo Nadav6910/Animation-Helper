@@ -32,9 +32,22 @@ export function presetsByCategory(category: PresetCategory): Preset[] {
   return PRESETS.filter((p) => p.category === category);
 }
 
-export function randomPreset(rand: () => number = Math.random): Preset {
-  const i = Math.floor(rand() * PRESETS.length);
-  return PRESETS[i];
+/**
+ * Pick a random preset, optionally avoiding `excludeId` so consecutive
+ * Surprise-me clicks never produce the same preset twice in a row.
+ * Falls back to the full pool if excludeId isn't found or PRESETS only
+ * has one entry.
+ */
+export function randomPreset(
+  excludeId?: string,
+  rand: () => number = Math.random
+): Preset {
+  const pool =
+    excludeId && PRESETS.length > 1
+      ? PRESETS.filter((p) => p.id !== excludeId)
+      : PRESETS;
+  const i = Math.floor(rand() * pool.length);
+  return pool[i];
 }
 
 export function buildPreset(id: string): AnimationConfig | null {
