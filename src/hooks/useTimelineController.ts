@@ -136,15 +136,20 @@ export function useTimelineController(
       if (first && typeof first.currentTime === 'number') {
         missingFrames = 0;
         setReady(true);
-        setCurrentTime(first.currentTime);
-        // For staggered groups (one Animation per letter) every letter
-        // shares the same wall-clock currentTime but enters its
-        // after-phase at a different time because of its
-        // animation-delay. Only count the group as "all stopped" when
-        // EVERY Animation reports finished; otherwise the late letters
-        // would freeze mid-frame the instant the first completes.
         const allFinished = anims.every((a) => a.playState === 'finished');
         const paused = first.playState === 'paused';
+        // Only mirror currentTime when the animation is actively
+        // advancing. For paused / finished states the WAAPI value
+        // SHOULD be static (and equal to React's mirror) — but some
+        // browsers drift the hold-time after a racy pause-then-seek
+        // sequence, and mirroring that drift back to React would
+        // clobber the user's scrub position right before they hit
+        // play. React's mirror already reflects every explicit
+        // pause / seek call we made, so leaving it alone while paused
+        // is the safe move.
+        if (!paused && !allFinished) {
+          setCurrentTime(first.currentTime);
+        }
         setIsPlaying(!allFinished && !paused);
       } else {
         // Animation reaped — finite CSS animations with fill:none get
