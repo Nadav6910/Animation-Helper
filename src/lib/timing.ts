@@ -1,14 +1,29 @@
 import type { AnimationConfig } from '@/types/animation';
 
 /**
- * Total wall-clock length of one full play of a config — delay + duration *
- * iteration count. Infinite presets render as one iteration so the timeline
- * still has a finite ruler to scrub against; once the user reaches the end
- * the animation visually loops at offset 0.
+ * Total wall-clock length the timeline covers — `delay + duration ×
+ * iterations`, with one wrinkle for infinite presets:
+ *
+ * Infinite renders ONE perceptual loop. For `direction: alternate` /
+ * `alternate-reverse`, one perceptual loop is forward + reverse — two
+ * iterations of `duration`. For `normal` / `reverse` it's one
+ * iteration. This matches the user's intuition that the timeline goes
+ * `0 → 100%` exactly once per visible loop, instead of `0 → 100%` once
+ * per iteration (which for alternate animations meant the playhead
+ * raced across the bar twice per visible cycle).
+ *
+ * Finite iterations use the literal count regardless of direction —
+ * the user explicitly chose "play this 3 times" so 3× duration is
+ * what the timeline shows.
  */
 export function totalDuration(c: AnimationConfig): number {
   const delay = Number.isFinite(c.delay) && c.delay > 0 ? c.delay : 0;
   const dur = Number.isFinite(c.duration) && c.duration > 0 ? c.duration : 0;
+  if (c.iterations === 'infinite') {
+    const isAlternate =
+      c.direction === 'alternate' || c.direction === 'alternate-reverse';
+    return delay + dur * (isAlternate ? 2 : 1);
+  }
   const iter =
     typeof c.iterations === 'number' && Number.isFinite(c.iterations) && c.iterations > 0
       ? c.iterations

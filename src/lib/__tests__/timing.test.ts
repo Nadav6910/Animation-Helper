@@ -38,6 +38,27 @@ describe('totalDuration', () => {
     expect(totalDuration(cfg({ duration: -500, delay: 0, iterations: 1 }))).toBe(0);
     expect(totalDuration(cfg({ duration: 1000, delay: 0, iterations: 0 }))).toBe(1000);
   });
+
+  it('doubles infinite-loop duration for alternate directions (one perceptual loop = forward + reverse)', () => {
+    expect(
+      totalDuration(
+        cfg({ duration: 1500, iterations: 'infinite', direction: 'alternate' })
+      )
+    ).toBe(3000);
+    expect(
+      totalDuration(
+        cfg({ duration: 1500, iterations: 'infinite', direction: 'alternate-reverse' })
+      )
+    ).toBe(3000);
+  });
+
+  it('does not double for finite alternate runs — uses the literal iteration count', () => {
+    expect(
+      totalDuration(
+        cfg({ duration: 1000, iterations: 3, direction: 'alternate' })
+      )
+    ).toBe(3000);
+  });
 });
 
 describe('clampTime', () => {
