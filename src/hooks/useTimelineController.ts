@@ -185,21 +185,35 @@ export function useTimelineController(
       }
       return;
     }
-    // Re-pin the WAAPI Animation to the React-mirrored playhead before
-    // resuming. Background: pause() + currentTime=ms in rapid sequence
-    // (which is exactly what scrub-while-playing does) leaves the
-    // browser with a pending pause task. Some browsers compute the
-    // hold time from the pre-seek timeline state when that task runs,
-    // overriding the immediate currentTime set we did during seek().
-    // Result: a.play() resumes from the pre-drag position, not where
-    // the user dropped the playhead. Re-pinning here at play time is
-    // a no-op for the well-behaved case (mirror is already current)
-    // and a guaranteed fix for the racy case.
+    // Resume playback from the React-mirrored playhead — i.e. wherever
+    // the user last scrubbed. Two pins (before AND after play()) are
+    // needed because of an asymmetry in how WAAPI handles currentTime
+    // writes around the pending-pause → running transition:
+    //
+    //   • The pre-pin sets hold-time on the (paused) animation, which
+    //     is what spec-compliant browsers read during play(). For
+    //     those, the post-pin is a no-op.
+    //
+    //   • Some browsers leave the pause task pending after a quick
+    //     pause-then-seek-then-play sequence and discard the
+    //     pre-play currentTime write, resuming from a stale hold-time
+    //     (= pre-drag position) instead of the seeked one. Once
+    //     play() has transitioned the animation to 'running', a
+    //     currentTime write is unambiguous: it updates the start
+    //     time so the visible playhead jumps to `target` and
+    //     continues forward — bypassing the pending-pause race
+    //     entirely. This is the actual fix for the racy browsers,
+    //     and harmless for the well-behaved ones.
     const target = currentTimeRef.current;
-    if (typeof target === 'number' && Number.isFinite(target)) {
+    const validTarget =
+      typeof target === 'number' && Number.isFinite(target);
+    if (validTarget) {
       for (const a of anims) a.currentTime = target;
     }
     for (const a of anims) a.play();
+    if (validTarget) {
+      for (const a of anims) a.currentTime = target;
+    }
     setIsPlaying(true);
   }, [className]);
 
