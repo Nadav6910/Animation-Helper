@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+# Single-route SPA — no sitemap needed, root is the only crawlable
+# page. The Netlify SPA rewrite serves index.html for everything,
+# but search engines should index the root only.

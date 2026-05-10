@@ -60,6 +60,13 @@ export default defineConfig({
     },
   },
   build: {
+    // Emit `.map` files alongside chunks so DevTools / Sentry / and
+    // Lighthouse's "Missing source maps for large first-party
+    // JavaScript" Best-Practices audit are satisfied. Maps are
+    // separate files (not inlined) so the actual JS payload doesn't
+    // grow — browsers only fetch a `.map` when DevTools is open. Cost
+    // is a few hundred kB extra in the dist directory at deploy time.
+    sourcemap: true,
     rollupOptions: {
       output: {
         // Only split things heavy enough that an isolated chunk pays for
