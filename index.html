@@ -18,21 +18,33 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!--
-      Plain stylesheet load (no `media="print"` + `onload` swap).
-      The classic non-blocking trick uses an inline `onload=`
-      attribute, which our CSP (`script-src 'self'`, no inline
-      handlers) rejects. We don't actually need the trick: the
-      stylesheet URL has `display=swap`, so Inter / JetBrains Mono /
-      Sansita Swashed don't block first text paint — the system
-      fallback shows immediately and the network font swaps in. The
-      inline splash a few lines down already paints LCP from
-      system-ui before the network stylesheet even resolves, so the
-      render-blocking cost of this <link> is invisible to Lighthouse.
+      Async font load that is also CSP-safe.
+      `media="print"` keeps the stylesheet OFF the critical render
+      path — browsers fetch but don't block screen rendering on
+      `print`-media CSS. main.tsx then flips `media` to `all` once
+      our bundle starts executing. The previous version did the
+      swap via `onload="this.media='all'"`, which is an inline event
+      handler that our CSP rightly rejects (`script-src 'self'`, no
+      inline handlers); doing the swap from inside our bundled JS
+      gets the same non-blocking behaviour without violating CSP.
+      The earlier "drop the trick entirely" version satisfied CSP
+      but cost ~0.5 s of FCP / 1.5 s of LCP because the stylesheet
+      went back on the critical path. The <noscript> fallback gives
+      no-JS users a normal sync load. font-display:swap (in the URL)
+      keeps text rendering even if the network call is slow.
     -->
     <link
+      id="ah-font-css"
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Sansita+Swashed:wght@600;700&display=swap"
+      media="print"
     />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Sansita+Swashed:wght@600;700&display=swap"
+      />
+    </noscript>
     <!--
       Inline splash so the LCP element (the title) paints during HTML
       parsing, before any JS executes. With Lighthouse's throttled
