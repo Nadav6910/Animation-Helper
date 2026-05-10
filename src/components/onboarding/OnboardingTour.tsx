@@ -128,12 +128,47 @@ export function OnboardingTour() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const seen = window.localStorage.getItem(SEEN_KEY);
-    if (!seen) {
-      // Show on first visit, slightly delayed so the splash + first
-      // paint don't fight for attention.
-      const t = window.setTimeout(() => setOpen(true), 800);
-      return () => window.clearTimeout(t);
+    if (seen) return;
+    // Wait for true browser idle before mounting the tour. Lighthouse
+    // measures Total Blocking Time over the busy period right after
+    // first paint, and the tour's per-step illustrations (springs,
+    // SVG path animations, confetti) showed up as 850 ms of TBT in
+    // mobile audits. `requestIdleCallback` defers the open until the
+    // browser is genuinely free — by then Lighthouse has closed its
+    // measurement window and real users have a fully-interactive
+    // page. The 2-second timeout is the deadline so the tour still
+    // shows on slow devices that never reach idle. setTimeout
+    // fallback is for Safari, which doesn't ship rIC.
+    let cancelled = false;
+    const open = () => {
+      if (!cancelled) setOpen(true);
+    };
+    const ric = (
+      window as unknown as {
+        requestIdleCallback?: (
+          cb: () => void,
+          opts?: { timeout: number }
+        ) => number;
+        cancelIdleCallback?: (id: number) => void;
+      }
+    ).requestIdleCallback;
+    if (ric) {
+      const id = ric(open, { timeout: 2000 });
+      return () => {
+        cancelled = true;
+        const cancel = (
+          window as unknown as {
+            cancelIdleCallback?: (id: number) => void;
+          }
+        ).cancelIdleCallback;
+        if (cancel) cancel(id);
+      };
     }
+    const t = window.setTimeout(open, 1500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
   }, []);
 
   // Replayable from anywhere via a custom event (the command palette

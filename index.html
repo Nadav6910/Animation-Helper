@@ -18,26 +18,21 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!--
-      Async font load: `media="print"` makes the stylesheet non-render-
-      blocking; the onload handler swaps it back to `all` once it's
-      downloaded. The <noscript> fallback gives no-JS users the same
-      sync load they'd get without this trick. font-display:swap (in
-      the URL) means text paints in the system fallback first and
-      re-renders once Inter / JetBrains Mono / Sansita Swashed are
-      ready, so the FCP / LCP land before the network fonts arrive.
+      Plain stylesheet load (no `media="print"` + `onload` swap).
+      The classic non-blocking trick uses an inline `onload=`
+      attribute, which our CSP (`script-src 'self'`, no inline
+      handlers) rejects. We don't actually need the trick: the
+      stylesheet URL has `display=swap`, so Inter / JetBrains Mono /
+      Sansita Swashed don't block first text paint — the system
+      fallback shows immediately and the network font swaps in. The
+      inline splash a few lines down already paints LCP from
+      system-ui before the network stylesheet even resolves, so the
+      render-blocking cost of this <link> is invisible to Lighthouse.
     -->
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Sansita+Swashed:wght@600;700&display=swap"
-      media="print"
-      onload="this.media='all'"
     />
-    <noscript>
-      <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Sansita+Swashed:wght@600;700&display=swap"
-      />
-    </noscript>
     <!--
       Inline splash so the LCP element (the title) paints during HTML
       parsing, before any JS executes. With Lighthouse's throttled
