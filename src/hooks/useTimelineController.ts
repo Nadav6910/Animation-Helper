@@ -247,11 +247,37 @@ export function useTimelineController(
       setIsPlaying(false);
       return;
     }
+    // Snapshot currentTime BEFORE calling pause(). The WAAPI spec
+    // schedules a "pending pause task" that finalises the hold-time
+    // when it later runs; depending on browser, the holdTime can
+    // land at the running currentTime AT THE TIME THE TASK RUNS,
+    // not at the time pause() was called. Combined with compositor
+    // lead (GPU-driven CSS animations render slightly ahead of the
+    // main-thread WAAPI clock), the settled holdTime can be visibly
+    // behind where the user saw the shape when they clicked, and
+    // the visual snaps backward when the compositor stops.
+    //
+    // Re-pinning each Animation's currentTime to the snapshot
+    // forces the holdTime to exactly the value we observed at
+    // click-time, eliminating the pending-pause drift.
+    const captured: (number | null)[] = anims.map((a) => {
+      const t = a.currentTime;
+      return typeof t === 'number' && Number.isFinite(t) ? t : null;
+    });
     for (const a of anims) a.pause();
+    for (let i = 0; i < anims.length; i++) {
+      const t = captured[i];
+      if (t !== null) anims[i].currentTime = t;
+    }
     setIsPlaying(false);
-    const first = anims[0];
-    if (first && typeof first.currentTime === 'number') {
-      setCurrentTime(first.currentTime);
+    const firstSnapshot = captured[0];
+    if (firstSnapshot !== null) {
+      setCurrentTime(firstSnapshot);
+    } else {
+      const first = anims[0];
+      if (first && typeof first.currentTime === 'number') {
+        setCurrentTime(first.currentTime);
+      }
     }
   }, [className]);
 
