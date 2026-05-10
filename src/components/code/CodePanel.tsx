@@ -268,7 +268,7 @@ export function CodePanel() {
             onClick={() => setExportOpen(true)}
             title="Export as MP4 / WebM / GIF"
             aria-label="Record video / GIF"
-            className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-accent/40 bg-accent/10 px-2.5 text-xs text-fg hover:bg-accent/15 focus-ring"
+            className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-bg-soft px-2.5 text-xs text-fg-muted hover:text-fg focus-ring"
           >
             <Film size={12} />
             <span className="hidden sm:inline">Record</span>
