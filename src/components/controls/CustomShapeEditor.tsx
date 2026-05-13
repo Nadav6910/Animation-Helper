@@ -1,9 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Trash2 } from 'lucide-react';
+import { Check, Copy, Trash2 } from 'lucide-react';
 import { PolygonEditor } from './PolygonEditor';
-import { defaultPolygon, type ClipPathPoint } from '@/lib/clipPath';
+import { defaultPolygon, pointsToClipPath, type ClipPathPoint } from '@/lib/clipPath';
 import { useCustomShapesStore } from '@/store/customShapesStore';
+import { useUiStore } from '@/store/uiStore';
+import { copyToClipboard } from '@/lib/clipboard';
 import type { CustomShape, CustomShapeId } from '@/types/animation';
 import { cn } from '@/lib/cn';
 
@@ -55,6 +57,20 @@ export function CustomShapeEditor({
   const add = useCustomShapesStore((s) => s.add);
   const update = useCustomShapesStore((s) => s.update);
   const remove = useCustomShapesStore((s) => s.remove);
+  const showToast = useUiStore((s) => s.showToast);
+  const [justCopied, setJustCopied] = useState(false);
+  const copyTimerRef = useRef<number | null>(null);
+
+  // Clear the pending check-icon timer on unmount so we don't call
+  // setJustCopied on a stale component if the user closes the editor
+  // within the 1.5s feedback window.
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
 
   const [name, setName] = useState(() => editing?.name ?? '');
   const [points, setPoints] = useState<ClipPathPoint[]>(() =>
@@ -138,6 +154,31 @@ export function CustomShapeEditor({
 
   const canSave = points.length >= 3 && name.trim().length > 0;
 
+  // Copy the live polygon as a CSS declaration (not just the
+  // function value) so users can paste it directly into any CSS
+  // rule. The declaration form is also self-documenting compared to
+  // a bare `polygon(...)` string.
+  const handleCopyClipPath = async () => {
+    if (points.length < 3) return;
+    const declaration = `clip-path: ${pointsToClipPath(points)};`;
+    const ok = await copyToClipboard(declaration);
+    if (!ok) {
+      showToast('Clipboard unavailable', 'error');
+      return;
+    }
+    showToast('Shape copied to clipboard');
+    setJustCopied(true);
+    // Tracked in a ref so a rapid double-tap doesn't leave a stale
+    // timeout flipping the icon back mid-feedback.
+    if (copyTimerRef.current !== null) {
+      window.clearTimeout(copyTimerRef.current);
+    }
+    copyTimerRef.current = window.setTimeout(() => {
+      setJustCopied(false);
+      copyTimerRef.current = null;
+    }, 1500);
+  };
+
   return (
     <motion.div
       ref={containerRef}
@@ -154,13 +195,33 @@ export function CustomShapeEditor({
           <h3 id={titleId} className="text-[12px] font-semibold text-fg">
             {editing ? 'Edit shape' : 'Create custom shape'}
           </h3>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="text-[11px] text-fg-muted hover:text-fg focus-ring rounded px-1 py-0.5"
-          >
-            Cancel
-          </button>
+          <div className="flex items-center gap-1">
+            {/* Copy the live polygon as a `clip-path: polygon(...);`
+                declaration so users can paste the shape into any
+                CSS rule. Disabled until the polygon has at least
+                3 vertices so the copied value is well-formed. */}
+            <button
+              type="button"
+              onClick={handleCopyClipPath}
+              disabled={points.length < 3}
+              aria-label="Copy clip-path declaration to clipboard"
+              title="Copy clip-path declaration"
+              className="grid h-6 w-6 place-items-center rounded text-fg-muted hover:bg-bg-panel hover:text-fg focus-ring transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-muted"
+            >
+              {justCopied ? (
+                <Check size={12} className="text-emerald-400" />
+              ) : (
+                <Copy size={12} />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="text-[11px] text-fg-muted hover:text-fg focus-ring rounded px-1 py-0.5"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-col gap-1.5">

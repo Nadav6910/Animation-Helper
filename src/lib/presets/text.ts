@@ -62,19 +62,27 @@ export const TEXT_PRESETS: Preset[] = [
     description: 'Letters snap on one at a time at a brisk pace',
     build: () => ({
       target: 'text', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
-      iterations: 1, direction: 'normal', fill: 'forwards',
-      // steps(1, end) snaps opacity 0 → 1 at the end of each letter's
-      // duration with no in-between blend. Combined with a stagger
-      // step matching the duration, letters appear strictly in
-      // sequence — the classic typewriter cadence. 90 ms per letter
-      // matches a brisk real-world typing speed without dragging on
-      // long phrases.
+      iterations: 1, direction: 'normal', fill: 'both',
+      // steps(1, jump-start) snaps to the END value (opacity 1) at
+      // the very START of each letter's duration and holds — so once
+      // the letter's stagger delay expires the letter is instantly
+      // visible. fill: both is critical: the BACKWARDS half ensures
+      // the letter is hidden DURING its delay (not at the static
+      // default of opacity 1), which is the classic typewriter
+      // off-then-on cadence. The previous (jump: 'end' + fill:
+      // forwards) combination did the opposite — letters were
+      // visible during the delay, briefly flashed off during their
+      // animation phase, then snapped back on. That reads as a
+      // glitch wave, not a typewriter.
+      //
+      // 90 ms per letter matches a brisk real-world typing speed
+      // without dragging on long phrases.
       keyframes: [
         { id: uid(), at: 0, opacity: 0, transform: { ...blank() } },
         { id: uid(), at: 100, opacity: 1, transform: { ...blank() } },
       ],
       duration: 90, delay: 0,
-      easing: { kind: 'steps', n: 1, jump: 'end' },
+      easing: { kind: 'steps', n: 1, jump: 'start' },
       stagger: { step: 90 },
     }),
   },
