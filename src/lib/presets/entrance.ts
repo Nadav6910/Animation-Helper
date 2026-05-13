@@ -29,6 +29,7 @@ export const ENTRANCE_PRESETS: Preset[] = [
     id: 'slide-up-fade',
     name: 'Slide up · fade',
     category: 'entrance',
+    description: 'Rises from below with a soft opacity fade',
     build: () => ({
       ...baseShape(),
       keyframes: [
@@ -44,6 +45,7 @@ export const ENTRANCE_PRESETS: Preset[] = [
     id: 'slide-left-fade',
     name: 'Slide left · fade',
     category: 'entrance',
+    description: 'Slides in from the right with a fade',
     build: () => ({
       ...baseShape(),
       keyframes: [
@@ -59,6 +61,7 @@ export const ENTRANCE_PRESETS: Preset[] = [
     id: 'zoom-in',
     name: 'Zoom in',
     category: 'entrance',
+    description: 'Scales up from small with a touch of overshoot',
     build: () => ({
       ...baseShape(),
       keyframes: [
@@ -74,6 +77,7 @@ export const ENTRANCE_PRESETS: Preset[] = [
     id: 'blur-in',
     name: 'Blur in',
     category: 'entrance',
+    description: 'Resolves out of a soft blur with fade',
     build: () => ({
       ...baseShape(),
       keyframes: [
@@ -89,6 +93,7 @@ export const ENTRANCE_PRESETS: Preset[] = [
     id: 'flip-in',
     name: 'Flip in',
     category: 'entrance',
+    description: 'X-axis card flip with overshoot',
     build: () => ({
       ...baseShape(),
       keyframes: [
@@ -104,6 +109,7 @@ export const ENTRANCE_PRESETS: Preset[] = [
     id: 'drop-in',
     name: 'Drop in',
     category: 'entrance',
+    description: 'Falls from above and bounces into place',
     build: () => ({
       ...baseShape(),
       keyframes: [
@@ -114,6 +120,63 @@ export const ENTRANCE_PRESETS: Preset[] = [
       duration: 1400,
       delay: 0,
       easing: { kind: 'cubic', v: [0.34, 1.56, 0.64, 1] },
+    }),
+  },
+  {
+    id: 'rise-rotate',
+    name: 'Rise · rotate',
+    category: 'entrance',
+    description: 'Rises from below with a gentle quarter turn',
+    build: () => ({
+      ...baseShape(),
+      // rotate3d around the Z axis (the screen's normal) gives a flat
+      // in-plane rotation, distinct from flip-in's X-axis flip. Combined
+      // with a vertical rise this reads as a "spinning into place" entry.
+      keyframes: [
+        { id: uid(), at: 0, opacity: 0, transform: { ...blank(), translate: [0, 36], rotate3d: { x: 0, y: 0, z: 1, deg: -45 } } },
+        { id: uid(), at: 100, opacity: 1, transform: { ...blank() } },
+      ],
+      duration: 1100,
+      delay: 0,
+      easing: { kind: 'cubic', v: [0.16, 1, 0.3, 1] },
+    }),
+  },
+  {
+    id: 'fold-down',
+    name: 'Fold down',
+    category: 'entrance',
+    description: 'Folds in from above on a horizontal hinge',
+    build: () => ({
+      ...baseShape(),
+      // Hinge on the X axis from above (rotateX -90 to 0). perspective
+      // gives the fold real depth; without it the rotation collapses
+      // to a flat squish and the user just sees a vertical scale.
+      keyframes: [
+        { id: uid(), at: 0, opacity: 0, transform: { ...blank(), perspective: 800, rotate: [-90, 0] } },
+        { id: uid(), at: 100, opacity: 1, transform: { ...blank(), perspective: 800 } },
+      ],
+      duration: 1100,
+      delay: 0,
+      easing: { kind: 'cubic', v: [0.34, 1.56, 0.64, 1] },
+    }),
+  },
+  {
+    id: 'swoop-in',
+    name: 'Swoop in',
+    category: 'entrance',
+    description: 'Sweeps in from the right with a slight tilt',
+    build: () => ({
+      ...baseShape(),
+      // Combined diagonal translate + Z-axis rotate (in-plane spin)
+      // gives a "card flying in from a distance" feel that none of the
+      // existing slide / flip presets cover.
+      keyframes: [
+        { id: uid(), at: 0, opacity: 0, transform: { ...blank(), translate: [60, -20], rotate3d: { x: 0, y: 0, z: 1, deg: 25 } } },
+        { id: uid(), at: 100, opacity: 1, transform: { ...blank() } },
+      ],
+      duration: 1100,
+      delay: 0,
+      easing: { kind: 'cubic', v: [0.22, 1, 0.36, 1] },
     }),
   },
 ];

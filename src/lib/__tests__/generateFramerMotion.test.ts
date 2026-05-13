@@ -151,4 +151,50 @@ describe('generateFramerMotion', () => {
     expect(out).toContain('[...TEXT].map');
     expect(out).toContain('i * 80');
   });
+
+  it('exports rotate3d Z-axis rotation as rotateZ', () => {
+    // Library presets express in-plane rotation via rotate3d with the
+    // canonical Z unit vector ({x:0, y:0, z:1}). Framer Motion has a
+    // distinct rotateZ channel; without this mapping the rotation
+    // would silently disappear from the exported component.
+    const out = generateFramerMotion({
+      ...cfg,
+      keyframes: [
+        {
+          id: 'a',
+          at: 0,
+          transform: { rotate3d: { x: 0, y: 0, z: 1, deg: 0 } },
+        },
+        {
+          id: 'b',
+          at: 100,
+          transform: { rotate3d: { x: 0, y: 0, z: 1, deg: 180 } },
+        },
+      ],
+    });
+    expect(out).toMatch(/rotateZ: \[0, 180\]/);
+  });
+
+  it('ignores rotate3d when the axis is not canonical Z', () => {
+    // Framer Motion has no `rotate3d` channel; we only safely map the
+    // pure-Z case. A mixed-axis rotate3d cannot be represented as a
+    // single rotate{X,Y,Z} so we drop it rather than emit something
+    // misleading.
+    const out = generateFramerMotion({
+      ...cfg,
+      keyframes: [
+        {
+          id: 'a',
+          at: 0,
+          transform: { rotate3d: { x: 1, y: 1, z: 1, deg: 0 } },
+        },
+        {
+          id: 'b',
+          at: 100,
+          transform: { rotate3d: { x: 1, y: 1, z: 1, deg: 90 } },
+        },
+      ],
+    });
+    expect(out).not.toMatch(/rotateZ:/);
+  });
 });
