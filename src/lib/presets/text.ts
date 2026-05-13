@@ -63,26 +63,36 @@ export const TEXT_PRESETS: Preset[] = [
     build: () => ({
       target: 'text', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
       iterations: 1, direction: 'normal', fill: 'both',
-      // steps(1, jump-start) snaps to the END value (opacity 1) at
-      // the very START of each letter's duration and holds — so once
-      // the letter's stagger delay expires the letter is instantly
-      // visible. fill: both is critical: the BACKWARDS half ensures
-      // the letter is hidden DURING its delay (not at the static
-      // default of opacity 1), which is the classic typewriter
-      // off-then-on cadence. The previous (jump: 'end' + fill:
-      // forwards) combination did the opposite — letters were
-      // visible during the delay, briefly flashed off during their
-      // animation phase, then snapped back on. That reads as a
-      // glitch wave, not a typewriter.
+      // Three-keyframe linear pattern instead of steps easing:
+      //   0%  : invisible
+      //   8%  : visible (linear interpolation from 0→1 over the
+      //         first 8 % of the cycle gives a near-instant snap
+      //         that still reads as snappy)
+      //   100%: visible
       //
-      // 90 ms per letter matches a brisk real-world typing speed
-      // without dragging on long phrases.
+      // Why linear (not steps): steps easing puts ALL of the
+      // animation's motion at one instant, which leaves nothing
+      // to "see cycling" under iterations: infinite. With steps
+      // the letter became visible on its first stagger turn and
+      // stayed visible forever — looked static.
+      //
+      // With this pattern, each cycle has an actual invisible →
+      // visible transition: under iterations: 1 + fill: both the
+      // letter is invisible during its stagger delay (backwards
+      // fill), snaps visible within 7 ms of its turn, holds, ends
+      // visible (forwards fill). Under iterations: infinite the
+      // letter cycles every 90 ms — at each cycle boundary it
+      // briefly drops to 0 and snaps back to 1, producing a
+      // visible looping flicker through the staggered letters
+      // that matches the loop behaviour of other one-shot text
+      // presets (fade-up, bounce-in, etc.).
       keyframes: [
         { id: uid(), at: 0, opacity: 0, transform: { ...blank() } },
+        { id: uid(), at: 8, opacity: 1, transform: { ...blank() } },
         { id: uid(), at: 100, opacity: 1, transform: { ...blank() } },
       ],
       duration: 90, delay: 0,
-      easing: { kind: 'steps', n: 1, jump: 'start' },
+      easing: { kind: 'preset', value: 'linear' },
       stagger: { step: 90 },
     }),
   },
