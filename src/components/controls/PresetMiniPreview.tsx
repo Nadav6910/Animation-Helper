@@ -55,7 +55,17 @@ export function PresetMiniPreview({ config, className }: Props) {
     () => ({
       ...config,
       selector: `.${cls}`,
-      iterations: 'infinite',
+      // Preserve the preset's original iterations. Inherently-looping
+      // presets (iterations: 'infinite' like wave, color-cycle) run
+      // their natural continuous cycle. Finite presets (iterations:
+      // 1 with fill that holds an end state — typewriter, fade-up,
+      // bounce-in, etc.) play through once and then hold; we replay
+      // them via the tick-bump effect below.
+      //
+      // Previously forced 'infinite' for every preset, which made
+      // step-eased presets like typewriter snap to their visible
+      // state once and then hold permanently — users saw the
+      // sequential reveal only on first mount and nothing after.
     }),
     [config, cls]
   );
@@ -79,6 +89,29 @@ export function PresetMiniPreview({ config, className }: Props) {
   useEffect(() => {
     setTick((n) => n + 1);
   }, [config]);
+
+  // Re-trigger finite presets on a steady cadence so users see the
+  // animation play → hold → replay, instead of it running once at
+  // mount and sitting still forever. Inherently-looping presets
+  // (iterations: 'infinite') don't need this — their own cycle
+  // covers continuous motion. Gated on the same in-view + tab-
+  // visible flags as the animation itself so the tick doesn't
+  // burn renders for off-screen cards.
+  useEffect(() => {
+    if (config.iterations === 'infinite') return;
+    if (animationDisabled) return;
+    // Replay interval = stagger fan-out (across the 3-letter mini
+    // preview = 2 staggers between letters) + animation duration +
+    // a 1 s hold. Floored at 800 ms so very short animations don't
+    // replay before users can register the held state — that would
+    // read as a flicker rather than a pleasant loop.
+    const fanOut = (config.stagger?.step ?? 0) * 2;
+    const replayMs = Math.max(800, config.duration + fanOut + 1000);
+    const id = window.setInterval(() => {
+      setTick((n) => n + 1);
+    }, replayMs);
+    return () => window.clearInterval(id);
+  }, [config, animationDisabled]);
 
   // animation-play-state is not inherited, so the override has to land
   // on every element that carries a generated `animation` shorthand.
