@@ -283,6 +283,11 @@ export function generateLottie(
   // rotation and should switch to a 3D-capable layer.
   if (c.keyframes.some((k) => k.transform?.rotate3d?.deg))
     dropped.push('rotate3d (collapsed to Z-rotation)');
+  // Lottie's basic shape layer has no animatable clip-path / mask
+  // primitive. Authoring tools (After Effects, Lottielab) can build
+  // animated masks but the resulting schema is wildly different from
+  // our keyframe model — emit a heads-up rather than half-fake it.
+  if (c.keyframes.some((k) => k.clipPath)) dropped.push('clip-path animation');
   if (
     c.keyframes.some(
       (k) => (k.transform?.rotate?.[0] ?? 0) !== 0 ||

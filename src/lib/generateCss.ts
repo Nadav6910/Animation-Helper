@@ -117,6 +117,16 @@ function declarationsForKeyframe(
   if (typeof k.offsetDistance === 'number') {
     decls.push(`offset-distance: ${num(k.offsetDistance)}%;`);
   }
+  if (k.clipPath) {
+    // Sanitise the same way every other untrusted CSS value is —
+    // strip declaration breakouts (`;`, `}`, `<`, `>`) so a tampered
+    // share URL can't smuggle sibling rules into the generated
+    // stylesheet. Polygon strings produced by the custom-shape
+    // editor never contain those characters, but the field is also
+    // writable via paste, URL hash, and localStorage so the
+    // sanitiser is the trust boundary.
+    decls.push(`clip-path: ${cssValueSafe(k.clipPath)};`);
+  }
   if (k.easing) {
     decls.push(`animation-timing-function: ${easingToCss(k.easing)};`);
   }

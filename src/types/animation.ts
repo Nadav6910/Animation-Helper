@@ -69,6 +69,20 @@ export type Keyframe = {
   strokeDashoffset?: number;
   easing?: Easing;
   offsetDistance?: number;
+  /**
+   * CSS `clip-path` value applied at this keyframe — typically a
+   * `polygon(x% y%, …)` produced from the custom-shape editor. Browsers
+   * interpolate clip-path smoothly between adjacent keyframes only
+   * when both sides use the same shape function and (for polygons)
+   * the same vertex count; mismatched counts result in a hard cut at
+   * the keyframe boundary, which the UI surface (Clip-path animation
+   * card, step 5) warns about so users aren't surprised.
+   *
+   * Lottie has no animatable clip-path primitive in its standard
+   * schema; that generator emits a one-line warning and drops the
+   * field, same pattern it already uses for hue-rotate.
+   */
+  clipPath?: string;
 };
 
 export type EasingPreset =

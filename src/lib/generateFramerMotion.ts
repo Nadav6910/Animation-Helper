@@ -18,7 +18,8 @@ type ChannelKey =
   | 'backgroundColor'
   | 'background'
   | 'filter'
-  | 'offsetDistance';
+  | 'offsetDistance'
+  | 'clipPath';
 
 function readChannel(k: Keyframe, ch: ChannelKey): string | number | undefined {
   const t: Transform | undefined = k.transform;
@@ -83,6 +84,15 @@ function readChannel(k: Keyframe, ch: ChannelKey): string | number | undefined {
       return typeof k.offsetDistance === 'number'
         ? `${num(k.offsetDistance)}%`
         : undefined;
+    case 'clipPath':
+      // Framer Motion forwards CSS values verbatim through its
+      // `clipPath` channel and interpolates between adjacent
+      // keyframes using the standard CSS clip-path interpolation
+      // rules (smooth between same-shape-function values, hard cut
+      // otherwise). Sanitise the same way every other untrusted CSS
+      // value is — the field is writable from URL hash / paste /
+      // localStorage so we can't trust the raw input.
+      return k.clipPath ? cssValueSafe(k.clipPath) : undefined;
   }
 }
 
@@ -128,6 +138,7 @@ export function generateFramerMotion(
     'background',
     'filter',
     'offsetDistance',
+    'clipPath',
   ];
 
   // Resting value for each channel — used to back-fill when a keyframe

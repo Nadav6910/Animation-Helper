@@ -25,6 +25,7 @@ function keyframeObj(k: Keyframe): Record<string, string | number> {
     out.strokeDashoffset = k.strokeDashoffset;
   if (typeof k.offsetDistance === 'number')
     out.offsetDistance = `${num(k.offsetDistance)}%`;
+  if (k.clipPath) out.clipPath = cssValueSafe(k.clipPath);
   if (k.easing) out.easing = easingToCss(k.easing);
   return out;
 }
