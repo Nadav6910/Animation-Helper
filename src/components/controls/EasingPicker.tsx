@@ -3,8 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Check, ChevronDown, Copy } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
 import { useUiStore } from '@/store/uiStore';
-import { EASING_PRESETS, easingToCss, parseEasing } from '@/lib/easings';
+import {
+  EASING_PRESETS,
+  easingToCss,
+  easingToCubicPreview,
+  parseEasing,
+} from '@/lib/easings';
 import { BezierEditor, easingDescription } from './BezierEditor';
+import { CurveThumbnail } from './CurveThumbnail';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { copyToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/cn';
@@ -74,18 +80,20 @@ export function EasingPicker() {
           >
             {EASING_PRESETS.map(({ name, value }) => {
               const active = isPresetActive(value);
+              const previewCurve = easingToCubicPreview(value);
               return (
                 <button
                   key={name}
                   type="button"
                   onClick={() => setEasing(value)}
                   className={cn(
-                    'rounded-full border px-2.5 py-1 text-xs transition-colors focus-ring',
+                    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors focus-ring',
                     active
                       ? 'bg-accent/15 border-accent/50 text-fg shadow-glow'
                       : 'bg-bg-soft border-border/70 text-fg-muted hover:border-border-strong hover:text-fg'
                   )}
                 >
+                  {previewCurve && <CurveThumbnail value={previewCurve} />}
                   {name}
                 </button>
               );
@@ -351,7 +359,12 @@ function CurrentEasingHint({ easing }: { easing: Easing }) {
     const css = easingToCss(easing);
     const ok = await copyToClipboard(css);
     if (ok) {
-      showToast(`Copied ${css}`);
+      // Match the phrasing of the app's primary copy paths (CodePanel,
+      // CopyButton) — short, action-past-tense — so the toast stream
+      // reads consistently regardless of which copy affordance the user
+      // hit. The CSS value isn't echoed here because it's already
+      // visible right next to the button.
+      showToast('Easing copied to clipboard');
       setJustCopied(true);
       // Reset the checkmark affordance after a beat. Tracked in a ref
       // so a second copy click before the timer fires doesn't leave a

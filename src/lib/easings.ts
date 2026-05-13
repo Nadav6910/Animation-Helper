@@ -46,6 +46,33 @@ const PRESET_NAMES: readonly EasingPreset[] = [
   'ease-in-out',
 ];
 
+// Spec-defined cubic-bezier approximations for the named CSS easings
+// (per https://drafts.csswg.org/css-easing/#valdef-easing-function-ease).
+// Used purely for visualisation — the engine still emits the named
+// keyword form, so generated CSS round-trips the original name.
+const PRESET_TO_CUBIC: Record<EasingPreset, [number, number, number, number]> =
+  {
+    linear: [0, 0, 1, 1],
+    ease: [0.25, 0.1, 0.25, 1],
+    'ease-in': [0.42, 0, 1, 1],
+    'ease-out': [0, 0, 0.58, 1],
+    'ease-in-out': [0.42, 0, 0.58, 1],
+  };
+
+/**
+ * Returns the cubic-bezier control points that visually represent the
+ * given easing, or `null` for easings that don't have a continuous
+ * curve (steps). Used by UI thumbnails — the actual CSS output uses
+ * the original easing form via `easingToCss`.
+ */
+export function easingToCubicPreview(
+  e: Easing
+): [number, number, number, number] | null {
+  if (e.kind === 'preset') return PRESET_TO_CUBIC[e.value];
+  if (e.kind === 'cubic') return e.v;
+  return null;
+}
+
 const STEPS_JUMPS: readonly StepsJump[] = ['start', 'end', 'none', 'both'];
 
 /**
