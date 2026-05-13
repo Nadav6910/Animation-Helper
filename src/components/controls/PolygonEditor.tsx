@@ -22,6 +22,14 @@ type Props = {
   size?: number;
   /** Minimum vertex count enforced for delete. Default 3 (any polygon). */
   minPoints?: number;
+  /** When true, the editor renders the polygon and vertex visuals but
+   *  ignores all input — pointer drags, canvas-tap inserts, vertex
+   *  keyboard nudges, and the × delete overlay are all suppressed.
+   *  Vertex buttons also get `tabIndex={-1}` so they drop out of the
+   *  tab order; otherwise a user could focus a vertex via keyboard
+   *  and watch arrow keys mutate state that the host then silently
+   *  discards. Used by the edit-mode of `CustomShapeModal`. */
+  readOnly?: boolean;
 };
 
 // 3-decimal grid matches the round-trip precision in clipPath.ts.
@@ -74,6 +82,7 @@ export function PolygonEditor({
   onChange,
   size = 240,
   minPoints = 3,
+  readOnly = false,
 }: Props) {
   const PAD = 12;
   const inner = size - PAD * 2;
@@ -121,6 +130,7 @@ export function PolygonEditor({
   );
 
   const onVertexPointerDown = (e: React.PointerEvent, idx: number) => {
+    if (readOnly) return;
     e.preventDefault();
     e.stopPropagation();
     setDragIdx(idx);
@@ -149,6 +159,7 @@ export function PolygonEditor({
   };
 
   const onCanvasPointerDown = (e: React.PointerEvent) => {
+    if (readOnly) return;
     const wrap = wrapRef.current;
     if (!wrap) return;
     const rect = wrap.getBoundingClientRect();
@@ -158,7 +169,7 @@ export function PolygonEditor({
   };
 
   const onCanvasPointerMove = (e: React.PointerEvent) => {
-    if (dragIdx !== null) return;
+    if (readOnly || dragIdx !== null) return;
     const wrap = wrapRef.current;
     if (!wrap) return;
     const rect = wrap.getBoundingClientRect();
@@ -189,6 +200,7 @@ export function PolygonEditor({
   };
 
   const handleVertexKey = (e: React.KeyboardEvent, idx: number) => {
+    if (readOnly) return;
     const step = e.shiftKey ? 5 : 1;
     const handled =
       e.key === 'ArrowLeft' ||
@@ -356,12 +368,18 @@ export function PolygonEditor({
                 onFocus={() => setHoverIdx(idx)}
                 onBlur={() => setHoverIdx((v) => (v === idx ? null : v))}
                 onKeyDown={(e) => handleVertexKey(e, idx)}
+                tabIndex={readOnly ? -1 : 0}
+                aria-disabled={readOnly || undefined}
                 aria-label={`Vertex ${idx + 1}, X ${p[0].toFixed(1)}, Y ${p[1].toFixed(1)}`}
                 aria-describedby={helpId}
                 aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown Backspace Delete"
                 className={cn(
                   'group/vertex relative grid h-8 w-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full focus-ring touch-none select-none [-webkit-touch-callout:none]',
-                  isDragging ? 'cursor-grabbing' : 'cursor-grab'
+                  readOnly
+                    ? 'cursor-default'
+                    : isDragging
+                      ? 'cursor-grabbing'
+                      : 'cursor-grab'
                 )}
               >
                 {/* Outer halo — fades in on hover / drag for affordance. */}
@@ -389,7 +407,7 @@ export function PolygonEditor({
                   <span className="h-1.5 w-1.5 rounded-full bg-accent" />
                 </span>
               </button>
-              {canDelete && (
+              {canDelete && !readOnly && (
                 // 24×24 hit area satisfies WCAG 2.5.5; the visual icon
                 // is 10 px. tabIndex=-1 keeps keyboard users tabbing
                 // through vertices only — Backspace/Delete on the

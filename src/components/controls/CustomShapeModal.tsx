@@ -16,6 +16,12 @@ type Props = {
   /** Called with the just-saved shape's id so callers can select it
    *  immediately (e.g. set `config.shape` to the new id). */
   onSaved?: (id: CustomShapeId) => void;
+  /** Called with the deleted shape's id so the parent can clear any
+   *  state that references it — most importantly, `config.shape`
+   *  if it pointed at the now-deleted shape, which would otherwise
+   *  leave the stage rendering a fallback square with no indication
+   *  to the user. */
+  onDeleted?: (id: CustomShapeId) => void;
 };
 
 /**
@@ -25,7 +31,13 @@ type Props = {
  * Save commits to `customShapesStore`; the picker re-renders the
  * picker list because it subscribes to the same store.
  */
-export function CustomShapeModal({ open, editing, onClose, onSaved }: Props) {
+export function CustomShapeModal({
+  open,
+  editing,
+  onClose,
+  onSaved,
+  onDeleted,
+}: Props) {
   const titleId = useId();
   const nameInputId = useId();
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -92,8 +104,13 @@ export function CustomShapeModal({ open, editing, onClose, onSaved }: Props) {
 
   const handleDelete = () => {
     if (!editing) return;
-    remove(editing.id);
+    const id = editing.id;
+    remove(id);
     onClose();
+    // Notify the parent AFTER close so it can reset any state that
+    // referenced this shape (most importantly, AnimationConfig.shape
+    // if the deleted shape was the currently selected one).
+    onDeleted?.(id);
   };
 
   const canSave = points.length >= 3 && name.trim().length > 0;
@@ -156,7 +173,13 @@ export function CustomShapeModal({ open, editing, onClose, onSaved }: Props) {
                   maxLength={120}
                   placeholder="My shape"
                   autoComplete="off"
-                  className="h-9 rounded-lg border border-border/70 bg-bg-soft px-3 text-sm focus-ring focus:border-accent/60"
+                  aria-invalid={name.trim().length === 0 || undefined}
+                  className={cn(
+                    'h-9 rounded-lg border bg-bg-soft px-3 text-sm focus-ring',
+                    name.trim().length === 0
+                      ? 'border-border/70 focus:border-accent/60'
+                      : 'border-border/70 focus:border-accent/60'
+                  )}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -164,23 +187,31 @@ export function CustomShapeModal({ open, editing, onClose, onSaved }: Props) {
                     }
                   }}
                 />
+                {name.trim().length === 0 && (
+                  <span className="text-[10px] text-fg-subtle">
+                    Give your shape a name to save it.
+                  </span>
+                )}
               </div>
 
               {/* Editor disabled in edit mode for v1 (see handleSave
-                  comment). Tints the editor with reduced opacity +
-                  pointer-events:none so the read-only state is
-                  visually obvious. */}
+                  comment). The `readOnly` prop suppresses pointer and
+                  keyboard input AND drops vertex buttons out of the
+                  tab order — without that, a focused vertex would
+                  still accept arrow-key nudges, the polygon would
+                  visibly change, and the save handler would silently
+                  discard the edits. */}
               <div
                 className={cn(
                   'grid place-items-center',
-                  editing && 'opacity-60 pointer-events-none'
+                  editing && 'opacity-60'
                 )}
-                aria-hidden={editing ? 'true' : undefined}
               >
                 <PolygonEditor
                   points={points}
                   onChange={setPoints}
                   size={240}
+                  readOnly={!!editing}
                 />
               </div>
               {editing && (

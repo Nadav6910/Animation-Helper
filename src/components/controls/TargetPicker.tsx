@@ -358,12 +358,29 @@ export function TargetPicker() {
               <Plus size={18} />
             </button>
           </div>
-          <CustomShapeModal
-            open={shapeModalOpen}
-            editing={editingShape}
-            onClose={() => setShapeModalOpen(false)}
-            onSaved={(id) => setShape(id)}
-          />
+          {/* Mount only while open so the modal's hooks and zustand
+              subscriptions don't tick on every controls-panel render. */}
+          {shapeModalOpen && (
+            <CustomShapeModal
+              open
+              editing={editingShape}
+              onClose={() => {
+                setShapeModalOpen(false);
+                // Hygiene — drop the stale editing reference so a
+                // future "+ Create" click doesn't briefly flash the
+                // previous edit before the open effect re-seeds.
+                setEditingShape(null);
+              }}
+              onSaved={(id) => setShape(id)}
+              onDeleted={(id) => {
+                // Selected shape was just deleted — fall back to the
+                // default square so the stage doesn't render an
+                // empty box and the picker doesn't get stuck on a
+                // ghost selection.
+                if (config.shape === id) setShape('square');
+              }}
+            />
+          )}
         </div>
       )}
 
