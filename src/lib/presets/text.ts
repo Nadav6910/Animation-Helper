@@ -63,37 +63,39 @@ export const TEXT_PRESETS: Preset[] = [
     build: () => ({
       target: 'text', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
       iterations: 1, direction: 'normal', fill: 'both',
-      // Three-keyframe linear pattern instead of steps easing:
-      //   0%  : invisible
-      //   8%  : visible (linear interpolation from 0→1 over the
-      //         first 8 % of the cycle gives a near-instant snap
-      //         that still reads as snappy)
-      //   100%: visible
+      // Three-keyframe linear pattern with a LONG cycle. The 3 %
+      // snap (≈ 30 ms of a 1000 ms cycle) reads as a near-instant
+      // pop to the eye; the remaining 97 % is hold-visible time.
       //
-      // Why linear (not steps): steps easing puts ALL of the
-      // animation's motion at one instant, which leaves nothing
-      // to "see cycling" under iterations: infinite. With steps
-      // the letter became visible on its first stagger turn and
-      // stayed visible forever — looked static.
+      // Why such a long duration: under iterations: infinite the
+      // browser cycles each letter independently every `duration`
+      // ms. With a SHORT 90 ms cycle, every letter flickered
+      // 11 Hz — looked like noise, not a typewriter. A 1000 ms
+      // cycle gives the staggered reset enough visible breathing
+      // room that the eye reads it as "letters being re-typed in
+      // sequence":
       //
-      // With this pattern, each cycle has an actual invisible →
-      // visible transition: under iterations: 1 + fill: both the
-      // letter is invisible during its stagger delay (backwards
-      // fill), snaps visible within 7 ms of its turn, holds, ends
-      // visible (forwards fill). Under iterations: infinite the
-      // letter cycles every 90 ms — at each cycle boundary it
-      // briefly drops to 0 and snaps back to 1, producing a
-      // visible looping flicker through the staggered letters
-      // that matches the loop behaviour of other one-shot text
-      // presets (fade-up, bounce-in, etc.).
+      //   t=0–510 ms : initial reveal cascade (6 * 80 ms stagger
+      //                + 30 ms snap = 510 ms for 7-letter word)
+      //   t=510–1000: all letters hold visible (≈ 490 ms hold)
+      //   t=1000–1480: letters' cycle-2 boundaries fire one by one
+      //                — each flickers off then snaps back on
+      //                (re-type cascade)
+      //   t=1480–2000: hold visible
+      //   …loops
+      //
+      // For iterations: 1 the cycle just plays once and forwards-
+      // fill holds the visible end state — same typewriter cadence
+      // as before, just with a longer total run-time (the hold
+      // phase before forwards-fill kicks in).
       keyframes: [
         { id: uid(), at: 0, opacity: 0, transform: { ...blank() } },
-        { id: uid(), at: 8, opacity: 1, transform: { ...blank() } },
+        { id: uid(), at: 3, opacity: 1, transform: { ...blank() } },
         { id: uid(), at: 100, opacity: 1, transform: { ...blank() } },
       ],
-      duration: 90, delay: 0,
+      duration: 1000, delay: 0,
       easing: { kind: 'preset', value: 'linear' },
-      stagger: { step: 90 },
+      stagger: { step: 80 },
     }),
   },
   {
