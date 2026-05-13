@@ -123,13 +123,50 @@ describe('useCustomShapesStore', () => {
     expect(parsed.entries[0].name).toBe('My shape');
   });
 
-  it('renames an existing entry', () => {
+  it('update renames an existing entry', () => {
     const entry = useCustomShapesStore
       .getState()
       .add('Original', [[0, 0], [100, 0], [50, 100]]);
-    useCustomShapesStore.getState().rename(entry.id, 'Renamed');
+    useCustomShapesStore.getState().update(entry.id, { name: 'Renamed' });
     const stored = useCustomShapesStore.getState().customShapes[0];
     expect(stored.name).toBe('Renamed');
+    // Points untouched by a name-only patch.
+    expect(stored.points).toEqual([[0, 0], [100, 0], [50, 100]]);
+  });
+
+  it('update replaces the polygon geometry', () => {
+    const entry = useCustomShapesStore
+      .getState()
+      .add('Original', [[0, 0], [100, 0], [50, 100]]);
+    useCustomShapesStore.getState().update(entry.id, {
+      points: [[10, 10], [90, 10], [50, 90], [20, 50]],
+    });
+    const stored = useCustomShapesStore.getState().customShapes[0];
+    expect(stored.points).toEqual([[10, 10], [90, 10], [50, 90], [20, 50]]);
+    // Name unchanged.
+    expect(stored.name).toBe('Original');
+  });
+
+  it('update accepts both name and points in one patch', () => {
+    const entry = useCustomShapesStore
+      .getState()
+      .add('Original', [[0, 0], [100, 0], [50, 100]]);
+    useCustomShapesStore.getState().update(entry.id, {
+      name: 'New name',
+      points: [[0, 0], [100, 0], [100, 100], [0, 100]],
+    });
+    const stored = useCustomShapesStore.getState().customShapes[0];
+    expect(stored.name).toBe('New name');
+    expect(stored.points).toHaveLength(4);
+  });
+
+  it('update caps oversized point arrays', () => {
+    const entry = useCustomShapesStore
+      .getState()
+      .add('Original', [[0, 0], [100, 0], [50, 100]]);
+    const huge = Array.from({ length: 1000 }, (_, i) => [i % 100, i % 100] as const);
+    useCustomShapesStore.getState().update(entry.id, { points: huge });
+    expect(useCustomShapesStore.getState().customShapes[0].points.length).toBe(256);
   });
 
   it('removes an entry', () => {

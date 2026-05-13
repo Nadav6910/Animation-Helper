@@ -53,7 +53,7 @@ export function CustomShapeEditor({
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const add = useCustomShapesStore((s) => s.add);
-  const rename = useCustomShapesStore((s) => s.rename);
+  const update = useCustomShapesStore((s) => s.update);
   const remove = useCustomShapesStore((s) => s.remove);
 
   const [name, setName] = useState(() => editing?.name ?? '');
@@ -112,7 +112,16 @@ export function CustomShapeEditor({
 
   const handleSave = () => {
     if (editing) {
-      rename(editing.id, name);
+      // Editing a saved shape updates both the name AND the polygon
+      // geometry now. Original v1 deferral worried about clobbering
+      // animations using this shape, but on close inspection that's
+      // a non-issue: `config.shape` references the shape by ID and
+      // the renderer reads its points live via `resolveShapeDef`, so
+      // edits propagate to the static preview as intended; and
+      // keyframe `clipPath` values are independent string snapshots
+      // (copied at the moment the user applied them) that aren't
+      // touched by source-shape edits.
+      update(editing.id, { name, points });
       onSaved?.(editing.id);
       return;
     }
@@ -187,20 +196,8 @@ export function CustomShapeEditor({
         </div>
 
         <div className="grid place-items-center">
-          <PolygonEditor
-            points={points}
-            onChange={setPoints}
-            size={240}
-            readOnly={!!editing}
-          />
+          <PolygonEditor points={points} onChange={setPoints} size={240} />
         </div>
-        {editing && (
-          <p className="text-[11px] text-fg-subtle text-center">
-            Editing the polygon of a saved shape is coming soon — rename
-            or delete this shape and create a new one if you want
-            different geometry.
-          </p>
-        )}
 
         <div
           className={cn(

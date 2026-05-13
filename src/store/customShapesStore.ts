@@ -121,7 +121,23 @@ const persist = (entries: CustomShape[]): boolean => {
 type State = {
   customShapes: CustomShape[];
   add: (name: string, points: ReadonlyArray<ClipPathPoint>) => CustomShape;
-  rename: (id: CustomShapeId, name: string) => void;
+  /**
+   * Update name and/or points on an existing custom shape. Pass only
+   * the fields you want to change; missing fields are left alone. Used
+   * by the inline editor when the user renames OR reshapes a saved
+   * polygon.
+   *
+   * Editing the polygon doesn't clobber existing animations: keyframe
+   * `clipPath` strings are independent snapshots (copied via
+   * `pointsToClipPath` at the moment the user set them), so changing
+   * the source shape only affects surfaces that resolve via
+   * `resolveShapeDef` at render time — the live preview's static
+   * clip-path, mainly.
+   */
+  update: (
+    id: CustomShapeId,
+    patch: { name?: string; points?: ReadonlyArray<ClipPathPoint> }
+  ) => void;
   remove: (id: CustomShapeId) => void;
 };
 
@@ -146,14 +162,23 @@ export const useCustomShapesStore = create<State>((set, get) => ({
     persist(next);
     return entry;
   },
-  rename: (id, name) => {
-    const safeName = (name.trim() || 'Untitled shape').slice(
-      0,
-      MAX_NAME_LENGTH
-    );
-    const next = get().customShapes.map((s) =>
-      s.id === id ? { ...s, name: safeName } : s
-    );
+  update: (id, patch) => {
+    const next = get().customShapes.map((s) => {
+      if (s.id !== id) return s;
+      const out: CustomShape = { ...s };
+      if (patch.name !== undefined) {
+        out.name = (patch.name.trim() || 'Untitled shape').slice(
+          0,
+          MAX_NAME_LENGTH
+        );
+      }
+      if (patch.points !== undefined) {
+        out.points = patch.points
+          .slice(0, MAX_POINTS)
+          .map(([x, y]) => [x, y] as ClipPathPoint);
+      }
+      return out;
+    });
     set({ customShapes: next });
     persist(next);
   },
