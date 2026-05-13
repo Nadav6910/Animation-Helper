@@ -77,10 +77,13 @@ export function parseEasing(input: string): Easing | null {
   if (trimmed === 'step-start') return { kind: 'steps', n: 1, jump: 'start' };
   if (trimmed === 'step-end') return { kind: 'steps', n: 1, jump: 'end' };
 
-  // Numeric literal pattern: optional minus, digits with optional decimal,
-  // OR a leading decimal with digits. Rejects `+`, scientific notation,
-  // and lone dots.
-  const NUM = '(-?(?:\\d+(?:\\.\\d+)?|\\.\\d+))';
+  // Numeric literal pattern: optional minus, then either
+  //   - digits with optional fractional part (e.g. `0`, `0.5`, `1.`)
+  //   - OR a leading decimal followed by digits (e.g. `.5`)
+  // Rejects `+`, scientific notation, double dots, and lone dots. Both
+  // trailing-dot (`1.`) and leading-dot (`.5`) forms are accepted to
+  // match CSS's <number> grammar, since both are common in pasted CSS.
+  const NUM = '(-?(?:\\d+\\.?\\d*|\\.\\d+))';
   const SEP = '\\s*,\\s*';
   const cubicRe = new RegExp(
     `^cubic-bezier\\s*\\(\\s*${NUM}${SEP}${NUM}${SEP}${NUM}${SEP}${NUM}\\s*\\)$`

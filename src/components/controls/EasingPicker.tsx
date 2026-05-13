@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
@@ -244,6 +244,12 @@ function CubicPasteInput({
 }) {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // Set briefly by the Escape handler before triggering blur — the
+  // subsequent onBlur reads this and skips its submit() call. Without
+  // the guard, Escape-then-blur would still run submit() and rely on
+  // the empty-string short-circuit, which works today but only
+  // incidentally.
+  const cancelNextBlur = useRef(false);
 
   const submit = () => {
     const trimmed = text.trim();
@@ -272,6 +278,8 @@ function CubicPasteInput({
         type="text"
         inputMode="text"
         autoComplete="off"
+        autoCapitalize="off"
+        autoCorrect="off"
         spellCheck={false}
         placeholder="Paste cubic-bezier(...) or 0.4, 0, 0.2, 1"
         value={text}
@@ -279,12 +287,19 @@ function CubicPasteInput({
           setText(e.target.value);
           if (error) setError(null);
         }}
-        onBlur={submit}
+        onBlur={() => {
+          if (cancelNextBlur.current) {
+            cancelNextBlur.current = false;
+            return;
+          }
+          submit();
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
             submit();
           } else if (e.key === 'Escape') {
+            cancelNextBlur.current = true;
             setText('');
             setError(null);
             (e.target as HTMLInputElement).blur();
@@ -293,6 +308,7 @@ function CubicPasteInput({
         aria-label="Paste cubic-bezier value"
         aria-invalid={error !== null}
         aria-errormessage={error ? 'bezier-paste-error' : undefined}
+        aria-describedby={error ? 'bezier-paste-error' : undefined}
         className={cn(
           'h-8 rounded-lg border bg-bg-soft px-3 text-xs font-mono outline-none transition-colors focus-ring',
           error

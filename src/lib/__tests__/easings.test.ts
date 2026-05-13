@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseEasing } from '@/lib/easings';
+import { easingToCss, parseEasing } from '@/lib/easings';
+import type { Easing } from '@/types/animation';
 
 describe('parseEasing', () => {
   describe('presets', () => {
@@ -57,6 +58,20 @@ describe('parseEasing', () => {
         kind: 'cubic',
         v: [0.5, 0.1, 0.5, 1],
       });
+    });
+
+    it('accepts trailing-decimal numbers like 1.', () => {
+      // CSS <number> grammar allows `1.`; some tools emit it that way.
+      expect(parseEasing('cubic-bezier(0.5, 1., 0.5, 1.)')).toEqual({
+        kind: 'cubic',
+        v: [0.5, 1, 0.5, 1],
+      });
+    });
+
+    it('still rejects double dots and lone dots', () => {
+      expect(parseEasing('cubic-bezier(0..5, 0, 0.2, 1)')).toBeNull();
+      expect(parseEasing('cubic-bezier(., 0, 0.2, 1)')).toBeNull();
+      expect(parseEasing('cubic-bezier(0.4, 0,, 0.2, 1)')).toBeNull();
     });
 
     it('rejects X1 outside [0, 1]', () => {
@@ -150,9 +165,29 @@ describe('parseEasing', () => {
     });
   });
 
-  it('rejects garbage', () => {
-    expect(parseEasing('not-a-function(0, 0, 0, 0)')).toBeNull();
-    expect(parseEasing('cubic-bezier')).toBeNull();
-    expect(parseEasing('cubic-bezier()')).toBeNull();
+  describe('garbage rejection', () => {
+    it('rejects unknown function names and bare keywords', () => {
+      expect(parseEasing('not-a-function(0, 0, 0, 0)')).toBeNull();
+      expect(parseEasing('cubic-bezier')).toBeNull();
+      expect(parseEasing('cubic-bezier()')).toBeNull();
+    });
+  });
+
+  describe('round-trip with easingToCss', () => {
+    // easingToCss(parseEasing(x)) === x for all easing kinds the
+    // editor exposes. Catches future drift where one side adds support
+    // for a form the other doesn't.
+    const fixtures: Easing[] = [
+      { kind: 'preset', value: 'linear' },
+      { kind: 'preset', value: 'ease-in-out' },
+      { kind: 'cubic', v: [0.4, 0, 0.2, 1] },
+      { kind: 'cubic', v: [0.68, -0.6, 0.32, 1.6] },
+      { kind: 'steps', n: 1, jump: 'end' },
+      { kind: 'steps', n: 6, jump: 'none' },
+    ];
+    it.each(fixtures)('survives parse → toCss round-trip ($kind)', (e) => {
+      const parsedBack = parseEasing(easingToCss(e));
+      expect(parsedBack).toEqual(e);
+    });
   });
 });
