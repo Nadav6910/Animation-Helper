@@ -107,6 +107,15 @@ export function ClipPathAnimationSection() {
   if (!keyframe) return null;
 
   const hasClipPath = !!keyframe.clipPath;
+  // First-enable case is when NO keyframe in the animation has a
+  // clip-path yet. Adding then propagates to all keyframes.
+  // Subsequent additions (when some other keyframe already has one
+  // but the current doesn't) only add to the current keyframe — so
+  // the label switches to make the scope explicit.
+  const isFirstEnable = config.keyframes.every((k) => !k.clipPath);
+  const addLabel = isFirstEnable
+    ? 'Enable clip-path animation'
+    : 'Add clip-path to this keyframe';
 
   const setClipPath = (next: ClipPathPoint[]) => {
     update(keyframe.id, { clipPath: pointsToClipPath(next) });
@@ -171,7 +180,24 @@ export function ClipPathAnimationSection() {
   };
 
   const removeClipPath = () => {
-    update(keyframe.id, { clipPath: undefined });
+    // Mirror the first-enable Add behaviour: addClipPath propagates
+    // the seed polygon to every keyframe (so the animation morphs
+    // out of the box), so removeClipPath clears every keyframe too.
+    // Without this, hitting Remove on one keyframe would leave the
+    // others' clip-paths in place and the user would see no visible
+    // change on the stage — they removed it but the morph keeps
+    // running with the remaining keyframes.
+    //
+    // Users who want partial coverage (e.g. an intentional discrete
+    // cut between a shaped keyframe and a 'no-clip' keyframe) can
+    // still author it by adding clip-path back to selected
+    // keyframes via the section; the partial-coverage warning will
+    // surface so the cut behaviour is explicit.
+    for (const k of config.keyframes) {
+      if (k.clipPath) {
+        update(k.id, { clipPath: undefined });
+      }
+    }
   };
 
   /**
@@ -202,7 +228,7 @@ export function ClipPathAnimationSection() {
           className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-dashed border-border/70 bg-bg-soft px-3 text-xs font-medium text-fg-muted hover:text-fg hover:border-border-strong focus-ring transition-colors"
         >
           <Plus size={14} />
-          Add clip-path to this keyframe
+          {addLabel}
         </button>
       ) : (
         <>
@@ -234,7 +260,7 @@ export function ClipPathAnimationSection() {
             className="inline-flex h-8 items-center justify-center gap-1.5 self-center rounded-lg px-3 text-[11px] text-red-400 hover:bg-red-500/10 hover:text-red-300 focus-ring transition-colors"
           >
             <Trash2 size={12} />
-            Remove clip-path from this keyframe
+            Disable clip-path animation
           </button>
         </>
       )}
