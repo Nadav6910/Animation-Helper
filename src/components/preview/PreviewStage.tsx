@@ -27,6 +27,28 @@ export function PreviewStage() {
     (s) => s.setPreviewTargetClassName
   );
   const tourOpen = useUiStore((s) => s.tourOpen);
+  const stageOccluded = useUiStore((s) => s.stageOccluded);
+
+  // When the mobile sheet covers the stage entirely (snap === 'full'),
+  // the WAAPI animation keeps ticking compositor work for a preview
+  // the user can't see. Pause via the controller when occluded; resume
+  // only if it WAS playing when we paused, so a user who'd manually
+  // paused before opening the sheet doesn't see it auto-resume. Done
+  // via the controller (not via CSS animation-play-state) so the play
+  // button's React state stays in sync with the WAAPI state.
+  useEffect(() => {
+    if (!stageOccluded) return;
+    if (!controller.isPlaying) return;
+    controller.pause();
+    return () => {
+      controller.play();
+    };
+    // Reading isPlaying inside the effect captures the play state at the
+    // moment occlusion began; we deliberately don't re-subscribe when
+    // isPlaying flips during occlusion (it would loop pause↔play with
+    // its own setIsPlaying ticks).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageOccluded]);
   // Timeline visibility — persisted so the user's preference survives
   // reload. Collapsing the timeline frees its vertical space for the
   // preview stage (the card has flex-1, so flexbox redistributes the

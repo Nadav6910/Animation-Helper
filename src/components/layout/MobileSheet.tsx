@@ -53,6 +53,20 @@ export function MobileSheet() {
   const [snap, setSnap] = useState<SheetSnap>('half');
   const [tab, setTab] = useState<'controls' | 'code'>('controls');
   const tourStepId = useUiStore((s) => s.tourStepId);
+  const setStageOccluded = useUiStore((s) => s.setStageOccluded);
+
+  // Publish the "preview stage is fully covered" flag whenever the
+  // sheet reaches its 'full' snap. PreviewStage reads this and pauses
+  // the running WAAPI animation so we don't keep ticking compositor
+  // work for a preview the user can't see. Reset to false on unmount
+  // so a layout-mode switch (mobile → desktop) doesn't leave a stale
+  // occluded flag behind.
+  useEffect(() => {
+    setStageOccluded(snap === 'full');
+  }, [snap, setStageOccluded]);
+  useEffect(() => {
+    return () => setStageOccluded(false);
+  }, [setStageOccluded]);
 
   // Tour layout coordination. Whenever the tour transitions to a step
   // whose anchor is hidden behind a tab swap or a fully-extended sheet,
