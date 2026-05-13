@@ -29,6 +29,7 @@ export const ENTRANCE_PRESETS: Preset[] = [
     id: 'slide-up-fade',
     name: 'Slide up · fade',
     category: 'entrance',
+    description: 'Rises from below with a soft opacity fade',
     build: () => ({
       ...baseShape(),
       keyframes: [
@@ -44,6 +45,7 @@ export const ENTRANCE_PRESETS: Preset[] = [
     id: 'slide-left-fade',
     name: 'Slide left · fade',
     category: 'entrance',
+    description: 'Slides in from the right with a fade',
     build: () => ({
       ...baseShape(),
       keyframes: [
@@ -59,6 +61,7 @@ export const ENTRANCE_PRESETS: Preset[] = [
     id: 'zoom-in',
     name: 'Zoom in',
     category: 'entrance',
+    description: 'Scales up from small with a touch of overshoot',
     build: () => ({
       ...baseShape(),
       keyframes: [
@@ -74,6 +77,7 @@ export const ENTRANCE_PRESETS: Preset[] = [
     id: 'blur-in',
     name: 'Blur in',
     category: 'entrance',
+    description: 'Resolves out of a soft blur with fade',
     build: () => ({
       ...baseShape(),
       keyframes: [
@@ -89,6 +93,7 @@ export const ENTRANCE_PRESETS: Preset[] = [
     id: 'flip-in',
     name: 'Flip in',
     category: 'entrance',
+    description: 'X-axis card flip with overshoot',
     build: () => ({
       ...baseShape(),
       keyframes: [
@@ -104,6 +109,7 @@ export const ENTRANCE_PRESETS: Preset[] = [
     id: 'drop-in',
     name: 'Drop in',
     category: 'entrance',
+    description: 'Falls from above and bounces into place',
     build: () => ({
       ...baseShape(),
       keyframes: [

@@ -7,6 +7,7 @@ export const EXIT_PRESETS: Preset[] = [
     id: 'fade-out',
     name: 'Fade out',
     category: 'exit',
+    description: 'Smooth opacity fade to invisible',
     build: () => ({
       target: 'shape', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
       iterations: 1, direction: 'normal', fill: 'forwards',
@@ -22,6 +23,7 @@ export const EXIT_PRESETS: Preset[] = [
     id: 'slide-down-fade',
     name: 'Slide down · fade',
     category: 'exit',
+    description: 'Drops away below the baseline with a fade',
     build: () => ({
       target: 'shape', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
       iterations: 1, direction: 'normal', fill: 'forwards',
@@ -37,6 +39,7 @@ export const EXIT_PRESETS: Preset[] = [
     id: 'zoom-out',
     name: 'Zoom out',
     category: 'exit',
+    description: 'Scales down to a point and fades',
     build: () => ({
       target: 'shape', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
       iterations: 1, direction: 'normal', fill: 'forwards',
@@ -52,6 +55,7 @@ export const EXIT_PRESETS: Preset[] = [
     id: 'blur-out',
     name: 'Blur out',
     category: 'exit',
+    description: 'Dissolves into a soft blur with fade',
     build: () => ({
       target: 'shape', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
       iterations: 1, direction: 'normal', fill: 'forwards',
