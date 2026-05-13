@@ -3,6 +3,7 @@ import { Download, ExternalLink, Film, Info, Variable } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
 import { useFontStore } from '@/store/fontStore';
 import { useUiStore } from '@/store/uiStore';
+import { useCustomShapesStore } from '@/store/customShapesStore';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { generateCss } from '@/lib/generateCss';
 import { generateScss } from '@/lib/generateScss';
@@ -133,6 +134,11 @@ function openCodePen(html: string, css: string) {
 export function CodePanel() {
   const config = useAnimationStore((s) => s.config);
   const font = useFontStore((s) => s.font);
+  // Custom shapes feed into HTML / animated-SVG exports so a generated
+  // file with `shape: custom:abc123` still resolves to the right
+  // clip-path. Other generators don't render shape geometry inline
+  // (the user supplies their own host markup) so they don't need it.
+  const customShapes = useCustomShapesStore((s) => s.customShapes);
   const setExportOpen = useUiStore((s) => s.setExportOpen);
   const [format, setFormat] = useState<Format>('css');
   const [toast, setToast] = useState<string | null>(null);
@@ -164,7 +170,11 @@ export function CodePanel() {
       return generateHtml(config, {
         fontFamily: font.family,
         fontHref: font.href,
+        customShapes,
       });
+    }
+    if (meta.value === 'animsvg') {
+      return generateAnimatedSvg(config, { customShapes });
     }
     if (cssVarsActive) {
       // Cast: the FormatRow type is the lowest-common-denominator
@@ -178,7 +188,7 @@ export function CodePanel() {
       return (meta.fn as unknown as CssVarsCapableFn)(config, { cssVars: true });
     }
     return meta.fn(config);
-  }, [meta, config, font, cssVarsActive]);
+  }, [meta, config, font, cssVarsActive, customShapes]);
 
   useEffect(() => {
     const handler = () => copyRef.current?.click();
@@ -249,6 +259,7 @@ export function CodePanel() {
             type="button"
             onClick={() => {
               const html = generateHtml(config, {
+                customShapes,
                 fontFamily: font.family,
                 fontHref: font.href,
               });

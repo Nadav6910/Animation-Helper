@@ -1,4 +1,5 @@
-import { SHAPE_BY_KIND } from '@/lib/shapes';
+import { resolveShapeDef, SHAPE_BY_KIND } from '@/lib/shapes';
+import { useCustomShapesStore } from '@/store/customShapesStore';
 import type { ShapeKind } from '@/types/animation';
 import type { CSSProperties } from 'react';
 
@@ -10,7 +11,12 @@ type Props = {
 const DEFAULT_SIZE = 'h-32 w-32 sm:h-40 sm:w-40';
 
 export function ShapeTarget({ shape, className }: Props) {
-  const def = SHAPE_BY_KIND[shape];
+  // resolveShapeDef looks up both built-in and custom shapes. If the
+  // user references a custom shape they've since deleted (stale URL
+  // hash, undo across delete) we fall back to the square so the
+  // stage stays sane rather than rendering an empty box.
+  const customShapes = useCustomShapesStore((s) => s.customShapes);
+  const def = resolveShapeDef(shape, customShapes) ?? SHAPE_BY_KIND.square;
 
   // Mask-image needs both spec + -webkit prefixes for Safari, and
   // mask-size: 100% 100% so a 100×100 viewBox scales to fill the box.

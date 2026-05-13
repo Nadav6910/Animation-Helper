@@ -1,7 +1,8 @@
 import type { AnimationConfig } from '@/types/animation';
 import { generateCss } from './generateCss';
 import { SVG_PATH_BY_ID } from './svgPaths';
-import { SHAPE_BY_KIND } from './shapes';
+import { resolveShapeDef, SHAPE_BY_KIND } from './shapes';
+import type { CustomShape } from '@/store/customShapesStore';
 import { sanitisePathD } from './svgPathSafety';
 import { cssValueSafe } from './css-helpers';
 
@@ -44,7 +45,8 @@ const safeFontHref = (href: string): string | null => {
 function targetMarkup(
   c: AnimationConfig,
   className: string,
-  fontFamily: string
+  fontFamily: string,
+  customShapes: ReadonlyArray<CustomShape>
 ): string {
   // Sanitise the font-family value — `escapeHtml` covers attribute
   // breakout but doesn't strip CSS terminators (`;` / `}`), so a
@@ -76,7 +78,12 @@ function targetMarkup(
   <path d="${d}" pathLength="100" style="stroke-dasharray:100" />
 </svg>`;
   }
-  const shape = SHAPE_BY_KIND[c.shape ?? 'square'];
+  // resolveShapeDef looks up both built-ins and custom polygons. A
+  // stale custom-shape id (e.g. user deleted the shape but the config
+  // still references it) falls back to the square so the exported HTML
+  // always renders SOMETHING.
+  const shape =
+    resolveShapeDef(c.shape, customShapes) ?? SHAPE_BY_KIND.square;
   const styleParts = ['width:160px', 'height:160px', 'background:#7c5cff'];
   if (shape.borderRadius) styleParts.push(`border-radius:${shape.borderRadius}`);
   if (shape.clipPath) styleParts.push(`clip-path:${shape.clipPath}`);
@@ -93,6 +100,11 @@ export type GenerateHtmlOptions = {
    *  <link rel="stylesheet"> in <head>. Allow-listed to font origins we
    *  trust ourselves to ship. Tampered values are dropped silently. */
   fontHref?: string;
+  /** User-authored custom shapes from the store. Passed in so the
+   *  generator can resolve `config.shape` if it points at a custom
+   *  polygon; built-in shapes are always available via SHAPE_BY_KIND
+   *  and don't need this. */
+  customShapes?: ReadonlyArray<CustomShape>;
 };
 
 const DEFAULT_FONT = 'system-ui, sans-serif';
@@ -108,7 +120,7 @@ export function generateHtml(
   const css = cssBlockSafe(
     generateCss({ ...c, selector: `.${className}` }, { name: 'play' })
   );
-  const markup = targetMarkup(c, className, fontFamily);
+  const markup = targetMarkup(c, className, fontFamily, opts.customShapes ?? []);
   const fontLink = fontHref
     ? `\n  <link rel="stylesheet" href="${escapeHtml(fontHref)}">`
     : '';

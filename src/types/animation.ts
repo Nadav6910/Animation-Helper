@@ -1,6 +1,7 @@
 export type Vec2 = [number, number];
 
-export type ShapeKind =
+/** Built-in shape kinds shipped in `SHAPES` (src/lib/shapes.ts). */
+export type BuiltInShapeKind =
   | 'square'
   | 'triangle'
   | 'circle'
@@ -13,6 +14,15 @@ export type ShapeKind =
   | 'heart'
   | 'cross'
   | 'pentagon';
+
+/** IDs assigned to user-authored custom shapes. The `custom:` prefix
+ *  is checked at resolve time so a runtime ShapeKind value can be
+ *  routed to either SHAPE_BY_KIND or the customShapesStore without
+ *  ambiguity. */
+export type CustomShapeId = `custom:${string}`;
+
+/** Effective shape identifier carried in AnimationConfig.shape. */
+export type ShapeKind = BuiltInShapeKind | CustomShapeId;
 
 export type TargetKind = 'text' | 'shape' | 'svg';
 

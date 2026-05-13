@@ -2,8 +2,14 @@ import { useMemo, useState } from 'react';
 import { Type, Shapes, Spline, Plus, X, Pencil, Search } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
 import { useCustomPathsStore } from '@/store/customPathsStore';
+import { useCustomShapesStore } from '@/store/customShapesStore';
 import { Tabs } from '@/components/ui/Tabs';
-import { SHAPES, SHAPE_BY_KIND, type ShapeDef } from '@/lib/shapes';
+import {
+  customShapeToDef,
+  resolveShapeDef,
+  SHAPES,
+  type ShapeDef,
+} from '@/lib/shapes';
 import {
   SVG_PATHS,
   SVG_PATH_CATEGORIES,
@@ -209,7 +215,17 @@ export function TargetPicker() {
     });
   }, [pathCategory, pathQuery]);
 
-  const currentShape = config.shape ? SHAPE_BY_KIND[config.shape] : null;
+  // Custom shapes live in their own store; resolveShapeDef merges
+  // both registries so the picker treats them interchangeably with
+  // built-ins. Deletion is handled by the create modal in step 3.
+  const customShapes = useCustomShapesStore((s) => s.customShapes);
+  const shapeItems = useMemo<ShapeDef[]>(
+    () => [...SHAPES, ...customShapes.map(customShapeToDef)],
+    [customShapes]
+  );
+  const currentShape = config.shape
+    ? resolveShapeDef(config.shape, customShapes) ?? null
+    : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -246,7 +262,7 @@ export function TargetPicker() {
           renderSelectedGlyph={(s) => (
             <ShapeGlyph preview={s.preview} className="h-7 w-7 fill-accent" />
           )}
-          items={SHAPES}
+          items={shapeItems}
           itemKey={(s) => s.kind}
           isActive={(s) => config.shape === s.kind}
           onSelect={(s) => setShape(s.kind)}

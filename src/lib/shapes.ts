@@ -1,6 +1,10 @@
-import type { ShapeKind } from '@/types/animation';
+import type { BuiltInShapeKind, ShapeKind } from '@/types/animation';
+import type { CustomShape } from '@/store/customShapesStore';
+import { pointsToClipPath, type ClipPathPoint } from './clipPath';
 
 export type ShapeDef = {
+  /** Either a BuiltInShapeKind (one of the 12 shipped shapes) or a
+   *  `custom:<uid>` ID for a user-authored shape. */
   kind: ShapeKind;
   label: string;
   clipPath: string | null;
@@ -157,6 +161,53 @@ export const SHAPES: ShapeDef[] = [
   },
 ];
 
-export const SHAPE_BY_KIND: Record<ShapeKind, ShapeDef> = Object.fromEntries(
+export const SHAPE_BY_KIND: Record<BuiltInShapeKind, ShapeDef> = Object.fromEntries(
   SHAPES.map((s) => [s.kind, s])
-) as Record<ShapeKind, ShapeDef>;
+) as Record<BuiltInShapeKind, ShapeDef>;
+
+/**
+ * Convert a stored `CustomShape` into the runtime `ShapeDef` form so
+ * renderers can treat it interchangeably with built-ins. Generates an
+ * SVG path for the picker thumbnail from the same polygon vertices
+ * that drive the clip-path, guaranteeing visual parity between the
+ * thumbnail and the rendered stage shape.
+ */
+export function customShapeToDef(custom: CustomShape): ShapeDef {
+  return {
+    kind: custom.id,
+    label: custom.name,
+    clipPath: pointsToClipPath(custom.points),
+    preview: { kind: 'path', d: pointsToSvgPath(custom.points) },
+  };
+}
+
+function pointsToSvgPath(points: ReadonlyArray<ClipPathPoint>): string {
+  if (points.length === 0) return '';
+  const [first, ...rest] = points;
+  const parts = [`M${first[0]} ${first[1]}`];
+  for (const [x, y] of rest) parts.push(`L${x} ${y}`);
+  parts.push('Z');
+  return parts.join(' ');
+}
+
+/**
+ * Look up the ShapeDef for any `ShapeKind`, regardless of whether
+ * it's a built-in or a custom user shape. Returns `undefined` if the
+ * id no longer exists (e.g. a config references a custom shape the
+ * user has since deleted) — caller falls back to a sensible default
+ * (`SHAPE_BY_KIND.square`).
+ */
+export function resolveShapeDef(
+  kind: ShapeKind | undefined,
+  customShapes: ReadonlyArray<CustomShape> = []
+): ShapeDef | undefined {
+  if (!kind) return undefined;
+  if (kind.startsWith('custom:')) {
+    const custom = customShapes.find((s) => s.id === kind);
+    return custom ? customShapeToDef(custom) : undefined;
+  }
+  // After the prefix check, `kind` is guaranteed to be a
+  // BuiltInShapeKind at runtime — the lookup may still miss if a
+  // stale id slipped in, in which case the caller's fallback applies.
+  return SHAPE_BY_KIND[kind as BuiltInShapeKind];
+}
