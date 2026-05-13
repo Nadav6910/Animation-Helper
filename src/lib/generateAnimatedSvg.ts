@@ -5,7 +5,7 @@ import {
   buildRuleDeclLines,
 } from './generateCss';
 import { resolveShapeDef, SHAPE_BY_KIND } from './shapes';
-import type { CustomShape } from '@/store/customShapesStore';
+import type { CustomShape } from '@/types/animation';
 import { SVG_PATH_BY_ID } from './svgPaths';
 import { sanitisePathD } from './svgPathSafety';
 import { num } from './css-helpers';

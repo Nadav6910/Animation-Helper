@@ -24,6 +24,19 @@ export type CustomShapeId = `custom:${string}`;
 /** Effective shape identifier carried in AnimationConfig.shape. */
 export type ShapeKind = BuiltInShapeKind | CustomShapeId;
 
+/** User-authored polygon shape — persisted by `customShapesStore` and
+ *  consumed by the picker, the renderer, and the HTML / SVG
+ *  generators. Hoisted into the types module so `lib/` consumers
+ *  don't have to import from `store/` (unidirectional dependency
+ *  graph: store → types ← lib, components → both). */
+export type CustomShape = {
+  id: CustomShapeId;
+  name: string;
+  /** Vertex coordinates in % space (0 – 100), matching CSS clip-path. */
+  points: ReadonlyArray<readonly [number, number]>;
+  createdAt: number;
+};
+
 export type TargetKind = 'text' | 'shape' | 'svg';
 
 export type Rotate3d = {

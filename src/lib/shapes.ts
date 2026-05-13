@@ -1,5 +1,8 @@
-import type { BuiltInShapeKind, ShapeKind } from '@/types/animation';
-import type { CustomShape } from '@/store/customShapesStore';
+import type {
+  BuiltInShapeKind,
+  CustomShape,
+  ShapeKind,
+} from '@/types/animation';
 import { pointsToClipPath, type ClipPathPoint } from './clipPath';
 
 export type ShapeDef = {
@@ -171,13 +174,23 @@ export const SHAPE_BY_KIND: Record<BuiltInShapeKind, ShapeDef> = Object.fromEntr
  * SVG path for the picker thumbnail from the same polygon vertices
  * that drive the clip-path, guaranteeing visual parity between the
  * thumbnail and the rendered stage shape.
+ *
+ * Defensive: a CustomShape with fewer than 3 points (which the store's
+ * `validateEntry` should never accept, but the function is exported
+ * and an external caller could pass anything) falls back to a square
+ * thumbnail + clip-path. Keeps the function total — no empty SVG `d`
+ * attribute or `polygon()` clip-path that would render an invisible
+ * shape.
  */
 export function customShapeToDef(custom: CustomShape): ShapeDef {
+  const valid = custom.points.length >= 3;
   return {
     kind: custom.id,
     label: custom.name,
-    clipPath: pointsToClipPath(custom.points),
-    preview: { kind: 'path', d: pointsToSvgPath(custom.points) },
+    clipPath: valid ? pointsToClipPath(custom.points) : null,
+    preview: valid
+      ? { kind: 'path', d: pointsToSvgPath(custom.points) }
+      : { kind: 'rect', rx: 12 },
   };
 }
 
@@ -206,8 +219,9 @@ export function resolveShapeDef(
     const custom = customShapes.find((s) => s.id === kind);
     return custom ? customShapeToDef(custom) : undefined;
   }
-  // After the prefix check, `kind` is guaranteed to be a
-  // BuiltInShapeKind at runtime — the lookup may still miss if a
-  // stale id slipped in, in which case the caller's fallback applies.
+  // After the prefix check, `kind` is statically a BuiltInShapeKind
+  // — safe narrowing. A stale built-in name (e.g. a removed `kind`)
+  // misses the lookup and returns undefined; the caller's fallback
+  // (`SHAPE_BY_KIND.square` in every consumer) absorbs it.
   return SHAPE_BY_KIND[kind as BuiltInShapeKind];
 }

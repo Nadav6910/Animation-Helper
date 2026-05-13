@@ -2,7 +2,7 @@ import type { AnimationConfig } from '@/types/animation';
 import { generateCss } from './generateCss';
 import { SVG_PATH_BY_ID } from './svgPaths';
 import { resolveShapeDef, SHAPE_BY_KIND } from './shapes';
-import type { CustomShape } from '@/store/customShapesStore';
+import type { CustomShape } from '@/types/animation';
 import { sanitisePathD } from './svgPathSafety';
 import { cssValueSafe } from './css-helpers';
 
