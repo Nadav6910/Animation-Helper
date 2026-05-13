@@ -10,11 +10,12 @@ type Props = {
 };
 
 // Stable reference so useInView doesn't tear down + re-create the
-// observer on every render. 200 px rootMargin gives the animation a
-// quarter-second of "warm-up" before it scrolls into view, hiding the
-// off→on transition under scroll momentum on long preset lists.
+// observer on every render. 100 px rootMargin gives ~1.5 card-heights
+// of warm-up before the card scrolls into view — hides the off→on
+// transition under scroll momentum without keeping a huge buffer
+// running on small mobile viewports.
 const PRESET_PREVIEW_IO_OPTIONS: IntersectionObserverInit = {
-  rootMargin: '200px',
+  rootMargin: '100px',
 };
 
 /**
@@ -68,13 +69,13 @@ export function PresetMiniPreview({ config, className }: Props) {
     setTick((n) => n + 1);
   }, [config]);
 
-  // animation-play-state is not inherited, so it has to land on the
-  // actually-animated element (the one carrying the cls class). Stagger
-  // children (the per-letter spans) inherit it from their parent's
-  // animation timeline in practice because the parent's
-  // `animation-play-state: paused` halts the WAAPI Animation that
-  // useAnimationStyle attached at the parent level — verified in
-  // Chrome / Safari / Firefox.
+  // animation-play-state is not inherited, so it has to land on every
+  // element that carries a generated `animation` shorthand. For
+  // stagger text, generateCss emits TWO separate @keyframes — one on
+  // .cls (the wrapper, usually empty / decorative) and one on .cls > span
+  // (each letter, where the visible motion lives). Paused play-state
+  // therefore has to be set on each span as well as on the wrapper —
+  // the wrapper alone wouldn't stop the per-letter animations.
   const animStyle: React.CSSProperties = { animationPlayState: playState };
 
   let inner: React.ReactNode;
@@ -136,6 +137,7 @@ export function PresetMiniPreview({ config, className }: Props) {
     <div
       ref={inViewRef}
       key={tick}
+      aria-hidden
       className={cn(
         'flex h-14 w-full items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-bg-soft/50',
         className
