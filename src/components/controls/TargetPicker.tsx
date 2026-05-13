@@ -1,9 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Type, Shapes, Spline, Plus, X, Pencil, Search } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
 import { useCustomPathsStore } from '@/store/customPathsStore';
+import { useCustomShapesStore } from '@/store/customShapesStore';
 import { Tabs } from '@/components/ui/Tabs';
-import { SHAPES, SHAPE_BY_KIND, type ShapeDef } from '@/lib/shapes';
+import {
+  customShapeToDef,
+  resolveShapeDef,
+  SHAPES,
+  type ShapeDef,
+} from '@/lib/shapes';
 import {
   SVG_PATHS,
   SVG_PATH_CATEGORIES,
@@ -13,7 +19,9 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/cn';
 import { CustomSvgForm } from './CustomSvgForm';
+import { CustomShapeEditor } from './CustomShapeEditor';
 import { FontPicker } from './FontPicker';
+import type { CustomShape } from '@/types/animation';
 
 function ShapeGlyph({
   preview,
@@ -90,6 +98,20 @@ function CollapsiblePicker<T>({
   itemLabel,
 }: CollapsiblePickerProps<T>) {
   const [expanded, setExpanded] = useState(selected === null);
+  // Collapse whenever the *external* selection changes to a non-null
+  // value — e.g. the user selected something through a sibling
+  // surface (the custom-shapes grid, a keyboard shortcut, undo). The
+  // internal onSelect path already calls setExpanded(false) so this
+  // is a no-op in that case. A ref tracks the previous selection so
+  // expanding the picker with a value already selected doesn't
+  // immediately collapse it again on mount.
+  const prevSelectedRef = useRef(selected);
+  useEffect(() => {
+    if (selected !== prevSelectedRef.current && selected !== null) {
+      setExpanded(false);
+    }
+    prevSelectedRef.current = selected;
+  }, [selected]);
 
   return (
     <div aria-label={ariaLabel}>
@@ -209,7 +231,21 @@ export function TargetPicker() {
     });
   }, [pathCategory, pathQuery]);
 
-  const currentShape = config.shape ? SHAPE_BY_KIND[config.shape] : null;
+  // Custom shapes are kept in their own store + rendered in a separate
+  // grid section below the built-ins picker. `resolveShapeDef` resolves
+  // either kind for the "currently selected" display in the picker's
+  // collapsed view.
+  const customShapes = useCustomShapesStore((s) => s.customShapes);
+  const currentShape = config.shape
+    ? resolveShapeDef(config.shape, customShapes) ?? null
+    : null;
+  // Inline editor state. `editorOpen=true` expands the editor below
+  // the shapes grid. `editingShape=null` means create mode; a value
+  // means edit-that-shape mode. The two flags are independent so a
+  // user can "edit" a shape, then "create" without the editor having
+  // to unmount and remount between modes.
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingShape, setEditingShape] = useState<CustomShape | null>(null);
 
   return (
     <div className="flex flex-col gap-4">
@@ -261,6 +297,121 @@ export function TargetPicker() {
           )}
           itemLabel={(s) => s.label}
         />
+      )}
+
+      {config.target === 'shape' && (
+        // Custom shapes panel — surfaces user-authored polygons in a
+        // grid below the built-in picker. Always rendered (even when
+        // empty) so the "+ Create your own" tile is always available.
+        // Each existing shape is a relative-positioned wrapper around
+        // a select-button + an absolutely-positioned edit button —
+        // sibling buttons, not nested, mirroring the custom-paths
+        // pattern below.
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 px-1">
+            <span className="text-[11px] uppercase tracking-wider text-fg-subtle font-semibold">
+              Your shapes
+            </span>
+            {customShapes.length > 0 && (
+              <span className="text-[10px] tabular-nums text-fg-subtle/70">
+                {customShapes.length}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+            {customShapes.map((shape) => {
+              const def = customShapeToDef(shape);
+              const active = config.shape === shape.id;
+              return (
+                <div key={shape.id} className="relative group">
+                  <motion.button
+                    type="button"
+                    onClick={() => setShape(shape.id)}
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.96 }}
+                    aria-pressed={active}
+                    aria-label={shape.name}
+                    className={cn(
+                      'aspect-square w-full rounded-xl border bg-bg-soft p-2.5 grid place-items-center focus-ring transition-colors',
+                      active
+                        ? 'border-accent/60 bg-accent/5 shadow-glow'
+                        : 'border-border/70 hover:border-border-strong'
+                    )}
+                  >
+                    <ShapeGlyph
+                      preview={def.preview}
+                      className={cn(
+                        'h-full w-full transition-colors',
+                        active ? 'fill-accent' : 'fill-fg-muted/70'
+                      )}
+                    />
+                  </motion.button>
+                  {/* Edit button: absolutely positioned sibling of the
+                      select button (NOT nested inside it — invalid
+                      HTML). Fades in on hover/focus of the group so
+                      idle tiles don't look noisy. */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingShape(shape);
+                      setEditorOpen(true);
+                    }}
+                    className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-bg-panel/80 text-fg-muted opacity-0 transition-opacity hover:text-accent focus-ring group-hover:opacity-100 group-focus-within:opacity-100"
+                    aria-label={`Edit ${shape.name}`}
+                  >
+                    <Pencil size={10} />
+                  </button>
+                </div>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => {
+                setEditingShape(null);
+                setEditorOpen(true);
+              }}
+              aria-expanded={editorOpen && !editingShape}
+              className={cn(
+                'aspect-square rounded-xl border-2 border-dashed bg-bg-soft/50 p-2.5 grid place-items-center focus-ring transition-colors',
+                editorOpen && !editingShape
+                  ? 'border-accent/60 text-accent'
+                  : 'border-border/60 text-fg-muted hover:text-fg hover:border-border-strong'
+              )}
+              aria-label="Create custom shape"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
+          {/* Inline editor — expands within the shapes card instead of
+              opening a modal. Lets the mobile sheet's native scroll
+              handle overflow (modals had to manage their own
+              max-height and the Save / Cancel row could fall off the
+              bottom). AnimatePresence does the height + opacity
+              transition. */}
+          <AnimatePresence initial={false}>
+            {editorOpen && (
+              <CustomShapeEditor
+                key={editingShape?.id ?? 'create'}
+                editing={editingShape}
+                onCancel={() => {
+                  setEditorOpen(false);
+                  setEditingShape(null);
+                }}
+                onSaved={(id) => {
+                  setShape(id);
+                  setEditorOpen(false);
+                  setEditingShape(null);
+                }}
+                onDeleted={(id) => {
+                  if (config.shape === id) setShape('square');
+                  setEditorOpen(false);
+                  setEditingShape(null);
+                }}
+              />
+            )}
+          </AnimatePresence>
+        </div>
       )}
 
       {config.target === 'svg' && (

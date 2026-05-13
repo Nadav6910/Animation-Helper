@@ -252,6 +252,17 @@ function validateKeyframe(v: unknown): Keyframe | null {
   if ('easing' in v) k.easing = validateEasing(v.easing);
   const od = finiteOrUndef(v.offsetDistance);
   if (od !== undefined) k.offsetDistance = od;
+  if ('clipPath' in v) {
+    // Same cap + sanitiser pipeline as dropShadow / color — without
+    // this the field is silently dropped on the way through
+    // useUrlState's hash decoder and savedPresetsStore's localStorage
+    // load. Net effect of the missing branch: clip-path keyframes
+    // appear to work in-session but never survive reload / share /
+    // save, leaving the entire feature unreachable for persisted
+    // state.
+    const cp = cappedStr(v.clipPath);
+    if (cp) k.clipPath = cp;
+  }
   return k;
 }
 

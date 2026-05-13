@@ -4,7 +4,8 @@ import {
   buildKeyframesBody,
   buildRuleDeclLines,
 } from './generateCss';
-import { SHAPE_BY_KIND } from './shapes';
+import { resolveShapeDef, SHAPE_BY_KIND } from './shapes';
+import type { CustomShape } from '@/types/animation';
 import { SVG_PATH_BY_ID } from './svgPaths';
 import { sanitisePathD } from './svgPathSafety';
 import { num } from './css-helpers';
@@ -54,6 +55,10 @@ export type GenerateAnimatedSvgOptions = {
   /** Mirror of generateCss's cssVars flag — emit timing slots as CSS
    *  variables on the rule and reference them from the shorthand. */
   cssVars?: boolean;
+  /** User-authored custom shapes from the store. Passed in so the
+   *  generator can resolve `config.shape` if it points at a custom
+   *  polygon; built-in shapes are always available via SHAPE_BY_KIND. */
+  customShapes?: ReadonlyArray<CustomShape>;
 };
 
 /**
@@ -99,7 +104,8 @@ export function generateAnimatedSvg(
     const text = escapeXml(c.text ?? 'Animate');
     inner = `<text class="${className}" x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="system-ui, sans-serif" font-size="${num(size / 4)}" font-weight="700" fill="currentColor">${text}</text>`;
   } else {
-    const shape = SHAPE_BY_KIND[c.shape ?? 'square'];
+    const shape =
+      resolveShapeDef(c.shape, opts.customShapes ?? []) ?? SHAPE_BY_KIND.square;
     const half = size / 2;
     if (shape.kind === 'circle') {
       inner = `<circle class="${className}" cx="${num(half)}" cy="${num(half)}" r="${num(size * 0.35)}" fill="currentColor" />`;

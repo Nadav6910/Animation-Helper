@@ -1,6 +1,7 @@
 export type Vec2 = [number, number];
 
-export type ShapeKind =
+/** Built-in shape kinds shipped in `SHAPES` (src/lib/shapes.ts). */
+export type BuiltInShapeKind =
   | 'square'
   | 'triangle'
   | 'circle'
@@ -13,6 +14,28 @@ export type ShapeKind =
   | 'heart'
   | 'cross'
   | 'pentagon';
+
+/** IDs assigned to user-authored custom shapes. The `custom:` prefix
+ *  is checked at resolve time so a runtime ShapeKind value can be
+ *  routed to either SHAPE_BY_KIND or the customShapesStore without
+ *  ambiguity. */
+export type CustomShapeId = `custom:${string}`;
+
+/** Effective shape identifier carried in AnimationConfig.shape. */
+export type ShapeKind = BuiltInShapeKind | CustomShapeId;
+
+/** User-authored polygon shape — persisted by `customShapesStore` and
+ *  consumed by the picker, the renderer, and the HTML / SVG
+ *  generators. Hoisted into the types module so `lib/` consumers
+ *  don't have to import from `store/` (unidirectional dependency
+ *  graph: store → types ← lib, components → both). */
+export type CustomShape = {
+  id: CustomShapeId;
+  name: string;
+  /** Vertex coordinates in % space (0 – 100), matching CSS clip-path. */
+  points: ReadonlyArray<readonly [number, number]>;
+  createdAt: number;
+};
 
 export type TargetKind = 'text' | 'shape' | 'svg';
 
@@ -46,6 +69,20 @@ export type Keyframe = {
   strokeDashoffset?: number;
   easing?: Easing;
   offsetDistance?: number;
+  /**
+   * CSS `clip-path` value applied at this keyframe — typically a
+   * `polygon(x% y%, …)` produced from the custom-shape editor. Browsers
+   * interpolate clip-path smoothly between adjacent keyframes only
+   * when both sides use the same shape function and (for polygons)
+   * the same vertex count; mismatched counts result in a hard cut at
+   * the keyframe boundary, which the UI surface (Clip-path animation
+   * card, step 5) warns about so users aren't surprised.
+   *
+   * Lottie has no animatable clip-path primitive in its standard
+   * schema; that generator emits a one-line warning and drops the
+   * field, same pattern it already uses for hue-rotate.
+   */
+  clipPath?: string;
 };
 
 export type EasingPreset =

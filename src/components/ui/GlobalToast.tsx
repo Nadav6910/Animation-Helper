@@ -4,6 +4,7 @@ import { Check, AlertTriangle } from 'lucide-react';
 import { useUiStore } from '@/store/uiStore';
 import { onSavedPresetsPersistError } from '@/store/savedPresetsStore';
 import { onCustomPathsPersistError } from '@/store/customPathsStore';
+import { onCustomShapesPersistError } from '@/store/customShapesStore';
 
 /**
  * App-level toast surface. Components dispatch via
@@ -31,9 +32,16 @@ export function GlobalToast() {
         'error'
       );
     });
+    const offShapes = onCustomShapesPersistError(() => {
+      showToast(
+        "Couldn't save custom shape — local storage is full or unavailable.",
+        'error'
+      );
+    });
     return () => {
       offPresets();
       offPaths();
+      offShapes();
     };
   }, [showToast]);
 

@@ -12,6 +12,7 @@ import {
   Box,
   Route,
   PenLine,
+  Scissors,
 } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
 import { Section } from './Section';
@@ -27,6 +28,7 @@ import { KeyframeTimeline } from './KeyframeTimeline';
 import { PresetGallery } from './PresetGallery';
 import { OffsetPathSection } from './OffsetPathSection';
 import { PathDrawControls } from './PathDrawControls';
+import { ClipPathAnimationSection } from './ClipPathAnimationSection';
 
 export function ControlsPanel() {
   const target = useAnimationStore((s) => s.config.target);
@@ -104,6 +106,15 @@ export function ControlsPanel() {
         defaultOpen={false}
       >
         <ColorFilterSection />
+      </Section>
+
+      <Section
+        title="Clip-path"
+        description="Animate the shape — morph between polygons per keyframe"
+        icon={<Scissors size={16} />}
+        defaultOpen={false}
+      >
+        <ClipPathAnimationSection />
       </Section>
 
       {target === 'text' && (

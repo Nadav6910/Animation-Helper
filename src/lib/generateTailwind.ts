@@ -45,6 +45,12 @@ function decls(k: Keyframe, target: AnimationConfig['target']): Record<string, s
   if (typeof k.offsetDistance === 'number') {
     out.offsetDistance = `${num(k.offsetDistance)}%`;
   }
+  if (k.clipPath) {
+    // Same sanitisation as the CSS generator — strip declaration
+    // terminators so a tampered value can't break out of the
+    // generated config object.
+    out.clipPath = cssValueSafe(k.clipPath);
+  }
   if (k.easing) {
     out.animationTimingFunction = easingToCss(k.easing);
   }
