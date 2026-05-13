@@ -19,7 +19,9 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/cn';
 import { CustomSvgForm } from './CustomSvgForm';
+import { CustomShapeModal } from './CustomShapeModal';
 import { FontPicker } from './FontPicker';
+import type { CustomShape } from '@/types/animation';
 
 function ShapeGlyph({
   preview,
@@ -215,17 +217,16 @@ export function TargetPicker() {
     });
   }, [pathCategory, pathQuery]);
 
-  // Custom shapes live in their own store; resolveShapeDef merges
-  // both registries so the picker treats them interchangeably with
-  // built-ins. Deletion is handled by the create modal in step 3.
+  // Custom shapes are kept in their own store + rendered in a separate
+  // grid section below the built-ins picker. `resolveShapeDef` resolves
+  // either kind for the "currently selected" display in the picker's
+  // collapsed view.
   const customShapes = useCustomShapesStore((s) => s.customShapes);
-  const shapeItems = useMemo<ShapeDef[]>(
-    () => [...SHAPES, ...customShapes.map(customShapeToDef)],
-    [customShapes]
-  );
   const currentShape = config.shape
     ? resolveShapeDef(config.shape, customShapes) ?? null
     : null;
+  const [shapeModalOpen, setShapeModalOpen] = useState(false);
+  const [editingShape, setEditingShape] = useState<CustomShape | null>(null);
 
   return (
     <div className="flex flex-col gap-4">
@@ -262,7 +263,7 @@ export function TargetPicker() {
           renderSelectedGlyph={(s) => (
             <ShapeGlyph preview={s.preview} className="h-7 w-7 fill-accent" />
           )}
-          items={shapeItems}
+          items={SHAPES}
           itemKey={(s) => s.kind}
           isActive={(s) => config.shape === s.kind}
           onSelect={(s) => setShape(s.kind)}
@@ -277,6 +278,93 @@ export function TargetPicker() {
           )}
           itemLabel={(s) => s.label}
         />
+      )}
+
+      {config.target === 'shape' && (
+        // Custom shapes panel — surfaces user-authored polygons in a
+        // grid below the built-in picker. Always rendered (even when
+        // empty) so the "+ Create your own" tile is always available.
+        // Each existing shape is a relative-positioned wrapper around
+        // a select-button + an absolutely-positioned edit button —
+        // sibling buttons, not nested, mirroring the custom-paths
+        // pattern below.
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 px-1">
+            <span className="text-[11px] uppercase tracking-wider text-fg-subtle font-semibold">
+              Your shapes
+            </span>
+            {customShapes.length > 0 && (
+              <span className="text-[10px] tabular-nums text-fg-subtle/70">
+                {customShapes.length}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+            {customShapes.map((shape) => {
+              const def = customShapeToDef(shape);
+              const active = config.shape === shape.id;
+              return (
+                <div key={shape.id} className="relative group">
+                  <motion.button
+                    type="button"
+                    onClick={() => setShape(shape.id)}
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.96 }}
+                    aria-pressed={active}
+                    aria-label={shape.name}
+                    className={cn(
+                      'aspect-square w-full rounded-xl border bg-bg-soft p-2.5 grid place-items-center focus-ring transition-colors',
+                      active
+                        ? 'border-accent/60 bg-accent/5 shadow-glow'
+                        : 'border-border/70 hover:border-border-strong'
+                    )}
+                  >
+                    <ShapeGlyph
+                      preview={def.preview}
+                      className={cn(
+                        'h-full w-full transition-colors',
+                        active ? 'fill-accent' : 'fill-fg-muted/70'
+                      )}
+                    />
+                  </motion.button>
+                  {/* Edit button: absolutely positioned sibling of the
+                      select button (NOT nested inside it — invalid
+                      HTML). Fades in on hover/focus of the group so
+                      idle tiles don't look noisy. */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingShape(shape);
+                      setShapeModalOpen(true);
+                    }}
+                    className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-bg-panel/80 text-fg-muted opacity-0 transition-opacity hover:text-accent focus-ring group-hover:opacity-100 group-focus-within:opacity-100"
+                    aria-label={`Edit ${shape.name}`}
+                  >
+                    <Pencil size={10} />
+                  </button>
+                </div>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => {
+                setEditingShape(null);
+                setShapeModalOpen(true);
+              }}
+              className="aspect-square rounded-xl border-2 border-dashed border-border/60 bg-bg-soft/50 p-2.5 grid place-items-center focus-ring text-fg-muted hover:text-fg hover:border-border-strong transition-colors"
+              aria-label="Create custom shape"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
+          <CustomShapeModal
+            open={shapeModalOpen}
+            editing={editingShape}
+            onClose={() => setShapeModalOpen(false)}
+            onSaved={(id) => setShape(id)}
+          />
+        </div>
       )}
 
       {config.target === 'svg' && (
