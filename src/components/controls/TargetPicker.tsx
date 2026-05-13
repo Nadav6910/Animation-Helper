@@ -19,7 +19,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/cn';
 import { CustomSvgForm } from './CustomSvgForm';
-import { CustomShapeModal } from './CustomShapeModal';
+import { CustomShapeEditor } from './CustomShapeEditor';
 import { FontPicker } from './FontPicker';
 import type { CustomShape } from '@/types/animation';
 
@@ -225,7 +225,12 @@ export function TargetPicker() {
   const currentShape = config.shape
     ? resolveShapeDef(config.shape, customShapes) ?? null
     : null;
-  const [shapeModalOpen, setShapeModalOpen] = useState(false);
+  // Inline editor state. `editorOpen=true` expands the editor below
+  // the shapes grid. `editingShape=null` means create mode; a value
+  // means edit-that-shape mode. The two flags are independent so a
+  // user can "edit" a shape, then "create" without the editor having
+  // to unmount and remount between modes.
+  const [editorOpen, setEditorOpen] = useState(false);
   const [editingShape, setEditingShape] = useState<CustomShape | null>(null);
 
   return (
@@ -336,7 +341,7 @@ export function TargetPicker() {
                     onClick={(e) => {
                       e.stopPropagation();
                       setEditingShape(shape);
-                      setShapeModalOpen(true);
+                      setEditorOpen(true);
                     }}
                     className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-bg-panel/80 text-fg-muted opacity-0 transition-opacity hover:text-accent focus-ring group-hover:opacity-100 group-focus-within:opacity-100"
                     aria-label={`Edit ${shape.name}`}
@@ -350,37 +355,48 @@ export function TargetPicker() {
               type="button"
               onClick={() => {
                 setEditingShape(null);
-                setShapeModalOpen(true);
+                setEditorOpen(true);
               }}
-              className="aspect-square rounded-xl border-2 border-dashed border-border/60 bg-bg-soft/50 p-2.5 grid place-items-center focus-ring text-fg-muted hover:text-fg hover:border-border-strong transition-colors"
+              aria-expanded={editorOpen && !editingShape}
+              className={cn(
+                'aspect-square rounded-xl border-2 border-dashed bg-bg-soft/50 p-2.5 grid place-items-center focus-ring transition-colors',
+                editorOpen && !editingShape
+                  ? 'border-accent/60 text-accent'
+                  : 'border-border/60 text-fg-muted hover:text-fg hover:border-border-strong'
+              )}
               aria-label="Create custom shape"
             >
               <Plus size={18} />
             </button>
           </div>
-          {/* Mount only while open so the modal's hooks and zustand
-              subscriptions don't tick on every controls-panel render. */}
-          {shapeModalOpen && (
-            <CustomShapeModal
-              open
-              editing={editingShape}
-              onClose={() => {
-                setShapeModalOpen(false);
-                // Hygiene — drop the stale editing reference so a
-                // future "+ Create" click doesn't briefly flash the
-                // previous edit before the open effect re-seeds.
-                setEditingShape(null);
-              }}
-              onSaved={(id) => setShape(id)}
-              onDeleted={(id) => {
-                // Selected shape was just deleted — fall back to the
-                // default square so the stage doesn't render an
-                // empty box and the picker doesn't get stuck on a
-                // ghost selection.
-                if (config.shape === id) setShape('square');
-              }}
-            />
-          )}
+          {/* Inline editor — expands within the shapes card instead of
+              opening a modal. Lets the mobile sheet's native scroll
+              handle overflow (modals had to manage their own
+              max-height and the Save / Cancel row could fall off the
+              bottom). AnimatePresence does the height + opacity
+              transition. */}
+          <AnimatePresence initial={false}>
+            {editorOpen && (
+              <CustomShapeEditor
+                key={editingShape?.id ?? 'create'}
+                editing={editingShape}
+                onCancel={() => {
+                  setEditorOpen(false);
+                  setEditingShape(null);
+                }}
+                onSaved={(id) => {
+                  setShape(id);
+                  setEditorOpen(false);
+                  setEditingShape(null);
+                }}
+                onDeleted={(id) => {
+                  if (config.shape === id) setShape('square');
+                  setEditorOpen(false);
+                  setEditingShape(null);
+                }}
+              />
+            )}
+          </AnimatePresence>
         </div>
       )}
 
