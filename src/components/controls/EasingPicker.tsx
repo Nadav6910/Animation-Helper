@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
-import { EASING_PRESETS } from '@/lib/easings';
+import { EASING_PRESETS, parseEasing } from '@/lib/easings';
 import { BezierEditor, easingDescription } from './BezierEditor';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { cn } from '@/lib/cn';
@@ -109,6 +109,9 @@ export function EasingPicker() {
                 onChange={(v) => setEasing({ kind: 'cubic', v })}
               />
             </div>
+            <CubicPasteInput
+              onApply={(v) => setEasing({ kind: 'cubic', v })}
+            />
           </motion.div>
         )}
 
@@ -230,6 +233,82 @@ export function EasingPicker() {
       </AnimatePresence>
 
       <CurrentEasingHint easing={easing} />
+    </div>
+  );
+}
+
+function CubicPasteInput({
+  onApply,
+}: {
+  onApply: (v: [number, number, number, number]) => void;
+}) {
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = () => {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      setError(null);
+      return;
+    }
+    const parsed = parseEasing(trimmed);
+    if (parsed && parsed.kind === 'cubic') {
+      onApply(parsed.v);
+      setText('');
+      setError(null);
+      return;
+    }
+    // Non-cubic parses (presets, steps) are rejected here on purpose:
+    // accepting them silently would change the easing kind out from
+    // under the cubic tab, leaving the editor showing a stale curve.
+    setError(
+      'Need a cubic-bezier value, e.g. cubic-bezier(0.4, 0, 0.2, 1) or 0.4, 0, 0.2, 1'
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      <input
+        type="text"
+        inputMode="text"
+        autoComplete="off"
+        spellCheck={false}
+        placeholder="Paste cubic-bezier(...) or 0.4, 0, 0.2, 1"
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          if (error) setError(null);
+        }}
+        onBlur={submit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            submit();
+          } else if (e.key === 'Escape') {
+            setText('');
+            setError(null);
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        aria-label="Paste cubic-bezier value"
+        aria-invalid={error !== null}
+        aria-errormessage={error ? 'bezier-paste-error' : undefined}
+        className={cn(
+          'h-8 rounded-lg border bg-bg-soft px-3 text-xs font-mono outline-none transition-colors focus-ring',
+          error
+            ? 'border-red-500/60'
+            : 'border-border/70 focus:border-accent/60'
+        )}
+      />
+      {error && (
+        <span
+          id="bezier-paste-error"
+          role="alert"
+          className="text-[10px] text-red-400"
+        >
+          {error}
+        </span>
+      )}
     </div>
   );
 }

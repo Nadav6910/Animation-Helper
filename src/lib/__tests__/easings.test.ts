@@ -1,0 +1,158 @@
+import { describe, expect, it } from 'vitest';
+import { parseEasing } from '@/lib/easings';
+
+describe('parseEasing', () => {
+  describe('presets', () => {
+    it.each(['linear', 'ease', 'ease-in', 'ease-out', 'ease-in-out'])(
+      'accepts %s',
+      (name) => {
+        expect(parseEasing(name)).toEqual({ kind: 'preset', value: name });
+      }
+    );
+
+    it('is case-insensitive', () => {
+      expect(parseEasing('EASE-OUT')).toEqual({
+        kind: 'preset',
+        value: 'ease-out',
+      });
+    });
+
+    it('trims surrounding whitespace', () => {
+      expect(parseEasing('  linear  ')).toEqual({
+        kind: 'preset',
+        value: 'linear',
+      });
+    });
+
+    it('rejects unknown preset names', () => {
+      expect(parseEasing('ease-out-back')).toBeNull();
+      expect(parseEasing('bouncy')).toBeNull();
+    });
+  });
+
+  describe('cubic-bezier()', () => {
+    it('parses canonical form', () => {
+      expect(parseEasing('cubic-bezier(0.4, 0, 0.2, 1)')).toEqual({
+        kind: 'cubic',
+        v: [0.4, 0, 0.2, 1],
+      });
+    });
+
+    it('tolerates wide whitespace', () => {
+      expect(parseEasing('cubic-bezier(  0.4 ,0,0.2 , 1  )')).toEqual({
+        kind: 'cubic',
+        v: [0.4, 0, 0.2, 1],
+      });
+    });
+
+    it('allows negative Y for overshoot / elastic curves', () => {
+      expect(parseEasing('cubic-bezier(0.68, -0.6, 0.32, 1.6)')).toEqual({
+        kind: 'cubic',
+        v: [0.68, -0.6, 0.32, 1.6],
+      });
+    });
+
+    it('accepts leading-decimal numbers like .5', () => {
+      expect(parseEasing('cubic-bezier(.5, .1, .5, 1)')).toEqual({
+        kind: 'cubic',
+        v: [0.5, 0.1, 0.5, 1],
+      });
+    });
+
+    it('rejects X1 outside [0, 1]', () => {
+      expect(parseEasing('cubic-bezier(-0.1, 0, 0.5, 1)')).toBeNull();
+      expect(parseEasing('cubic-bezier(1.1, 0, 0.5, 1)')).toBeNull();
+    });
+
+    it('rejects X2 outside [0, 1]', () => {
+      expect(parseEasing('cubic-bezier(0.4, 0, -0.01, 1)')).toBeNull();
+      expect(parseEasing('cubic-bezier(0.4, 0, 1.5, 1)')).toBeNull();
+    });
+
+    it('rejects malformed input', () => {
+      expect(parseEasing('cubic-bezier(0.4, 0, 0.2)')).toBeNull();
+      expect(parseEasing('cubic-bezier(0.4 0 0.2 1)')).toBeNull();
+      expect(parseEasing('cubic-bezier(a, b, c, d)')).toBeNull();
+      // Scientific notation and `+` signs aren't valid CSS easing syntax.
+      expect(parseEasing('cubic-bezier(1e-1, 0, 0.5, 1)')).toBeNull();
+      expect(parseEasing('cubic-bezier(+0.5, 0, 0.5, 1)')).toBeNull();
+    });
+
+    it('rejects empty input', () => {
+      expect(parseEasing('')).toBeNull();
+      expect(parseEasing('   ')).toBeNull();
+    });
+  });
+
+  describe('raw tuple form', () => {
+    it('parses bare four-number tuples', () => {
+      expect(parseEasing('0.4, 0, 0.2, 1')).toEqual({
+        kind: 'cubic',
+        v: [0.4, 0, 0.2, 1],
+      });
+    });
+
+    it('applies the same X-range validation as cubic-bezier()', () => {
+      expect(parseEasing('-0.1, 0, 0.5, 1')).toBeNull();
+      expect(parseEasing('0.4, 0, 1.1, 1')).toBeNull();
+    });
+  });
+
+  describe('steps()', () => {
+    it('parses bare step count', () => {
+      expect(parseEasing('steps(4)')).toEqual({
+        kind: 'steps',
+        n: 4,
+        jump: 'end',
+      });
+    });
+
+    it.each(['start', 'end'])('parses bare position %s', (pos) => {
+      expect(parseEasing(`steps(4, ${pos})`)).toEqual({
+        kind: 'steps',
+        n: 4,
+        jump: pos,
+      });
+    });
+
+    it.each(['start', 'end', 'none', 'both'])(
+      'parses jump-%s modifier',
+      (mod) => {
+        expect(parseEasing(`steps(6, jump-${mod})`)).toEqual({
+          kind: 'steps',
+          n: 6,
+          jump: mod,
+        });
+      }
+    );
+
+    it('parses step-start / step-end shorthands', () => {
+      expect(parseEasing('step-start')).toEqual({
+        kind: 'steps',
+        n: 1,
+        jump: 'start',
+      });
+      expect(parseEasing('step-end')).toEqual({
+        kind: 'steps',
+        n: 1,
+        jump: 'end',
+      });
+    });
+
+    it('rejects zero or negative step counts', () => {
+      expect(parseEasing('steps(0)')).toBeNull();
+      expect(parseEasing('steps(-1)')).toBeNull();
+    });
+
+    it('rejects unknown jump modifiers', () => {
+      expect(parseEasing('steps(4, jump-mid)')).toBeNull();
+      expect(parseEasing('steps(4, sometime)')).toBeNull();
+    });
+  });
+
+  it('rejects garbage', () => {
+    expect(parseEasing('not-a-function(0, 0, 0, 0)')).toBeNull();
+    expect(parseEasing('cubic-bezier')).toBeNull();
+    expect(parseEasing('cubic-bezier()')).toBeNull();
+  });
+});

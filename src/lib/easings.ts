@@ -1,4 +1,4 @@
-import type { Easing } from '@/types/animation';
+import type { Easing, EasingPreset, StepsJump } from '@/types/animation';
 
 export const EASING_PRESETS: { name: string; value: Easing }[] = [
   { name: 'linear', value: { kind: 'preset', value: 'linear' } },
@@ -36,4 +36,90 @@ export function easingToCss(e: Easing): string {
   }
   const [a, b, c, d] = e.v;
   return `cubic-bezier(${a}, ${b}, ${c}, ${d})`;
+}
+
+const PRESET_NAMES: readonly EasingPreset[] = [
+  'linear',
+  'ease',
+  'ease-in',
+  'ease-out',
+  'ease-in-out',
+];
+
+const STEPS_JUMPS: readonly StepsJump[] = ['start', 'end', 'none', 'both'];
+
+/**
+ * Parse a user-supplied easing string into the internal `Easing`
+ * representation. Returns `null` for malformed input — the caller is
+ * responsible for surfacing a user-facing error.
+ *
+ * Accepts:
+ *  - Named presets: `linear`, `ease`, `ease-in`, `ease-out`, `ease-in-out`
+ *  - CSS cubic-bezier form: `cubic-bezier(0.4, 0, 0.2, 1)` (case-insensitive,
+ *    flexible whitespace; X1 / X2 must be in [0, 1] per the CSS spec)
+ *  - Raw 4-number tuple: `0.4, 0, 0.2, 1` — convenience for pasting from
+ *    tools that only emit the numbers
+ *  - Steps function: `steps(4)`, `steps(4, end)`, `steps(4, jump-end)`,
+ *    plus the `step-start` / `step-end` keyword shorthands
+ *
+ * Numeric parsing is strict: scientific notation, hex, plus signs, and
+ * lone decimal points are rejected because the CSS spec doesn't allow
+ * them and accepting them would mask user typos.
+ */
+export function parseEasing(input: string): Easing | null {
+  const trimmed = input.trim().toLowerCase();
+  if (!trimmed) return null;
+
+  if ((PRESET_NAMES as readonly string[]).includes(trimmed)) {
+    return { kind: 'preset', value: trimmed as EasingPreset };
+  }
+
+  if (trimmed === 'step-start') return { kind: 'steps', n: 1, jump: 'start' };
+  if (trimmed === 'step-end') return { kind: 'steps', n: 1, jump: 'end' };
+
+  // Numeric literal pattern: optional minus, digits with optional decimal,
+  // OR a leading decimal with digits. Rejects `+`, scientific notation,
+  // and lone dots.
+  const NUM = '(-?(?:\\d+(?:\\.\\d+)?|\\.\\d+))';
+  const SEP = '\\s*,\\s*';
+  const cubicRe = new RegExp(
+    `^cubic-bezier\\s*\\(\\s*${NUM}${SEP}${NUM}${SEP}${NUM}${SEP}${NUM}\\s*\\)$`
+  );
+  const rawRe = new RegExp(`^${NUM}${SEP}${NUM}${SEP}${NUM}${SEP}${NUM}$`);
+
+  const cubicMatch = trimmed.match(cubicRe) ?? trimmed.match(rawRe);
+  if (cubicMatch) {
+    const nums = [1, 2, 3, 4].map((i) => Number(cubicMatch[i])) as [
+      number,
+      number,
+      number,
+      number,
+    ];
+    if (!nums.every(Number.isFinite)) return null;
+    // Per CSS spec, X1 and X2 must be in [0, 1]; Y can be anything (overshoot
+    // / undershoot is how easeOutBack etc. are expressed).
+    if (nums[0] < 0 || nums[0] > 1 || nums[2] < 0 || nums[2] > 1) return null;
+    return { kind: 'cubic', v: nums };
+  }
+
+  const stepsRe = /^steps\s*\(\s*(\d+)(?:\s*,\s*(jump-(?:start|end|none|both)|start|end))?\s*\)$/;
+  const stepsMatch = trimmed.match(stepsRe);
+  if (stepsMatch) {
+    const n = Number(stepsMatch[1]);
+    if (!Number.isFinite(n) || n < 1) return null;
+    let jump: StepsJump = 'end';
+    const mod = stepsMatch[2];
+    if (mod) {
+      if (mod === 'start') jump = 'start';
+      else if (mod === 'end') jump = 'end';
+      else {
+        const stripped = mod.replace(/^jump-/, '') as StepsJump;
+        if (!(STEPS_JUMPS as readonly string[]).includes(stripped)) return null;
+        jump = stripped;
+      }
+    }
+    return { kind: 'steps', n: Math.round(n), jump };
+  }
+
+  return null;
 }
