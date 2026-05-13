@@ -86,6 +86,12 @@ export function PolygonEditor({
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  // Persistent "I'm working on this vertex" state — set on tap or
+  // drag of a vertex, cleared when the user taps an empty canvas
+  // area or presses Escape. Drives the × delete overlay's visibility
+  // independently of hover so mobile users (where hover doesn't
+  // exist) still get a tap → see × → tap × flow.
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [insertHint, setInsertHint] = useState<ClipPathPoint | null>(null);
   // Same anti-stale-closure pattern as BezierEditor: the pointermove
   // listener captures `points` from the render that fired the drag.
@@ -129,6 +135,7 @@ export function PolygonEditor({
     e.preventDefault();
     e.stopPropagation();
     setDragIdx(idx);
+    setSelectedIdx(idx);
     setInsertHint(null);
     try {
       (e.currentTarget as Element).setPointerCapture(e.pointerId);
@@ -161,6 +168,11 @@ export function PolygonEditor({
     const [x, y] = fromPx(e.clientX - rect.left, e.clientY - rect.top);
     onChange(insertPointAt(pointsRef.current, [round3(x), round3(y)]));
     setInsertHint(null);
+    // Tapping empty space deselects — same gesture used to dismiss
+    // selections in most touch UIs. The newly-inserted vertex isn't
+    // selected automatically; if the user wants to delete it they
+    // can tap it explicitly.
+    setSelectedIdx(null);
   };
 
   const onCanvasPointerMove = (e: React.PointerEvent) => {
@@ -196,6 +208,14 @@ export function PolygonEditor({
 
   const handleVertexKey = (e: React.KeyboardEvent, idx: number) => {
     if (readOnly) return;
+    // Escape clears the active selection so the × disappears on
+    // keyboard users too. Doesn't preventDefault so the keystroke
+    // can still bubble to a containing surface (e.g. the inline
+    // editor) that uses it to cancel.
+    if (e.key === 'Escape') {
+      setSelectedIdx(null);
+      return;
+    }
     const step = e.shiftKey ? 5 : 1;
     const handled =
       e.key === 'ArrowLeft' ||
@@ -347,6 +367,14 @@ export function PolygonEditor({
           const canDelete = points.length > minPoints;
           const isDragging = dragIdx === idx;
           const isHover = hoverIdx === idx;
+          const isSelected = selectedIdx === idx;
+          // Active = the vertex is currently the user's focus of
+          // attention. Drives the × overlay visibility, the halo's
+          // scale-up, and the inner ring's enlargement. Combining
+          // hover + drag + persistent selection gives a consistent
+          // affordance across desktop (hover) and mobile (tap-to-
+          // select).
+          const isActive = isHover || isDragging || isSelected;
           return (
             // Plain div positioned via left/top so the vertex tracks
             // the cursor every render — no framer-motion buffering.
@@ -373,7 +401,13 @@ export function PolygonEditor({
                 onPointerDown={(e) => onVertexPointerDown(e, idx)}
                 onPointerEnter={() => setHoverIdx(idx)}
                 onPointerLeave={() => setHoverIdx((v) => (v === idx ? null : v))}
-                onFocus={() => setHoverIdx(idx)}
+                onFocus={() => {
+                  setHoverIdx(idx);
+                  // Keyboard-tab path also selects the vertex so the
+                  // × delete overlay appears for the focused vertex
+                  // without requiring a pointer hover.
+                  setSelectedIdx(idx);
+                }}
                 onBlur={() => setHoverIdx((v) => (v === idx ? null : v))}
                 onKeyDown={(e) => handleVertexKey(e, idx)}
                 tabIndex={readOnly ? -1 : 0}
@@ -390,16 +424,17 @@ export function PolygonEditor({
                       : 'cursor-grab'
                 )}
               >
-                {/* Outer halo — fades in on hover / drag for affordance. */}
+                {/* Outer halo — fades in when the vertex is active
+                    (hovered, dragged, selected, or focused). */}
                 <span
                   aria-hidden
                   className={cn(
                     'absolute inset-0 m-auto h-6 w-6 rounded-full bg-accent/20 transition-all duration-150',
                     isDragging
                       ? 'scale-125 bg-accent/40'
-                      : isHover
+                      : isActive
                         ? 'scale-110'
-                        : 'scale-90 opacity-0 group-focus-visible/vertex:opacity-100 group-focus-visible/vertex:scale-110'
+                        : 'scale-90 opacity-0'
                   )}
                 />
                 {/* Outer ring — the visible "grommet" edge. */}
@@ -407,7 +442,7 @@ export function PolygonEditor({
                   aria-hidden
                   className={cn(
                     'relative grid h-4 w-4 place-items-center rounded-full border-2 border-accent bg-bg shadow-glow transition-transform duration-150',
-                    isDragging ? 'scale-125' : isHover ? 'scale-110' : 'scale-100'
+                    isDragging ? 'scale-125' : isActive ? 'scale-110' : 'scale-100'
                   )}
                 >
                   {/* Inner dot — fills the centre so the handle reads
@@ -420,18 +455,25 @@ export function PolygonEditor({
                 // is 10 px. tabIndex=-1 keeps keyboard users tabbing
                 // through vertices only — Backspace/Delete on the
                 // vertex covers keyboard deletion.
+                //
+                // Visible whenever the vertex is "active" (hover on
+                // desktop, drag-in-progress, or persistently
+                // selected via tap on mobile). Without the selected
+                // branch, mobile users had no way to surface the
+                // × button — hover doesn't fire on touch.
                 <button
                   type="button"
                   tabIndex={-1}
                   onClick={(e) => {
                     e.stopPropagation();
                     removePoint(idx);
+                    setSelectedIdx(null);
                   }}
                   onPointerDown={(e) => e.stopPropagation()}
                   aria-label={`Remove vertex ${idx + 1}`}
                   className={cn(
                     'absolute -right-4 -top-4 grid h-6 w-6 place-items-center rounded-full border border-border bg-bg-panel text-fg-muted hover:text-red-400 hover:border-red-500/60 focus-ring transition-all duration-150',
-                    isHover || isDragging
+                    isActive
                       ? 'opacity-100 scale-100'
                       : 'opacity-0 scale-75 pointer-events-none'
                   )}

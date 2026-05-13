@@ -74,12 +74,14 @@ export function CustomShapeEditor({
       setName('');
       setPoints(defaultPolygon());
     }
-    // Focus the name input on open so users can start typing
-    // immediately — same affordance the modal version had.
-    nameInputRef.current?.focus();
-    // Scroll into view so the editor section is centred in the
-    // mobile sheet's viewport when it expands; otherwise users have
-    // to manually scroll the controls panel to see the canvas.
+    // Deliberately NOT auto-focusing the name input: on mobile that
+    // raises the on-screen keyboard the moment the editor expands,
+    // which covers the polygon canvas the user just opened it to
+    // see. Desktop users one tap away from the field anyway.
+    //
+    // Still scroll the section into view so the canvas isn't
+    // hidden below the mobile sheet's fold when the user expands
+    // the editor.
     containerRef.current?.scrollIntoView({
       behavior: 'smooth',
       block: 'nearest',

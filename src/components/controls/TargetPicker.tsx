@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Type, Shapes, Spline, Plus, X, Pencil, Search } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
 import { useCustomPathsStore } from '@/store/customPathsStore';
@@ -98,6 +98,20 @@ function CollapsiblePicker<T>({
   itemLabel,
 }: CollapsiblePickerProps<T>) {
   const [expanded, setExpanded] = useState(selected === null);
+  // Collapse whenever the *external* selection changes to a non-null
+  // value — e.g. the user selected something through a sibling
+  // surface (the custom-shapes grid, a keyboard shortcut, undo). The
+  // internal onSelect path already calls setExpanded(false) so this
+  // is a no-op in that case. A ref tracks the previous selection so
+  // expanding the picker with a value already selected doesn't
+  // immediately collapse it again on mount.
+  const prevSelectedRef = useRef(selected);
+  useEffect(() => {
+    if (selected !== prevSelectedRef.current && selected !== null) {
+      setExpanded(false);
+    }
+    prevSelectedRef.current = selected;
+  }, [selected]);
 
   return (
     <div aria-label={ariaLabel}>
