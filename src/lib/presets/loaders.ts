@@ -7,6 +7,7 @@ export const LOADER_PRESETS: Preset[] = [
     id: 'spinner',
     name: 'Spinner',
     category: 'loaders',
+    description: 'Continuous full-rotation spin at a steady pace',
     build: () => ({
       target: 'shape', selector: '.animated', shape: 'circle', text: 'Animate', svgPath: 'check',
       iterations: 'infinite', direction: 'normal', fill: 'none',
@@ -22,6 +23,7 @@ export const LOADER_PRESETS: Preset[] = [
     id: 'dot-pulse',
     name: 'Dot pulse',
     category: 'loaders',
+    description: 'Scale and opacity breathe in unison',
     build: () => ({
       target: 'shape', selector: '.animated', shape: 'circle', text: 'Animate', svgPath: 'check',
       iterations: 'infinite', direction: 'normal', fill: 'none',
@@ -38,6 +40,7 @@ export const LOADER_PRESETS: Preset[] = [
     id: 'circle-draw',
     name: 'Circle draw',
     category: 'loaders',
+    description: 'SVG stroke draws itself around the circle',
     build: () => ({
       target: 'svg', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'circle',
       iterations: 'infinite', direction: 'normal', fill: 'forwards',
@@ -53,6 +56,7 @@ export const LOADER_PRESETS: Preset[] = [
     id: 'bar-bounce',
     name: 'Bar bounce',
     category: 'loaders',
+    description: 'Vertical scale alternates between endpoints',
     build: () => ({
       target: 'shape', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
       iterations: 'infinite', direction: 'alternate', fill: 'none',
@@ -95,11 +99,13 @@ export const LOADER_PRESETS: Preset[] = [
       iterations: 'infinite', direction: 'normal', fill: 'none',
       // Distinct from bar-bounce (alternating endpoints): this one
       // returns to baseline every cycle, giving a heartbeat-like
-      // breathing rhythm rather than a metronome bounce.
+      // breathing rhythm rather than a metronome bounce. Endpoints
+      // use the identity transform (no explicit scale) so the
+      // generated CSS stays as clean as bar-bounce's.
       keyframes: [
-        { id: uid(), at: 0, transform: { ...blank(), scale: [1, 1] } },
+        { id: uid(), at: 0, transform: { ...blank() } },
         { id: uid(), at: 50, transform: { ...blank(), scale: [1, 1.5] } },
-        { id: uid(), at: 100, transform: { ...blank(), scale: [1, 1] } },
+        { id: uid(), at: 100, transform: { ...blank() } },
       ],
       duration: 1400, delay: 0,
       easing: { kind: 'preset', value: 'ease-in-out' },

@@ -7,6 +7,7 @@ export const ATTENTION_PRESETS: Preset[] = [
     id: 'pulse',
     name: 'Pulse',
     category: 'attention',
+    description: 'Gentle scale and opacity breathing loop',
     build: () => ({
       target: 'shape', selector: '.animated', shape: 'circle', text: 'Animate', svgPath: 'check',
       iterations: 'infinite', direction: 'normal', fill: 'none',
@@ -23,6 +24,7 @@ export const ATTENTION_PRESETS: Preset[] = [
     id: 'shake',
     name: 'Shake',
     category: 'attention',
+    description: 'Quick side-to-side translate that decays',
     build: () => ({
       target: 'shape', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
       iterations: 1, direction: 'normal', fill: 'none',
@@ -44,6 +46,7 @@ export const ATTENTION_PRESETS: Preset[] = [
     id: 'wobble',
     name: 'Wobble',
     category: 'attention',
+    description: 'Translate and skew waves that settle',
     build: () => ({
       target: 'shape', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
       iterations: 1, direction: 'normal', fill: 'none',
@@ -62,6 +65,7 @@ export const ATTENTION_PRESETS: Preset[] = [
     id: 'heartbeat',
     name: 'Heartbeat',
     category: 'attention',
+    description: 'Double-tap scale loop that mimics a pulse',
     build: () => ({
       target: 'svg', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'heart',
       iterations: 'infinite', direction: 'normal', fill: 'none',
@@ -80,6 +84,7 @@ export const ATTENTION_PRESETS: Preset[] = [
     id: 'jello',
     name: 'Jello',
     category: 'attention',
+    description: 'Skew wobble in opposing diagonals that settles flat',
     build: () => ({
       target: 'shape', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
       iterations: 1, direction: 'normal', fill: 'none',
@@ -100,6 +105,7 @@ export const ATTENTION_PRESETS: Preset[] = [
     id: 'rubber-band',
     name: 'Rubber band',
     category: 'attention',
+    description: 'Squash and stretch like a snapped rubber band',
     build: () => ({
       target: 'shape', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
       iterations: 1, direction: 'normal', fill: 'none',
@@ -170,11 +176,14 @@ export const ATTENTION_PRESETS: Preset[] = [
       // dropShadow is the supported filter primitive (text-shadow isn't
       // wired through the generators); expanding the blur radius while
       // dialling the colour's alpha creates a "halo breathing" effect.
-      // rgb(var(--accent)) follows the active theme accent.
+      // Literal rgba (matching globals.css's --accent value) keeps the
+      // exported CSS portable: a user pasting the generated code into
+      // a project without an --accent custom property would otherwise
+      // see the colour resolve to invalid and the glow disappear.
       keyframes: [
-        { id: uid(), at: 0, dropShadow: '0 0 0 rgb(var(--accent) / 0.7)', transform: { ...blank() } },
-        { id: uid(), at: 50, dropShadow: '0 0 24px rgb(var(--accent) / 0.0)', transform: { ...blank() } },
-        { id: uid(), at: 100, dropShadow: '0 0 0 rgb(var(--accent) / 0.7)', transform: { ...blank() } },
+        { id: uid(), at: 0, dropShadow: '0 0 0 rgba(124, 92, 255, 0.7)', transform: { ...blank() } },
+        { id: uid(), at: 50, dropShadow: '0 0 24px rgba(124, 92, 255, 0)', transform: { ...blank() } },
+        { id: uid(), at: 100, dropShadow: '0 0 0 rgba(124, 92, 255, 0.7)', transform: { ...blank() } },
       ],
       duration: 2000, delay: 0,
       easing: { kind: 'preset', value: 'ease-in-out' },
