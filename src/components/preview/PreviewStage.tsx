@@ -44,16 +44,30 @@ export function PreviewStage() {
       stageMountedRef.current = false;
     };
   }, []);
+  // Both pause effects (occlusion + document visibility) share one
+  // safe-to-resume gate: only call controller.play() if the stage is
+  // visible AND the tab is visible. The gate reads LIVE store state
+  // via useUiStore.getState() because the closure-captured values
+  // could be stale by the time the cleanup runs — e.g. sheet closes
+  // while the tab is still minimised would otherwise resume the
+  // animation behind a hidden tab.
+  const resumeIfFullyVisible = useCallback(() => {
+    if (!stageMountedRef.current) return;
+    const ui = useUiStore.getState();
+    if (!ui.documentVisible) return;
+    if (ui.stageOccluded) return;
+    controller.play();
+  }, [controller]);
+
   useEffect(() => {
     if (!stageOccluded) return;
     if (!controller.isPlaying) return;
     controller.pause();
     return () => {
-      // Skip the resume on full unmount — by then the className-targeted
-      // animation is also gone, and play()'s missing-animation fallback
-      // would bump the className and reset state on a doomed tree.
-      if (!stageMountedRef.current) return;
-      controller.play();
+      // Resume-gate reads live store state so we don't play() into a
+      // tab that's still hidden (or a stage that's still occluded by
+      // some other gate).
+      resumeIfFullyVisible();
     };
     // Reading isPlaying inside the effect captures the play state at the
     // moment occlusion began; we deliberately don't re-subscribe when
@@ -72,8 +86,7 @@ export function PreviewStage() {
     if (!controller.isPlaying) return;
     controller.pause();
     return () => {
-      if (!stageMountedRef.current) return;
-      controller.play();
+      resumeIfFullyVisible();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentVisible]);
