@@ -9,6 +9,7 @@ type ChannelKey =
   | 'z'
   | 'rotateX'
   | 'rotateY'
+  | 'rotateZ'
   | 'skewX'
   | 'skewY'
   | 'scaleX'
@@ -33,6 +34,22 @@ function readChannel(k: Keyframe, ch: ChannelKey): string | number | undefined {
       return t?.rotate?.[0];
     case 'rotateY':
       return t?.rotate?.[1];
+    case 'rotateZ': {
+      // Framer Motion has discrete rotateX / rotateY / rotateZ
+      // channels, but our internal model splits rotation across
+      // `rotate: [x, y]` (the in-plane rotateX / rotateY) and
+      // `rotate3d: {x, y, z, deg}` for free-axis rotation. The Z
+      // component is only meaningful when the rotate3d axis is the
+      // canonical Z unit vector (x=0, y=0, z=1) — that's the case
+      // every preset in the library uses. Any other axis (mixed-
+      // axis rotate3d) is intentionally ignored here; users who
+      // need a fancy mixed rotation in Framer Motion can compose
+      // rotateX / rotateY / rotateZ themselves.
+      const r = t?.rotate3d;
+      if (!r) return undefined;
+      const isCanonicalZ = r.x === 0 && r.y === 0 && r.z !== 0;
+      return isCanonicalZ ? r.deg : undefined;
+    }
     case 'skewX':
       return t?.skew?.[0];
     case 'skewY':
@@ -118,6 +135,7 @@ export function generateFramerMotion(
     'z',
     'rotateX',
     'rotateY',
+    'rotateZ',
     'skewX',
     'skewY',
     'scaleX',
