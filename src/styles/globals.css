@@ -172,9 +172,14 @@
   }
 }
 
-/* Live preview ball for the cubic-bezier editor. The --slide-end
-   custom property lets the consuming component fix the travel
-   distance without us having to emit a per-instance @keyframes block.
+/* Live preview ball for the cubic-bezier editor. The --slide-from /
+   --slide-end custom properties let the consuming component fix the
+   travel range without emitting a per-instance @keyframes block. For
+   overshoot curves (Y outside [0, 1]) the consumer shrinks the
+   from→to span so the curve's peak / trough lands exactly at the
+   track edges; the ball never escapes the track even on curves like
+   easeOutBack or bounce.
+
    `alternate` (set on the consumer) plays the curve forward then in
    reverse so the user sees the curve in both directions per cycle.
    Reduced-motion handling is done in JS via framer-motion's
@@ -182,7 +187,7 @@
    hint instead of leaving a frozen dot pinned at the start. */
 @keyframes ah-bezier-slide {
   from {
-    transform: translate(0, -50%);
+    transform: translate(var(--slide-from, 0px), -50%);
   }
   to {
     transform: translate(var(--slide-end, 248px), -50%);

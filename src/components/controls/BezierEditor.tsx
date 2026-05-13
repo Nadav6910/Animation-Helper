@@ -60,13 +60,26 @@ export function BezierEditor({ value, onChange }: Props) {
   }, [value]);
 
   const inner = SIZE - PAD * 2;
+  // The visible Y range adapts to fit the current curve. For an in-range
+  // curve (handles inside [0, 1]) we render the canonical [-0.15, 1.15]
+  // window so there's always a touch of breathing room above and below
+  // the grid square. For overshoot curves (easeOutBack, bounce…) the
+  // window expands so the handles, control lines, and curve all stay
+  // inside the SVG instead of floating off the editor into surrounding
+  // UI. The grid square (the bg-bg-soft rect with 0/0.25/0.5/0.75/1
+  // gridlines) is still the [0, 1] reference and re-positions inside
+  // the SVG to leave room for the overshoot above / below.
+  const Y_BUFFER = 0.15;
+  const yMin = Math.min(0, value[1], value[3]) - Y_BUFFER;
+  const yMax = Math.max(1, value[1], value[3]) + Y_BUFFER;
+  const yRange = yMax - yMin;
   const toPx = (x: number, y: number) => ({
     x: PAD + x * inner,
-    y: PAD + (1 - y) * inner,
+    y: PAD + ((yMax - y) / yRange) * inner,
   });
   const fromPx = (px: number, py: number): [number, number] => {
     const x = (px - PAD) / inner;
-    const y = 1 - (py - PAD) / inner;
+    const y = yMax - ((py - PAD) / inner) * yRange;
     return [clampX(x), clampY(y)];
   };
 
@@ -134,21 +147,45 @@ export function BezierEditor({ value, onChange }: Props) {
         style={{ width: SIZE, height: SIZE }}
       >
         <svg width={SIZE} height={SIZE} className="absolute inset-0">
-          {/* grid */}
-          <rect
-            x={PAD}
-            y={PAD}
-            width={inner}
-            height={inner}
-            rx={8}
-            className="fill-bg-soft stroke-border/70"
-          />
-          {[0.25, 0.5, 0.75].map((t) => (
-            <g key={t} className="stroke-border/40">
-              <line x1={PAD} y1={PAD + t * inner} x2={SIZE - PAD} y2={PAD + t * inner} />
-              <line x1={PAD + t * inner} y1={PAD} x2={PAD + t * inner} y2={SIZE - PAD} />
-            </g>
-          ))}
+          {/* Grid: the [0, 1] reference square. For in-range curves it
+              fills most of the SVG; for overshoot curves it shrinks
+              and re-positions so the overshoot has room above / below
+              within the SVG bounds. */}
+          {(() => {
+            const gridTop = toPx(0, 1).y;
+            const gridBottom = toPx(0, 0).y;
+            const gridHeight = gridBottom - gridTop;
+            return (
+              <>
+                <rect
+                  x={PAD}
+                  y={gridTop}
+                  width={inner}
+                  height={gridHeight}
+                  rx={8}
+                  className="fill-bg-soft stroke-border/70"
+                />
+                {[0.25, 0.5, 0.75].map((t) => (
+                  <g key={t} className="stroke-border/40">
+                    {/* horizontal gridlines proportional to the
+                        re-sized grid square */}
+                    <line
+                      x1={PAD}
+                      y1={gridTop + t * gridHeight}
+                      x2={SIZE - PAD}
+                      y2={gridTop + t * gridHeight}
+                    />
+                    <line
+                      x1={PAD + t * inner}
+                      y1={gridTop}
+                      x2={PAD + t * inner}
+                      y2={gridBottom}
+                    />
+                  </g>
+                ))}
+              </>
+            );
+          })()}
           {/* baseline */}
           <line
             x1={p0.x}
@@ -352,15 +389,32 @@ function BezierPreviewBall({
     return () => document.removeEventListener('visibilitychange', onChange);
   }, []);
 
-  const slideEnd =
-    trackWidth !== null ? Math.max(0, trackWidth - PREVIEW_BALL_SIZE) : null;
+  // For curves whose Y stays inside [0, 1] the ball travels the full
+  // track edge-to-edge. For overshoot curves (easeOutBack, bounce…)
+  // the curve's Y peaks above 1 and/or troughs below 0; CSS would
+  // translate the ball that proportion past the end / start. We map
+  // the WHOLE Y range of the curve into the track instead, so the
+  // peak lands exactly at the right edge and the trough at the left
+  // edge — the ball never escapes its track, but the overshoot
+  // behaviour is still visible as the ball goes past the "settled"
+  // position (where Y=1 maps to) on the way out.
+  let slideStart: number | null = null;
+  let slideEnd: number | null = null;
+  if (trackWidth !== null) {
+    const usable = Math.max(0, trackWidth - PREVIEW_BALL_SIZE);
+    const yLo = Math.min(0, value[1], value[3]);
+    const yHi = Math.max(1, value[1], value[3]);
+    const yRange = yHi - yLo;
+    // Position the ball at (Y - yLo) / yRange * usable, so Y=yLo lands
+    // at 0 (left edge) and Y=yHi lands at `usable` (right edge).
+    // Y=0 (animation start) is at -yLo / yRange * usable.
+    // Y=1 (animation end) is at (1 - yLo) / yRange * usable.
+    slideStart = (-yLo / yRange) * usable;
+    slideEnd = ((1 - yLo) / yRange) * usable;
+  }
 
   return (
-    // px-4 reserves horizontal room for the ball's overshoot on
-    // elastic curves (cubic-bezier values with Y outside [0,1]) so it
-    // can travel a little past the track edges without colliding with
-    // the editor's outer card.
-    <div className="flex w-full max-w-[260px] flex-col items-center gap-1.5 px-4">
+    <div className="flex w-full max-w-[260px] flex-col items-center gap-1.5">
       <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
         Live preview
       </span>
@@ -390,12 +444,13 @@ function BezierPreviewBall({
               accent-coloured handles above: subtle linear gradient +
               a thin highlight ring so the ball reads as a "physical"
               moving object distinct from the editor's draggable knobs. */}
-          {slideEnd !== null && (
+          {slideEnd !== null && slideStart !== null && (
             <span
               className="ah-bezier-preview-ball absolute top-1/2 rounded-full bg-gradient-to-br from-accent via-accent/85 to-accent/60 ring-1 ring-accent/40 shadow-[0_2px_8px_-2px_rgb(var(--accent)/0.55)]"
               style={{
                 width: PREVIEW_BALL_SIZE,
                 height: PREVIEW_BALL_SIZE,
+                ['--slide-from' as string]: `${slideStart}px`,
                 ['--slide-end' as string]: `${slideEnd}px`,
                 animationName: 'ah-bezier-slide',
                 animationDuration: `${PREVIEW_DURATION_MS[speed]}ms`,
