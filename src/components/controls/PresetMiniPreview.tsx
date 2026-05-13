@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import type { AnimationConfig } from '@/types/animation';
 import { generateCss } from '@/lib/generateCss';
 import { useInView } from '@/hooks/useInView';
+import { useUiStore } from '@/store/uiStore';
 import { cn } from '@/lib/cn';
 
 type Props = {
@@ -38,7 +39,12 @@ export function PresetMiniPreview({ config, className }: Props) {
   const [inViewRef, inView] = useInView<HTMLDivElement>(
     PRESET_PREVIEW_IO_OPTIONS
   );
-  const playState = inView ? 'running' : 'paused';
+  const documentVisible = useUiStore((s) => s.documentVisible);
+  // Animate only when BOTH conditions hold: card is in (or near) the
+  // viewport AND the browser tab is visible. Browsers already throttle
+  // hidden tabs, but an explicit pause stops the CSS animation from
+  // ticking entirely so backgrounded sessions cost nothing.
+  const playState = inView && documentVisible ? 'running' : 'paused';
 
   const loopCfg = useMemo<AnimationConfig>(
     () => ({

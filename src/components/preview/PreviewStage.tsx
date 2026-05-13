@@ -28,6 +28,7 @@ export function PreviewStage() {
   );
   const tourOpen = useUiStore((s) => s.tourOpen);
   const stageOccluded = useUiStore((s) => s.stageOccluded);
+  const documentVisible = useUiStore((s) => s.documentVisible);
 
   // When the mobile sheet covers the stage entirely (snap === 'full'),
   // the WAAPI animation keeps ticking compositor work for a preview
@@ -60,6 +61,22 @@ export function PreviewStage() {
     // its own setIsPlaying ticks).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stageOccluded]);
+
+  // Same pattern, driven by document visibility. Browsers already
+  // throttle hidden tabs hard (rAF → 1 Hz, compositor animations
+  // slowed), but explicitly pausing stops React state churn from the
+  // controller's rAF tick and lets the controller resume cleanly when
+  // the user comes back instead of mid-iteration on a throttled clock.
+  useEffect(() => {
+    if (documentVisible) return;
+    if (!controller.isPlaying) return;
+    controller.pause();
+    return () => {
+      if (!stageMountedRef.current) return;
+      controller.play();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentVisible]);
   // Timeline visibility — persisted so the user's preference survives
   // reload. Collapsing the timeline frees its vertical space for the
   // preview stage (the card has flex-1, so flexbox redistributes the

@@ -53,8 +53,22 @@ export function App() {
   useUrlState();
   const undo = useAnimationStore((s) => s.undo);
   const redo = useAnimationStore((s) => s.redo);
+  const setDocumentVisible = useUiStore((s) => s.setDocumentVisible);
 
   const [loading, setLoading] = useState(true);
+
+  // Single window-level visibilitychange listener that feeds the
+  // store. Every consumer that pauses on tab-hidden (preview stage,
+  // preset cards, bezier preview ball) reads from this one flag
+  // instead of attaching its own listener — saves N listener
+  // installs / removes when N animated surfaces are mounted.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const sync = () => setDocumentVisible(!document.hidden);
+    sync();
+    document.addEventListener('visibilitychange', sync);
+    return () => document.removeEventListener('visibilitychange', sync);
+  }, [setDocumentVisible]);
 
   // Prefetch the Shell chunk a moment into the splash so it's parsed
   // and cached by the time `loading` flips false — avoids a blank

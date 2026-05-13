@@ -10,6 +10,7 @@ import {
 import { motion, useReducedMotion } from 'framer-motion';
 import type { Easing } from '@/types/animation';
 import { NumberInput } from '@/components/ui/NumberInput';
+import { useUiStore } from '@/store/uiStore';
 import { cn } from '@/lib/cn';
 
 type Props = {
@@ -359,7 +360,11 @@ function BezierPreviewBall({
   // flash where it would otherwise render at the 260-px fallback and
   // then snap to a narrower value once the observer fired.
   const [trackWidth, setTrackWidth] = useState<number | null>(null);
-  const [docHidden, setDocHidden] = useState(false);
+  // Pause the preview animation while the browser tab is hidden,
+  // reading from the single global flag App.tsx maintains. Browsers
+  // throttle hidden tabs anyway, but the explicit pause stops the
+  // animation entirely so backgrounded sessions cost nothing.
+  const documentVisible = useUiStore((s) => s.documentVisible);
   const reduceMotion = useReducedMotion();
 
   useLayoutEffect(() => {
@@ -375,18 +380,6 @@ function BezierPreviewBall({
     });
     obs.observe(el);
     return () => obs.disconnect();
-  }, []);
-
-  // Pause the animation while the browser tab is hidden. CSS animations
-  // on the compositor can keep ticking at a reduced rate even when the
-  // page isn't visible — saves a small but real amount of battery on
-  // long sessions left in the background.
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const onChange = () => setDocHidden(document.hidden);
-    onChange();
-    document.addEventListener('visibilitychange', onChange);
-    return () => document.removeEventListener('visibilitychange', onChange);
   }, []);
 
   // For curves whose Y stays inside [0, 1] the ball travels the full
@@ -457,7 +450,7 @@ function BezierPreviewBall({
                 animationTimingFunction: `cubic-bezier(${value.join(', ')})`,
                 animationIterationCount: 'infinite',
                 animationDirection: 'alternate',
-                animationPlayState: docHidden ? 'paused' : 'running',
+                animationPlayState: documentVisible ? 'running' : 'paused',
               }}
             />
           )}

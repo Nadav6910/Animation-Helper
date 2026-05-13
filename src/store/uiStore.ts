@@ -51,6 +51,14 @@ type State = {
    *  invisible overlay. Defaults false on desktop (sheet never mounts). */
   stageOccluded: boolean;
   setStageOccluded: (v: boolean) => void;
+  /** Mirror of `!document.hidden`. Subscribed once at the app root via a
+   *  visibilitychange listener; everywhere else just reads this flag.
+   *  Single source of truth means consumers (preview stage, preset
+   *  cards, bezier preview ball) don't each register their own listener
+   *  — one listener, N subscribers. Defaults true on first paint so
+   *  nothing flashes paused before the listener installs. */
+  documentVisible: boolean;
+  setDocumentVisible: (v: boolean) => void;
 };
 
 let toastCounter = 0;
@@ -73,6 +81,8 @@ export const useUiStore = create<State>((set) => ({
   setPreviewTargetClassName: (cn) => set({ previewTargetClassName: cn }),
   stageOccluded: false,
   setStageOccluded: (v) => set({ stageOccluded: v }),
+  documentVisible: true,
+  setDocumentVisible: (v) => set({ documentVisible: v }),
   toast: null,
   showToast: (message, tone = 'info') => {
     toastCounter += 1;
