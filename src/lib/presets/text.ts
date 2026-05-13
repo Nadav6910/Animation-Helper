@@ -7,6 +7,7 @@ export const TEXT_PRESETS: Preset[] = [
     id: 'text-fade-up',
     name: 'Letters · fade up',
     category: 'text',
+    description: 'Letters rise into place with a soft fade',
     build: () => ({
       target: 'text', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
       iterations: 1, direction: 'normal', fill: 'forwards',
@@ -23,6 +24,7 @@ export const TEXT_PRESETS: Preset[] = [
     id: 'text-wave',
     name: 'Letters · wave',
     category: 'text',
+    description: 'Letters undulate in a continuous wave',
     build: () => ({
       target: 'text', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
       iterations: 'infinite', direction: 'normal', fill: 'none',
@@ -40,6 +42,7 @@ export const TEXT_PRESETS: Preset[] = [
     id: 'text-blur-in',
     name: 'Letters · blur in',
     category: 'text',
+    description: 'Letters resolve out of a soft blur',
     build: () => ({
       target: 'text', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
       iterations: 1, direction: 'normal', fill: 'forwards',
@@ -56,21 +59,23 @@ export const TEXT_PRESETS: Preset[] = [
     id: 'text-typewriter',
     name: 'Letters · typewriter',
     category: 'text',
-    description: 'Letters snap on one at a time',
+    description: 'Letters snap on one at a time at a brisk pace',
     build: () => ({
       target: 'text', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
       iterations: 1, direction: 'normal', fill: 'forwards',
       // steps(1, end) snaps opacity 0 → 1 at the end of each letter's
       // duration with no in-between blend. Combined with a stagger
       // step matching the duration, letters appear strictly in
-      // sequence — the classic typewriter cadence.
+      // sequence — the classic typewriter cadence. 90 ms per letter
+      // matches a brisk real-world typing speed without dragging on
+      // long phrases.
       keyframes: [
         { id: uid(), at: 0, opacity: 0, transform: { ...blank() } },
         { id: uid(), at: 100, opacity: 1, transform: { ...blank() } },
       ],
-      duration: 120, delay: 0,
+      duration: 90, delay: 0,
       easing: { kind: 'steps', n: 1, jump: 'end' },
-      stagger: { step: 120 },
+      stagger: { step: 90 },
     }),
   },
   {
@@ -112,15 +117,18 @@ export const TEXT_PRESETS: Preset[] = [
     id: 'text-rotate-in',
     name: 'Letters · rotate in',
     category: 'text',
-    description: 'Letters flip in on the Y axis',
+    description: 'Letters flip in on the Y axis with perspective',
     build: () => ({
       target: 'text', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
       iterations: 1, direction: 'normal', fill: 'forwards',
       // rotate is [rotateX, rotateY] — Y-axis flip mimics a card
-      // flipping open in place.
+      // flipping open in place. perspective is set on every keyframe
+      // so the rotation renders with depth; without it, rotateY
+      // collapses to a 1-px vertical sliver and the user sees a fade
+      // rather than a flip.
       keyframes: [
-        { id: uid(), at: 0, opacity: 0, transform: { ...blank(), rotate: [0, -90] } },
-        { id: uid(), at: 100, opacity: 1, transform: { ...blank() } },
+        { id: uid(), at: 0, opacity: 0, transform: { ...blank(), perspective: 600, rotate: [0, -90] } },
+        { id: uid(), at: 100, opacity: 1, transform: { ...blank(), perspective: 600 } },
       ],
       duration: 900, delay: 0,
       easing: { kind: 'cubic', v: [0.34, 1.56, 0.64, 1] },
@@ -135,13 +143,16 @@ export const TEXT_PRESETS: Preset[] = [
     build: () => ({
       target: 'text', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
       iterations: 'infinite', direction: 'normal', fill: 'none',
-      // hue-rotate as a filter cycles the rendered colour. Linear
-      // easing keeps the cycle perceptually steady; stagger offsets
-      // each letter through the cycle so the wave flows across the
-      // word.
+      // hue-rotate cycles the rendered colour in HSL space. An
+      // unsaturated source (white-ish foreground on a dark theme)
+      // would yield zero visible change, so the preset pins a vivid
+      // baseline `color` on both keyframes; the filter then has
+      // something saturated to rotate. Linear easing keeps the cycle
+      // perceptually steady; stagger offsets each letter through the
+      // cycle so the wave flows across the word.
       keyframes: [
-        { id: uid(), at: 0, hueRotate: 0, transform: { ...blank() } },
-        { id: uid(), at: 100, hueRotate: 360, transform: { ...blank() } },
+        { id: uid(), at: 0, color: '#ff5577', hueRotate: 0, transform: { ...blank() } },
+        { id: uid(), at: 100, color: '#ff5577', hueRotate: 360, transform: { ...blank() } },
       ],
       duration: 4000, delay: 0,
       easing: { kind: 'preset', value: 'linear' },
