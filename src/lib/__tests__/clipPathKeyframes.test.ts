@@ -4,6 +4,8 @@ import { generateTailwind } from '@/lib/generateTailwind';
 import { generateFramerMotion } from '@/lib/generateFramerMotion';
 import { generateWaapi } from '@/lib/generateWaapi';
 import { generateLottie } from '@/lib/generateLottie';
+import { generateScss } from '@/lib/generateScss';
+import { validateAnimationConfig } from '@/lib/validateConfig';
 import type { AnimationConfig } from '@/types/animation';
 
 const baseCfg: AnimationConfig = {
@@ -114,6 +116,50 @@ describe('clip-path keyframe engine support', () => {
       // surprised by the missing motion in After Effects / web
       // player.
       expect(out).toContain('clip-path animation');
+    });
+  });
+
+  describe('buildKeyframesBody fan-out', () => {
+    // The shared-helper generators (SCSS / Vue / Svelte / React /
+    // StyledComponents / AnimatedSvg / HTML) all flow through
+    // buildKeyframesBody → declarationsForKeyframe in generateCss.ts,
+    // so they pick up clip-path automatically. SCSS is the cheapest
+    // smoke test that locks the fan-out: if anyone replaces
+    // buildKeyframesBody with a local emitter in any of those
+    // generators, this test catches it.
+    it('generateScss emits clip-path through the shared helper', () => {
+      const out = generateScss(cfgWithClipPath);
+      expect(out).toContain(`clip-path: ${SQUARE};`);
+      expect(out).toContain(`clip-path: ${TRIANGLE};`);
+    });
+  });
+
+  describe('validateAnimationConfig', () => {
+    it('preserves clipPath on round-trip through the validator', () => {
+      // Without an explicit branch in validateKeyframe, the field
+      // gets silently dropped — the validator gates URL hash decode
+      // and localStorage rehydrate, so a missing branch means
+      // clip-path keyframes work in-session but never survive
+      // reload / share / save.
+      const parsed = validateAnimationConfig(cfgWithClipPath);
+      expect(parsed).not.toBeNull();
+      expect(parsed!.keyframes[0].clipPath).toBe(SQUARE);
+      expect(parsed!.keyframes[1].clipPath).toBe(TRIANGLE);
+    });
+
+    it('strips tampered non-string clipPath values', () => {
+      const parsed = validateAnimationConfig({
+        ...cfgWithClipPath,
+        keyframes: [
+          // Numeric value — invalid per the Keyframe type, should be
+          // dropped to keep the persisted state shape sound.
+          { id: 'a', at: 0, clipPath: 12345 as unknown as string },
+          { id: 'b', at: 100, clipPath: TRIANGLE },
+        ],
+      });
+      expect(parsed).not.toBeNull();
+      expect(parsed!.keyframes[0].clipPath).toBeUndefined();
+      expect(parsed!.keyframes[1].clipPath).toBe(TRIANGLE);
     });
   });
 });

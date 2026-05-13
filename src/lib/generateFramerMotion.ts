@@ -142,11 +142,23 @@ export function generateFramerMotion(
   ];
 
   // Resting value for each channel — used to back-fill when a keyframe
-  // doesn't define the channel and we have no prior frame to inherit from.
-  // scaleX/scaleY rest at 1, opacity rests at 1, every other channel
-  // rests at 0 (no-op).
+  // doesn't define the channel and we have no prior frame to inherit
+  // from. scaleX/scaleY/opacity rest at 1; string channels rest as
+  // `'none'` so Framer Motion's tween infrastructure doesn't end up
+  // with a mixed-type array (`[0, 'polygon(...)'])` — numeric back-
+  // fill for a string channel would either no-op or throw at runtime.
+  // All numeric channels rest at 0 (no-op).
+  const STRING_CHANNELS: ReadonlySet<ChannelKey> = new Set<ChannelKey>([
+    'color',
+    'backgroundColor',
+    'background',
+    'filter',
+    'offsetDistance',
+    'clipPath',
+  ]);
   const restingValue = (ch: ChannelKey): string | number => {
     if (ch === 'scaleX' || ch === 'scaleY' || ch === 'opacity') return 1;
+    if (STRING_CHANNELS.has(ch)) return 'none';
     return 0;
   };
 
