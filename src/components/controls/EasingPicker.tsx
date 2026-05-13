@@ -4,6 +4,7 @@ import { Check, ChevronDown, Copy } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
 import { useUiStore } from '@/store/uiStore';
 import {
+  CUBIC_QUICK_STARTERS,
   EASING_PRESETS,
   easingToCss,
   easingToCubicPreview,
@@ -113,6 +114,10 @@ export function EasingPicker() {
             <div className="text-[11px] font-mono text-fg-subtle text-center">
               {easingDescription(easing)}
             </div>
+            <CubicQuickStartChips
+              currentValue={easing.kind === 'cubic' ? easing.v : null}
+              onApply={(v) => setEasing({ kind: 'cubic', v })}
+            />
             <div className="grid place-items-center">
               <BezierEditor
                 value={easing.kind === 'cubic' ? easing.v : [0.4, 0, 0.2, 1]}
@@ -243,6 +248,53 @@ export function EasingPicker() {
       </AnimatePresence>
 
       <CurrentEasingHint easing={easing} />
+    </div>
+  );
+}
+
+function CubicQuickStartChips({
+  currentValue,
+  onApply,
+}: {
+  currentValue: [number, number, number, number] | null;
+  onApply: (v: [number, number, number, number]) => void;
+}) {
+  const matchesCurrent = (
+    v: [number, number, number, number]
+  ): boolean =>
+    currentValue !== null &&
+    // 1e-3 tolerance matches BezierEditor's round3() output, so a chip
+    // applied earlier still reads as "active" after a no-op tweak in
+    // the editor.
+    v.every((n, i) => Math.abs(n - currentValue[i]) < 0.001);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
+        Quick start
+      </span>
+      <div className="flex flex-wrap gap-1">
+        {CUBIC_QUICK_STARTERS.map(({ name, v }) => {
+          const active = matchesCurrent(v);
+          return (
+            <button
+              key={name}
+              type="button"
+              onClick={() => onApply(v)}
+              aria-pressed={active}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] transition-colors focus-ring',
+                active
+                  ? 'border-accent/50 bg-accent/15 text-fg'
+                  : 'border-border/70 bg-bg-soft text-fg-muted hover:border-border-strong hover:text-fg'
+              )}
+            >
+              <CurveThumbnail value={v} width={14} height={10} />
+              {name}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -73,6 +73,27 @@ export function easingToCubicPreview(
   return null;
 }
 
+/**
+ * Curated cubic-bezier starters surfaced inside the Cubic tab — these
+ * complement the basic `EASING_PRESETS` (which mix CSS-spec keywords
+ * with our own spring / bounce / elastic / sharp / gentle) by adding
+ * the "named curves from easings.net" that designers ask for. Picked
+ * so each has a distinct shape from anything in EASING_PRESETS.
+ *
+ * Sourced from https://easings.net (Public Domain).
+ */
+export const CUBIC_QUICK_STARTERS: {
+  name: string;
+  v: [number, number, number, number];
+}[] = [
+  { name: 'easeOutQuint', v: [0.22, 1, 0.36, 1] },
+  { name: 'easeOutBack', v: [0.34, 1.56, 0.64, 1] },
+  { name: 'easeInOutCirc', v: [0.85, 0, 0.15, 1] },
+  { name: 'easeOutCirc', v: [0, 0.55, 0.45, 1] },
+  { name: 'easeInExpo', v: [0.7, 0, 0.84, 0] },
+  { name: 'easeOutExpo', v: [0.16, 1, 0.3, 1] },
+];
+
 const STEPS_JUMPS: readonly StepsJump[] = ['start', 'end', 'none', 'both'];
 
 /**
