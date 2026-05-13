@@ -1,10 +1,12 @@
 import { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Copy } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
-import { EASING_PRESETS, parseEasing } from '@/lib/easings';
+import { useUiStore } from '@/store/uiStore';
+import { EASING_PRESETS, easingToCss, parseEasing } from '@/lib/easings';
 import { BezierEditor, easingDescription } from './BezierEditor';
 import { NumberInput } from '@/components/ui/NumberInput';
+import { copyToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/cn';
 import type { Easing, StepsJump } from '@/types/animation';
 import { DEFAULT_SPRING, springToCubic, type SpringConfig } from '@/lib/spring';
@@ -330,6 +332,31 @@ function CubicPasteInput({
 }
 
 function CurrentEasingHint({ easing }: { easing: Easing }) {
+  const showToast = useUiStore((s) => s.showToast);
+  const [justCopied, setJustCopied] = useState(false);
+  const copyTimerRef = useRef<number | null>(null);
+
+  const onCopy = async () => {
+    const css = easingToCss(easing);
+    const ok = await copyToClipboard(css);
+    if (ok) {
+      showToast(`Copied ${css}`);
+      setJustCopied(true);
+      // Reset the checkmark affordance after a beat. Tracked in a ref
+      // so a second copy click before the timer fires doesn't leave a
+      // stale timer dangling.
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+      copyTimerRef.current = window.setTimeout(() => {
+        setJustCopied(false);
+        copyTimerRef.current = null;
+      }, 1500);
+    } else {
+      showToast('Clipboard unavailable', 'error');
+    }
+  };
+
   return (
     <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-bg-soft/50 px-3 py-1.5">
       <ChevronDown size={14} className="text-fg-subtle rotate-[-90deg]" />
@@ -337,6 +364,19 @@ function CurrentEasingHint({ easing }: { easing: Easing }) {
       <span className="ml-auto font-mono text-[11px] text-fg-muted">
         {easingDescription(easing)}
       </span>
+      <button
+        type="button"
+        onClick={onCopy}
+        aria-label={`Copy ${easingToCss(easing)} to clipboard`}
+        title="Copy easing as CSS"
+        className="grid h-5 w-5 place-items-center rounded text-fg-subtle hover:bg-bg-panel hover:text-fg focus-ring transition-colors"
+      >
+        {justCopied ? (
+          <Check size={12} className="text-emerald-400" />
+        ) : (
+          <Copy size={12} />
+        )}
+      </button>
     </div>
   );
 }
