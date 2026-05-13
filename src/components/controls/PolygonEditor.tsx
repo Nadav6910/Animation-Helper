@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import {
   type ClipPathPoint,
@@ -42,15 +41,11 @@ function clampPct(n: number): number {
   return Math.max(0, Math.min(100, n));
 }
 
-// Pre-tuned spring used for non-drag vertex movements (load a custom
-// shape, undo, paste-in). Drag updates bypass the spring so the
-// cursor and the vertex stay locked together.
-const VERTEX_SPRING = {
-  type: 'spring' as const,
-  stiffness: 540,
-  damping: 38,
-  mass: 0.45,
-};
+// Pre-tuned CSS easing used for non-drag vertex movements (load a
+// custom shape, undo, paste-in). Drag updates bypass the transition
+// (set to 'none') so the cursor and the vertex stay locked together.
+const VERTEX_IDLE_TRANSITION =
+  'left 120ms cubic-bezier(0.22, 1, 0.36, 1), top 120ms cubic-bezier(0.22, 1, 0.36, 1)';
 
 /**
  * Polygon authoring surface for the custom-shape modal and the
@@ -311,18 +306,18 @@ export function PolygonEditor({
             </g>
           ))}
           {points.length >= 3 && (
-            // motion.polygon animates the `points` attribute on
-            // non-drag updates (load a different shape, undo). During
-            // a drag we render directly because the points stream is
-            // already at pointer cadence.
-            <motion.polygon
+            // Plain <polygon> with no transition. SVG attribute updates
+            // are flushed every render, so the polygon tracks the
+            // dragged vertex pixel-for-pixel; the previous motion.polygon
+            // buffered rapid target changes through the framer-motion
+            // animation engine and only painted the final position
+            // on drag release.
+            <polygon
               points={polyPoints}
               fill={`url(#${helpId}-fill)`}
               className="stroke-accent"
               strokeWidth={1.75}
               strokeLinejoin="round"
-              animate={dragIdx === null ? { points: polyPoints } : undefined}
-              transition={dragIdx === null ? { duration: 0.12, ease: [0.22, 1, 0.36, 1] } : undefined}
             />
           )}
           {/* Insertion ghost: faint dot at the position the user's
@@ -353,12 +348,25 @@ export function PolygonEditor({
           const isDragging = dragIdx === idx;
           const isHover = hoverIdx === idx;
           return (
-            <motion.div
+            // Plain div positioned via left/top so the vertex tracks
+            // the cursor every render — no framer-motion buffering.
+            // translate(-50% -50%) lives ONLY here, on the
+            // positioned wrapper; the inner button doesn't get its
+            // own -translate or it would double-shift the vertex 16
+            // pixels off the actual point. CSS transition gives a
+            // gentle interpolation on non-drag changes (load shape,
+            // arrow-key nudge) and is suppressed entirely during a
+            // drag.
+            <div
               key={idx}
               className="absolute"
-              animate={{ x: px.x, y: px.y }}
-              transition={isDragging ? { duration: 0 } : VERTEX_SPRING}
-              style={{ translate: '-50% -50%' }}
+              style={{
+                left: px.x,
+                top: px.y,
+                transform: 'translate(-50%, -50%)',
+                transition: isDragging ? 'none' : VERTEX_IDLE_TRANSITION,
+                willChange: isDragging ? 'left, top' : undefined,
+              }}
             >
               <button
                 type="button"
@@ -374,7 +382,7 @@ export function PolygonEditor({
                 aria-describedby={helpId}
                 aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown Backspace Delete"
                 className={cn(
-                  'group/vertex relative grid h-8 w-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full focus-ring touch-none select-none [-webkit-touch-callout:none]',
+                  'group/vertex relative grid h-8 w-8 place-items-center rounded-full focus-ring touch-none select-none [-webkit-touch-callout:none]',
                   readOnly
                     ? 'cursor-default'
                     : isDragging
@@ -440,7 +448,7 @@ export function PolygonEditor({
                   {p[0].toFixed(1)}, {p[1].toFixed(1)}
                 </div>
               )}
-            </motion.div>
+            </div>
           );
         })}
       </div>

@@ -136,7 +136,12 @@ export function CustomShapeModal({
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 12, opacity: 0, scale: 0.97 }}
             transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-            className="w-full max-w-sm rounded-2xl border border-border/70 bg-bg-panel/95 shadow-2xl backdrop-blur-xl overflow-hidden focus:outline-none"
+            // Cap height at the viewport so on small phones (with the
+            // on-screen keyboard up, or in landscape) the dialog stays
+            // fully reachable. overflow-hidden on the outer card keeps
+            // the rounded corners; the inner scrollable body handles
+            // overflow.
+            className="flex w-full max-w-sm flex-col rounded-2xl border border-border/70 bg-bg-panel/95 shadow-2xl backdrop-blur-xl overflow-hidden focus:outline-none max-h-[calc(100dvh-2rem)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
@@ -156,7 +161,16 @@ export function CustomShapeModal({
               </button>
             </div>
 
-            <div className="flex flex-col items-stretch gap-3.5 px-4 py-4">
+            {/* overflow-y-auto on the body so a long content stack
+                (editor + tall hint copy + on-screen keyboard) scrolls
+                inside the modal. overscroll-behavior: contain stops
+                the scroll chaining into the page beneath the modal,
+                which would otherwise feel like the modal "leaks" the
+                gesture through. */}
+            <div
+              className="flex flex-col items-stretch gap-3.5 px-4 py-4 overflow-y-auto"
+              style={{ overscrollBehavior: 'contain' }}
+            >
               <div className="flex flex-col gap-1.5">
                 <label
                   htmlFor={nameInputId}
