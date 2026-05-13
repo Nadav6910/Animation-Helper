@@ -1,6 +1,16 @@
-import { useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import type { Easing } from '@/types/animation';
+import { NumberInput } from '@/components/ui/NumberInput';
+import { cn } from '@/lib/cn';
 
 type Props = {
   value: [number, number, number, number];
@@ -9,22 +19,81 @@ type Props = {
 
 const SIZE = 200;
 const PAD = 16;
+// X is clamped to [0,1] so the curve remains a valid cubic-bezier.
+// Y is allowed outside [0,1] so users can author overshoot/elastic curves
+// (e.g. easeOutBack peaks above 1) without the editor fighting them.
+const X_MIN = 0;
+const X_MAX = 1;
+const Y_MIN = -1.5;
+const Y_MAX = 2.5;
+
+// Round dragged / typed values to 3 decimals. Keeps state free of float
+// crud (no 0.4000000000000001 artefacts in the generated CSS) without
+// losing perceptible precision — 0.001 ≈ 1/5 of a pixel on this editor.
+// The same 0.001 grid is exported as EASING_VALUE_TOLERANCE from
+// `@/lib/easings` and consumed by the preset / quick-starter
+// active-state matchers, so a single constant governs both round-trip
+// precision and "did the user's drag move them off this preset".
+// Normalise `-0` away so JSON-serialised state and CSS output never
+// surface a stray minus sign.
+const round3 = (n: number) => {
+  const r = Math.round(n * 1000) / 1000;
+  return r === 0 ? 0 : r;
+};
+const clampX = (x: number) => Math.max(X_MIN, Math.min(X_MAX, x));
+const clampY = (y: number) => Math.max(Y_MIN, Math.min(Y_MAX, y));
 
 export function BezierEditor({ value, onChange }: Props) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [dragging, setDragging] = useState<0 | 1 | null>(null);
+  const reactId = useId();
+  const helpId = `bezier-help-${reactId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  // Mirror the latest `value` into a ref so the pointermove closure
+  // can read fresh state without re-attaching listeners on every render.
+  // Without this, a drag started at render N keeps a snapshot of `value`
+  // from that render; if the user types into the OTHER handle's number
+  // input mid-drag (rare but possible with finger + keyboard on tablets),
+  // the drag would clobber the typed value with the stale snapshot.
+  const valueRef = useRef(value);
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
 
   const inner = SIZE - PAD * 2;
+  // The visible Y range adapts to fit the current curve. For an in-range
+  // curve (handles inside [0, 1]) we render the canonical [-0.15, 1.15]
+  // window so there's always a touch of breathing room above and below
+  // the grid square. For overshoot curves (easeOutBack, bounce…) the
+  // window expands so the handles, control lines, and curve all stay
+  // inside the SVG instead of floating off the editor into surrounding
+  // UI. The grid square (the bg-bg-soft rect with 0/0.25/0.5/0.75/1
+  // gridlines) is still the [0, 1] reference and re-positions inside
+  // the SVG to leave room for the overshoot above / below.
+  const Y_BUFFER = 0.15;
+  const yMin = Math.min(0, value[1], value[3]) - Y_BUFFER;
+  const yMax = Math.max(1, value[1], value[3]) + Y_BUFFER;
+  const yRange = yMax - yMin;
   const toPx = (x: number, y: number) => ({
     x: PAD + x * inner,
-    y: PAD + (1 - y) * inner,
+    y: PAD + ((yMax - y) / yRange) * inner,
   });
   const fromPx = (px: number, py: number): [number, number] => {
     const x = (px - PAD) / inner;
-    const y = 1 - (py - PAD) / inner;
-    // clamp X to [0, 1] to remain a valid cubic-bezier curve; allow Y outside for elastic feel
-    return [Math.max(0, Math.min(1, x)), Math.max(-1.5, Math.min(2.5, y))];
+    const y = yMax - ((py - PAD) / inner) * yRange;
+    return [clampX(x), clampY(y)];
   };
+
+  const setHandle = useCallback(
+    (idx: 0 | 1, nx: number, ny: number) => {
+      const cx = round3(clampX(nx));
+      const cy = round3(clampY(ny));
+      const cur = valueRef.current;
+      const next: [number, number, number, number] =
+        idx === 0 ? [cx, cy, cur[2], cur[3]] : [cur[0], cur[1], cx, cy];
+      onChange(next);
+    },
+    [onChange]
+  );
 
   const p0 = toPx(0, 0);
   const p3 = toPx(1, 1);
@@ -41,17 +110,20 @@ export function BezierEditor({ value, onChange }: Props) {
       const px = ev.clientX - rect.left;
       const py = ev.clientY - rect.top;
       const [nx, ny] = fromPx(px, py);
-      const next: [number, number, number, number] =
-        idx === 0 ? [nx, ny, value[2], value[3]] : [value[0], value[1], nx, ny];
-      onChange(next);
+      setHandle(idx, nx, ny);
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
       setDragging(null);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    // pointercancel fires when the OS yanks the pointer (e.g. iOS context
+    // menu, palm rejection). Without it, the drag stays "stuck" with the
+    // window listeners still attached.
+    window.addEventListener('pointercancel', up);
   };
 
   const pathD = useMemo(
@@ -61,63 +133,358 @@ export function BezierEditor({ value, onChange }: Props) {
   );
 
   return (
-    <div ref={wrapRef} className="relative" style={{ width: SIZE, height: SIZE }}>
-      <svg width={SIZE} height={SIZE} className="absolute inset-0">
-        {/* grid */}
-        <rect
-          x={PAD}
-          y={PAD}
-          width={inner}
-          height={inner}
-          rx={8}
-          className="fill-bg-soft stroke-border/70"
-        />
-        {[0.25, 0.5, 0.75].map((t) => (
-          <g key={t} className="stroke-border/40">
-            <line x1={PAD} y1={PAD + t * inner} x2={SIZE - PAD} y2={PAD + t * inner} />
-            <line x1={PAD + t * inner} y1={PAD} x2={PAD + t * inner} y2={SIZE - PAD} />
-          </g>
+    <div className="flex flex-col items-center gap-3">
+      {/* Spoken once on handle focus via aria-describedby. Kept off the
+          visual layout via sr-only so screen-reader users get the
+          shortcut hint without sighted users seeing repeated copy. */}
+      <span id={helpId} className="sr-only">
+        Use arrow keys to nudge the handle. Hold shift for a larger step.
+        Press Home or End to snap X to its endpoints.
+      </span>
+      <div
+        ref={wrapRef}
+        className="relative select-none"
+        style={{ width: SIZE, height: SIZE }}
+      >
+        <svg width={SIZE} height={SIZE} className="absolute inset-0">
+          {/* Grid: the [0, 1] reference square. For in-range curves it
+              fills most of the SVG; for overshoot curves it shrinks
+              and re-positions so the overshoot has room above / below
+              within the SVG bounds. */}
+          {(() => {
+            const gridTop = toPx(0, 1).y;
+            const gridBottom = toPx(0, 0).y;
+            const gridHeight = gridBottom - gridTop;
+            return (
+              <>
+                <rect
+                  x={PAD}
+                  y={gridTop}
+                  width={inner}
+                  height={gridHeight}
+                  rx={8}
+                  className="fill-bg-soft stroke-border/70"
+                />
+                {[0.25, 0.5, 0.75].map((t) => (
+                  <g key={t} className="stroke-border/40">
+                    {/* horizontal gridlines proportional to the
+                        re-sized grid square */}
+                    <line
+                      x1={PAD}
+                      y1={gridTop + t * gridHeight}
+                      x2={SIZE - PAD}
+                      y2={gridTop + t * gridHeight}
+                    />
+                    <line
+                      x1={PAD + t * inner}
+                      y1={gridTop}
+                      x2={PAD + t * inner}
+                      y2={gridBottom}
+                    />
+                  </g>
+                ))}
+              </>
+            );
+          })()}
+          {/* baseline */}
+          <line
+            x1={p0.x}
+            y1={p0.y}
+            x2={p3.x}
+            y2={p3.y}
+            className="stroke-border-strong/60"
+            strokeDasharray="3 4"
+          />
+          {/* control lines */}
+          <line x1={p0.x} y1={p0.y} x2={p1.x} y2={p1.y} className="stroke-accent/50" />
+          <line x1={p3.x} y1={p3.y} x2={p2.x} y2={p2.y} className="stroke-accent/50" />
+          {/* curve */}
+          <motion.path
+            d={pathD}
+            fill="none"
+            className="stroke-accent"
+            strokeWidth={2.5}
+            strokeLinecap="round"
+          />
+          {/* anchors */}
+          <circle cx={p0.x} cy={p0.y} r={3} className="fill-fg-subtle" />
+          <circle cx={p3.x} cy={p3.y} r={3} className="fill-fg-subtle" />
+        </svg>
+        {/* Handles. The <button> is the touch / click target (32 px so it
+            clears Apple's 24 px and Google's 24-48 px minimums), with a
+            smaller visual circle inside so the editor's look doesn't
+            change. touch-action:none stops the browser from claiming the
+            gesture for scroll / pull-to-refresh while the user is
+            dragging — without it, mobile drags feel sticky and short. */}
+        {[
+          { idx: 0 as const, p: p1, x: value[0], y: value[1] },
+          { idx: 1 as const, p: p2, x: value[2], y: value[3] },
+        ].map(({ idx, p, x, y }) => (
+          <button
+            key={idx}
+            type="button"
+            onPointerDown={(e) => handlePointer(e, idx)}
+            onKeyDown={(e) => {
+              // Sighted keyboard users get arrow-key nudges; shift
+              // multiplies the step by 10 for coarse moves. Screen-reader
+              // users typically navigate via the NumberInputs instead —
+              // those expose proper number-input semantics and don't
+              // require 2D coordinate navigation. Home/End snap X to the
+              // endpoints (a no-op for clamp-bounded x but useful for
+              // resetting from a dragged interior).
+              //
+              // stopPropagation is critical: App.tsx has a window-level
+              // ArrowLeft/ArrowRight handler that dispatches
+              // `ah:scrub-nudge`, which would otherwise fire alongside
+              // the handle nudge and scrub the timeline every time the
+              // user adjusted X.
+              const handled =
+                e.key === 'ArrowLeft' ||
+                e.key === 'ArrowRight' ||
+                e.key === 'ArrowUp' ||
+                e.key === 'ArrowDown' ||
+                e.key === 'Home' ||
+                e.key === 'End';
+              if (!handled) return;
+              e.preventDefault();
+              e.stopPropagation();
+              const step = e.shiftKey ? 0.1 : 0.01;
+              switch (e.key) {
+                case 'ArrowLeft':
+                  setHandle(idx, x - step, y);
+                  break;
+                case 'ArrowRight':
+                  setHandle(idx, x + step, y);
+                  break;
+                case 'ArrowUp':
+                  setHandle(idx, x, y + step);
+                  break;
+                case 'ArrowDown':
+                  setHandle(idx, x, y - step);
+                  break;
+                case 'Home':
+                  setHandle(idx, X_MIN, y);
+                  break;
+                case 'End':
+                  setHandle(idx, X_MAX, y);
+                  break;
+              }
+            }}
+            // aria-label carries ONLY the current X/Y so screen readers
+            // can announce the value succinctly on each nudge. The static
+            // shortcut help moves into an off-screen description span
+            // (referenced by aria-describedby) so it's spoken once on
+            // focus, not every time the value changes.
+            aria-label={`Bezier handle ${idx + 1}, X ${x.toFixed(2)}, Y ${y.toFixed(2)}`}
+            aria-describedby={helpId}
+            aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown Home End"
+            className="absolute grid h-8 w-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full cursor-grab focus-ring touch-none select-none [-webkit-touch-callout:none]"
+            style={{ left: p.x, top: p.y }}
+          >
+            <span
+              className={cn(
+                'h-4 w-4 rounded-full bg-accent shadow-glow border-2 border-bg transition-transform',
+                dragging === idx ? 'scale-125' : ''
+              )}
+            />
+          </button>
         ))}
-        {/* baseline */}
-        <line
-          x1={p0.x}
-          y1={p0.y}
-          x2={p3.x}
-          y2={p3.y}
-          className="stroke-border-strong/60"
-          strokeDasharray="3 4"
+      </div>
+      {/* Numeric inputs. Values round-trip through `setHandle` so the
+          same clamp / round-3 logic governs typed entry and drag entry.
+          Step 0.01 keeps ± buttons usable for fine tuning; users wanting
+          big jumps either drag or type a value directly. */}
+      <div className="grid w-full max-w-[260px] grid-cols-4 gap-2">
+        <NumberInput
+          size="sm"
+          label="X1"
+          value={value[0]}
+          onChange={(n) => setHandle(0, n, value[1])}
+          min={X_MIN}
+          max={X_MAX}
+          step={0.01}
         />
-        {/* control lines */}
-        <line x1={p0.x} y1={p0.y} x2={p1.x} y2={p1.y} className="stroke-accent/50" />
-        <line x1={p3.x} y1={p3.y} x2={p2.x} y2={p2.y} className="stroke-accent/50" />
-        {/* curve */}
-        <motion.path
-          d={pathD}
-          fill="none"
-          className="stroke-accent"
-          strokeWidth={2.5}
-          strokeLinecap="round"
+        <NumberInput
+          size="sm"
+          label="Y1"
+          value={value[1]}
+          onChange={(n) => setHandle(0, value[0], n)}
+          min={Y_MIN}
+          max={Y_MAX}
+          step={0.01}
         />
-        {/* anchors */}
-        <circle cx={p0.x} cy={p0.y} r={3} className="fill-fg-subtle" />
-        <circle cx={p3.x} cy={p3.y} r={3} className="fill-fg-subtle" />
-      </svg>
-      {[
-        { idx: 0 as const, p: p1 },
-        { idx: 1 as const, p: p2 },
-      ].map(({ idx, p }) => (
-        <button
-          key={idx}
-          type="button"
-          onPointerDown={(e) => handlePointer(e, idx)}
-          aria-label={`Bezier handle ${idx + 1}`}
-          className={
-            'absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-glow border-2 border-bg cursor-grab focus-ring ' +
-            (dragging === idx ? 'cursor-grabbing scale-125' : '')
-          }
-          style={{ left: p.x, top: p.y, transition: 'transform .15s ease' }}
+        <NumberInput
+          size="sm"
+          label="X2"
+          value={value[2]}
+          onChange={(n) => setHandle(1, n, value[3])}
+          min={X_MIN}
+          max={X_MAX}
+          step={0.01}
         />
-      ))}
+        <NumberInput
+          size="sm"
+          label="Y2"
+          value={value[3]}
+          onChange={(n) => setHandle(1, value[2], n)}
+          min={Y_MIN}
+          max={Y_MAX}
+          step={0.01}
+        />
+      </div>
+      <BezierPreviewBall value={value} />
+    </div>
+  );
+}
+
+type PreviewSpeed = '0.5x' | '1x' | '2x';
+
+const PREVIEW_DURATION_MS: Record<PreviewSpeed, number> = {
+  '0.5x': 2400,
+  '1x': 1200,
+  '2x': 600,
+};
+
+const PREVIEW_BALL_SIZE = 12;
+
+function BezierPreviewBall({
+  value,
+}: {
+  value: [number, number, number, number];
+}) {
+  const [speed, setSpeed] = useState<PreviewSpeed>('1x');
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  // Null until the first synchronous measurement lands. The ball is
+  // held back until we know the real width, eliminating the first-paint
+  // flash where it would otherwise render at the 260-px fallback and
+  // then snap to a narrower value once the observer fired.
+  const [trackWidth, setTrackWidth] = useState<number | null>(null);
+  const [docHidden, setDocHidden] = useState(false);
+  const reduceMotion = useReducedMotion();
+
+  useLayoutEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    // Synchronous initial measurement before paint so the ball renders
+    // at the correct slide-end on its very first frame.
+    setTrackWidth(el.getBoundingClientRect().width);
+    if (typeof ResizeObserver === 'undefined') return;
+    const obs = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      if (w > 0) setTrackWidth(w);
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  // Pause the animation while the browser tab is hidden. CSS animations
+  // on the compositor can keep ticking at a reduced rate even when the
+  // page isn't visible — saves a small but real amount of battery on
+  // long sessions left in the background.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const onChange = () => setDocHidden(document.hidden);
+    onChange();
+    document.addEventListener('visibilitychange', onChange);
+    return () => document.removeEventListener('visibilitychange', onChange);
+  }, []);
+
+  // For curves whose Y stays inside [0, 1] the ball travels the full
+  // track edge-to-edge. For overshoot curves (easeOutBack, bounce…)
+  // the curve's Y peaks above 1 and/or troughs below 0; CSS would
+  // translate the ball that proportion past the end / start. We map
+  // the WHOLE Y range of the curve into the track instead, so the
+  // peak lands exactly at the right edge and the trough at the left
+  // edge — the ball never escapes its track, but the overshoot
+  // behaviour is still visible as the ball goes past the "settled"
+  // position (where Y=1 maps to) on the way out.
+  let slideStart: number | null = null;
+  let slideEnd: number | null = null;
+  if (trackWidth !== null) {
+    const usable = Math.max(0, trackWidth - PREVIEW_BALL_SIZE);
+    const yLo = Math.min(0, value[1], value[3]);
+    const yHi = Math.max(1, value[1], value[3]);
+    const yRange = yHi - yLo;
+    // Position the ball at (Y - yLo) / yRange * usable, so Y=yLo lands
+    // at 0 (left edge) and Y=yHi lands at `usable` (right edge).
+    // Y=0 (animation start) is at -yLo / yRange * usable.
+    // Y=1 (animation end) is at (1 - yLo) / yRange * usable.
+    slideStart = (-yLo / yRange) * usable;
+    slideEnd = ((1 - yLo) / yRange) * usable;
+  }
+
+  return (
+    <div className="flex w-full max-w-[260px] flex-col items-center gap-1.5">
+      <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
+        Live preview
+      </span>
+      {reduceMotion ? (
+        // prefers-reduced-motion users get a static hint instead of an
+        // empty track with a frozen dot, which would otherwise read as
+        // a broken control. The curve in the editor above already
+        // communicates the easing visually; no live-region role is
+        // needed — sighted users see the hint, screen readers ignore it.
+        <div
+          className="grid h-6 w-full place-items-center rounded-full border border-border/70 bg-bg-soft px-2 text-[10px] italic text-fg-subtle"
+          aria-hidden
+        >
+          Preview paused for reduced motion
+        </div>
+      ) : (
+        <div
+          ref={trackRef}
+          className="relative h-6 w-full overflow-visible rounded-full border border-border/70 bg-bg-soft"
+          aria-hidden
+        >
+          {/* Driving individual animation-* properties (not the shorthand)
+              lets browsers preserve current progress when only the
+              duration or timing function changes. Rebuilding the
+              shorthand on every speed change restarted the iteration
+              in Safari / Firefox. Visual differentiation from the
+              accent-coloured handles above: subtle linear gradient +
+              a thin highlight ring so the ball reads as a "physical"
+              moving object distinct from the editor's draggable knobs. */}
+          {slideEnd !== null && slideStart !== null && (
+            <span
+              className="ah-bezier-preview-ball absolute top-1/2 rounded-full bg-gradient-to-br from-accent via-accent/85 to-accent/60 ring-1 ring-accent/40 shadow-[0_2px_8px_-2px_rgb(var(--accent)/0.55)]"
+              style={{
+                width: PREVIEW_BALL_SIZE,
+                height: PREVIEW_BALL_SIZE,
+                ['--slide-from' as string]: `${slideStart}px`,
+                ['--slide-end' as string]: `${slideEnd}px`,
+                animationName: 'ah-bezier-slide',
+                animationDuration: `${PREVIEW_DURATION_MS[speed]}ms`,
+                animationTimingFunction: `cubic-bezier(${value.join(', ')})`,
+                animationIterationCount: 'infinite',
+                animationDirection: 'alternate',
+                animationPlayState: docHidden ? 'paused' : 'running',
+              }}
+            />
+          )}
+        </div>
+      )}
+      <div role="radiogroup" aria-label="Preview speed" className="flex gap-1">
+        {(['0.5x', '1x', '2x'] as const).map((s) => {
+          const active = speed === s;
+          return (
+            <button
+              key={s}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => setSpeed(s)}
+              className={cn(
+                'rounded-full border px-2 py-0.5 text-[10px] tabular-nums transition-colors focus-ring',
+                active
+                  ? 'border-accent/50 bg-accent/15 text-fg'
+                  : 'border-border/70 bg-bg-soft text-fg-muted hover:text-fg'
+              )}
+            >
+              {s}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

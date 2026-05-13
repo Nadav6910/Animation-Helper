@@ -1,10 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Copy } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
-import { EASING_PRESETS } from '@/lib/easings';
+import { useUiStore } from '@/store/uiStore';
+import {
+  CUBIC_QUICK_STARTERS,
+  EASING_PRESETS,
+  EASING_VALUE_TOLERANCE,
+  easingToCss,
+  easingToCubicPreview,
+  parseEasing,
+} from '@/lib/easings';
 import { BezierEditor, easingDescription } from './BezierEditor';
+import { CurveThumbnail } from '@/components/ui/CurveThumbnail';
 import { NumberInput } from '@/components/ui/NumberInput';
+import { copyToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/cn';
 import type { Easing, StepsJump } from '@/types/animation';
 import { DEFAULT_SPRING, springToCubic, type SpringConfig } from '@/lib/spring';
@@ -29,7 +39,9 @@ export function EasingPicker() {
     if (e.kind !== easing.kind) return false;
     if (e.kind === 'preset' && easing.kind === 'preset') return e.value === easing.value;
     if (e.kind === 'cubic' && easing.kind === 'cubic') {
-      return e.v.every((n, i) => Math.abs(n - easing.v[i]) < 0.001);
+      return e.v.every(
+        (n, i) => Math.abs(n - easing.v[i]) < EASING_VALUE_TOLERANCE
+      );
     }
     return false;
   };
@@ -72,18 +84,20 @@ export function EasingPicker() {
           >
             {EASING_PRESETS.map(({ name, value }) => {
               const active = isPresetActive(value);
+              const previewCurve = easingToCubicPreview(value);
               return (
                 <button
                   key={name}
                   type="button"
                   onClick={() => setEasing(value)}
                   className={cn(
-                    'rounded-full border px-2.5 py-1 text-xs transition-colors focus-ring',
+                    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors focus-ring',
                     active
                       ? 'bg-accent/15 border-accent/50 text-fg shadow-glow'
                       : 'bg-bg-soft border-border/70 text-fg-muted hover:border-border-strong hover:text-fg'
                   )}
                 >
+                  {previewCurve && <CurveThumbnail value={previewCurve} />}
                   {name}
                 </button>
               );
@@ -103,12 +117,19 @@ export function EasingPicker() {
             <div className="text-[11px] font-mono text-fg-subtle text-center">
               {easingDescription(easing)}
             </div>
+            <CubicQuickStartChips
+              currentValue={easing.kind === 'cubic' ? easing.v : null}
+              onApply={(v) => setEasing({ kind: 'cubic', v })}
+            />
             <div className="grid place-items-center">
               <BezierEditor
                 value={easing.kind === 'cubic' ? easing.v : [0.4, 0, 0.2, 1]}
                 onChange={(v) => setEasing({ kind: 'cubic', v })}
               />
             </div>
+            <CubicPasteInput
+              onApply={(v) => setEasing({ kind: 'cubic', v })}
+            />
           </motion.div>
         )}
 
@@ -234,7 +255,193 @@ export function EasingPicker() {
   );
 }
 
+function CubicQuickStartChips({
+  currentValue,
+  onApply,
+}: {
+  currentValue: [number, number, number, number] | null;
+  onApply: (v: [number, number, number, number]) => void;
+}) {
+  const matchesCurrent = (
+    v: [number, number, number, number]
+  ): boolean =>
+    currentValue !== null &&
+    // Tolerance matches BezierEditor's round3() output, so a chip
+    // applied earlier still reads as "active" after a no-op tweak in
+    // the editor.
+    v.every((n, i) => Math.abs(n - currentValue[i]) < EASING_VALUE_TOLERANCE);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
+        Quick start
+      </span>
+      <div className="flex flex-wrap gap-1">
+        {CUBIC_QUICK_STARTERS.map(({ name, v }) => {
+          const active = matchesCurrent(v);
+          return (
+            // aria-current (not aria-pressed) because clicking always
+            // applies the value rather than toggling a state; the
+            // active styling is a read of external state, not a press
+            // memory. Screen readers announce "current" only on the
+            // matching chip, which is the correct semantic.
+            <button
+              key={name}
+              type="button"
+              onClick={() => onApply(v)}
+              aria-current={active ? 'true' : undefined}
+              aria-label={`Apply ${name}${active ? ', currently selected' : ''}`}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] transition-colors focus-ring',
+                active
+                  ? 'border-accent/50 bg-accent/15 text-fg'
+                  : 'border-border/70 bg-bg-soft text-fg-muted hover:border-border-strong hover:text-fg'
+              )}
+            >
+              <CurveThumbnail value={v} width={14} height={10} />
+              {name}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CubicPasteInput({
+  onApply,
+}: {
+  onApply: (v: [number, number, number, number]) => void;
+}) {
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  // Set briefly by the Escape handler before triggering blur — the
+  // subsequent onBlur reads this and skips its submit() call. Without
+  // the guard, Escape-then-blur would still run submit() and rely on
+  // the empty-string short-circuit, which works today but only
+  // incidentally.
+  const cancelNextBlur = useRef(false);
+
+  const submit = () => {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      setError(null);
+      return;
+    }
+    const parsed = parseEasing(trimmed);
+    if (parsed && parsed.kind === 'cubic') {
+      onApply(parsed.v);
+      setText('');
+      setError(null);
+      return;
+    }
+    // Non-cubic parses (presets, steps) are rejected here on purpose:
+    // accepting them silently would change the easing kind out from
+    // under the cubic tab, leaving the editor showing a stale curve.
+    setError(
+      'Need a cubic-bezier value, e.g. cubic-bezier(0.4, 0, 0.2, 1) or 0.4, 0, 0.2, 1'
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      <input
+        type="text"
+        inputMode="text"
+        autoComplete="off"
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
+        placeholder="Paste cubic-bezier(...) or 0.4, 0, 0.2, 1"
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          if (error) setError(null);
+        }}
+        onBlur={() => {
+          if (cancelNextBlur.current) {
+            cancelNextBlur.current = false;
+            return;
+          }
+          submit();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            submit();
+          } else if (e.key === 'Escape') {
+            cancelNextBlur.current = true;
+            setText('');
+            setError(null);
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        aria-label="Paste cubic-bezier value"
+        aria-invalid={error !== null}
+        aria-errormessage={error ? 'bezier-paste-error' : undefined}
+        aria-describedby={error ? 'bezier-paste-error' : undefined}
+        className={cn(
+          'h-8 rounded-lg border bg-bg-soft px-3 text-xs font-mono outline-none transition-colors focus-ring',
+          error
+            ? 'border-red-500/60'
+            : 'border-border/70 focus:border-accent/60'
+        )}
+      />
+      {error && (
+        <span
+          id="bezier-paste-error"
+          role="alert"
+          className="text-[10px] text-red-400"
+        >
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function CurrentEasingHint({ easing }: { easing: Easing }) {
+  const showToast = useUiStore((s) => s.showToast);
+  const [justCopied, setJustCopied] = useState(false);
+  const copyTimerRef = useRef<number | null>(null);
+
+  // Clear the pending check-icon timer on unmount so we don't call
+  // setJustCopied on a stale component if the user copies and then
+  // navigates away within 1.5s.
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
+
+  const onCopy = async () => {
+    const css = easingToCss(easing);
+    const ok = await copyToClipboard(css);
+    if (ok) {
+      // Match the phrasing of the app's primary copy paths (CodePanel,
+      // CopyButton) — short, action-past-tense — so the toast stream
+      // reads consistently regardless of which copy affordance the user
+      // hit. The CSS value isn't echoed here because it's already
+      // visible right next to the button.
+      showToast('Easing copied to clipboard');
+      setJustCopied(true);
+      // Reset the checkmark affordance after a beat. Tracked in a ref
+      // so a second copy click before the timer fires doesn't leave a
+      // stale timer dangling.
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+      copyTimerRef.current = window.setTimeout(() => {
+        setJustCopied(false);
+        copyTimerRef.current = null;
+      }, 1500);
+    } else {
+      showToast('Clipboard unavailable', 'error');
+    }
+  };
+
   return (
     <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-bg-soft/50 px-3 py-1.5">
       <ChevronDown size={14} className="text-fg-subtle rotate-[-90deg]" />
@@ -242,6 +449,19 @@ function CurrentEasingHint({ easing }: { easing: Easing }) {
       <span className="ml-auto font-mono text-[11px] text-fg-muted">
         {easingDescription(easing)}
       </span>
+      <button
+        type="button"
+        onClick={onCopy}
+        aria-label={`Copy ${easingToCss(easing)} to clipboard`}
+        title="Copy easing as CSS"
+        className="grid h-5 w-5 place-items-center rounded text-fg-subtle hover:bg-bg-panel hover:text-fg focus-ring transition-colors"
+      >
+        {justCopied ? (
+          <Check size={12} className="text-emerald-400" />
+        ) : (
+          <Copy size={12} />
+        )}
+      </button>
     </div>
   );
 }
