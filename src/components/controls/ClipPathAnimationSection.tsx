@@ -33,19 +33,21 @@ export function ClipPathAnimationSection() {
   const update = useAnimationStore((s) => s.updateKeyframe);
 
   // Parse the stored CSS clip-path string back into the editor's
-  // point array. Anything we can't parse (a future kind of clip-path
-  // function the editor doesn't support, a tampered string the
-  // validator missed) falls back to the default square so the editor
-  // surface still works.
-  const points = useMemo<ClipPathPoint[]>(() => {
-    if (!keyframe?.clipPath) return defaultPolygon();
-    return clipPathToPoints(keyframe.clipPath) ?? defaultPolygon();
+  // point array. Returns `null` when the stored value is something
+  // the editor can't represent (a future shape function like
+  // inset() / circle(), a corrupted value the validator missed) —
+  // surface a hint to the user so they know the first edit will
+  // overwrite the unparseable value.
+  const parsedPoints = useMemo<ClipPathPoint[] | null>(() => {
+    if (!keyframe?.clipPath) return null;
+    return clipPathToPoints(keyframe.clipPath);
   }, [keyframe?.clipPath]);
+  const points = parsedPoints ?? defaultPolygon();
+  const parseFailed = !!keyframe?.clipPath && parsedPoints === null;
 
-  // Adjacent-keyframe vertex-count check across the whole config —
-  // any pair with mismatched counts will hard-cut at the boundary
-  // instead of morphing. We collect the affected keyframes for the
-  // warning and the equalisation button.
+  // Vertex count per keyframe with a clip-path. Used for both the
+  // global "max vertex count" the equaliser targets and the
+  // adjacency check below.
   const vertexCountsByKeyframe = useMemo(() => {
     const counts = new Map<string, number>();
     for (const k of config.keyframes) {
@@ -60,11 +62,31 @@ export function ClipPathAnimationSection() {
     () => Math.max(0, ...Array.from(vertexCountsByKeyframe.values())),
     [vertexCountsByKeyframe]
   );
+  const minVertexCount = useMemo(
+    () => {
+      const vals = Array.from(vertexCountsByKeyframe.values());
+      return vals.length ? Math.min(...vals) : 0;
+    },
+    [vertexCountsByKeyframe]
+  );
+  // Adjacent-keyframe vertex-count check. Browsers only interpolate
+  // between ADJACENT keyframes (in `at` order), so a sequence like
+  // 4 → 6 → 4 actually morphs fine: 4↔6 cuts at the boundary but
+  // the user explicitly chose those counts. The earlier "any set
+  // size > 1" check fired on this case too, prompting users to fix
+  // something that already worked. Walk adjacent pairs that both
+  // carry clip-path and only flag a real mismatch.
   const hasMismatch = useMemo(() => {
-    const values = Array.from(vertexCountsByKeyframe.values());
-    if (values.length < 2) return false;
-    return new Set(values).size > 1;
-  }, [vertexCountsByKeyframe]);
+    const sorted = [...config.keyframes].sort((a, b) => a.at - b.at);
+    let prevCount: number | null = null;
+    for (const k of sorted) {
+      const count = vertexCountsByKeyframe.get(k.id);
+      if (count === undefined) continue;
+      if (prevCount !== null && prevCount !== count) return true;
+      prevCount = count;
+    }
+    return false;
+  }, [config.keyframes, vertexCountsByKeyframe]);
 
   if (!keyframe) return null;
 
@@ -75,11 +97,24 @@ export function ClipPathAnimationSection() {
   };
 
   const addClipPath = () => {
-    // Seed from the highest existing vertex count if any keyframe
-    // already has one, so the new keyframe matches by default and
-    // the user doesn't immediately get the mismatch warning.
-    const target = maxVertexCount >= 3 ? maxVertexCount : 4;
-    setClipPath(growPolygon(defaultPolygon(), target));
+    // Match the vertex count of an existing keyframe's polygon when
+    // any exist, so the new keyframe doesn't immediately trip the
+    // mismatch warning. Source polygon: pick the keyframe whose
+    // vertex count equals the maxVertexCount so growing isn't
+    // needed; copy its points verbatim. Falls back to a 4-pt square
+    // when no other keyframe carries a clip-path.
+    if (maxVertexCount >= 3) {
+      for (const k of config.keyframes) {
+        if (k.id === keyframe.id) continue;
+        if (!k.clipPath) continue;
+        const pts = clipPathToPoints(k.clipPath);
+        if (pts && pts.length === maxVertexCount) {
+          setClipPath([...pts]);
+          return;
+        }
+      }
+    }
+    setClipPath(defaultPolygon());
   };
 
   const removeClipPath = () => {
@@ -118,6 +153,25 @@ export function ClipPathAnimationSection() {
         </button>
       ) : (
         <>
+          {/* Surface the divergence between stored value and editor
+              state when we couldn't parse the stored clip-path
+              (future shape function, corrupted import). The first
+              edit overwrites the unparseable value — flag it so
+              the data loss is intentional, not surprising. */}
+          {parseFailed && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] leading-snug text-amber-200/80">
+              <AlertTriangle
+                size={13}
+                className="mt-0.5 shrink-0 text-amber-400"
+                aria-hidden
+              />
+              <span>
+                Couldn't parse the stored clip-path (maybe a
+                different shape function). Editing here will replace
+                it with a polygon.
+              </span>
+            </div>
+          )}
           <div className="grid place-items-center">
             <PolygonEditor points={points} onChange={setClipPath} size={220} />
           </div>
@@ -142,12 +196,12 @@ export function ClipPathAnimationSection() {
               </span>
               <p className="text-[11px] leading-snug text-amber-200/80">
                 CSS only interpolates clip-path smoothly between
-                polygons with the same number of vertices. Your
-                keyframes range from {Math.min(...vertexCountsByKeyframe.values())}
-                {' '}to {maxVertexCount} vertices — adjacent transitions
-                will hard-cut instead of morphing. Bring every
-                keyframe up to {maxVertexCount} vertices to get a
-                smooth shape morph.
+                polygons with the same number of vertices. Adjacent
+                keyframes in your animation have different vertex
+                counts ({minVertexCount} – {maxVertexCount}) so the
+                browser will hard-cut at those boundaries instead of
+                morphing. Bring every keyframe up to {maxVertexCount}
+                vertices to get a smooth shape morph.
               </p>
             </div>
           </div>
