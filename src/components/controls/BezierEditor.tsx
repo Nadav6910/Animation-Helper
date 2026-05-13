@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import type { Easing } from '@/types/animation';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { cn } from '@/lib/cn';
@@ -288,15 +288,15 @@ export function BezierEditor({ value, onChange }: Props) {
   );
 }
 
-type PreviewSpeed = 'slow' | 'normal' | 'fast';
+type PreviewSpeed = '0.5x' | '1x' | '2x';
 
 const PREVIEW_DURATION_MS: Record<PreviewSpeed, number> = {
-  slow: 2400,
-  normal: 1200,
-  fast: 600,
+  '0.5x': 2400,
+  '1x': 1200,
+  '2x': 600,
 };
 
-const PREVIEW_TRACK_WIDTH = 260;
+const PREVIEW_TRACK_MAX_WIDTH = 260;
 const PREVIEW_BALL_SIZE = 12;
 
 function BezierPreviewBall({
@@ -304,46 +304,83 @@ function BezierPreviewBall({
 }: {
   value: [number, number, number, number];
 }) {
-  const [speed, setSpeed] = useState<PreviewSpeed>('normal');
-  const slideEnd = PREVIEW_TRACK_WIDTH - PREVIEW_BALL_SIZE;
-  // Inline the cubic-bezier value into the animation shorthand. When
-  // the user drags a handle, React re-renders with a new style string;
-  // the browser swaps the timing function for the remainder of the
-  // current iteration without restarting the animation. That avoids
-  // the jarring "ball snaps to start on every drag tick" we'd get from
-  // remounting via a React key.
-  const animation = `ah-bezier-slide ${PREVIEW_DURATION_MS[speed]}ms cubic-bezier(${value.join(', ')}) infinite alternate`;
+  const [speed, setSpeed] = useState<PreviewSpeed>('1x');
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  // Measure the actual rendered track width so the ball's end position
+  // matches the track on narrow viewports. A hard 260px would overflow
+  // narrow controls panels and let the ball travel past the visible
+  // edge. Falling back to the max width on layouts that haven't
+  // measured yet (SSR / first paint) keeps the ball visible.
+  const [trackWidth, setTrackWidth] = useState(PREVIEW_TRACK_MAX_WIDTH);
+  const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const obs = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      if (w > 0) setTrackWidth(w);
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const slideEnd = Math.max(0, trackWidth - PREVIEW_BALL_SIZE);
+
   return (
-    <div className="flex w-full flex-col items-center gap-1.5">
+    <div className="flex w-full max-w-[260px] flex-col items-center gap-1.5">
       <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
         Live preview
       </span>
-      <div
-        className="relative h-6 overflow-visible rounded-full border border-border/70 bg-bg-soft"
-        style={{ width: PREVIEW_TRACK_WIDTH }}
-        aria-hidden
-      >
-        <span
-          className="ah-bezier-preview-ball absolute top-1/2 rounded-full bg-accent shadow-glow"
-          style={{
-            width: PREVIEW_BALL_SIZE,
-            height: PREVIEW_BALL_SIZE,
-            ['--slide-end' as string]: `${slideEnd}px`,
-            animation,
-          }}
-        />
-      </div>
-      <div className="flex gap-1">
-        {(['slow', 'normal', 'fast'] as const).map((s) => {
+      {reduceMotion ? (
+        // prefers-reduced-motion users get a static hint instead of an
+        // empty track with a frozen dot, which would otherwise read as
+        // a broken control. The curve in the editor above already
+        // communicates the easing visually.
+        <div
+          className="grid h-6 w-full place-items-center rounded-full border border-border/70 bg-bg-soft px-2 text-[10px] italic text-fg-subtle"
+          role="status"
+        >
+          Preview paused for reduced motion
+        </div>
+      ) : (
+        <div
+          ref={trackRef}
+          className="relative h-6 w-full overflow-visible rounded-full border border-border/70 bg-bg-soft"
+          aria-hidden
+        >
+          {/* Driving individual animation-* properties (not the shorthand)
+              lets browsers preserve current progress when only the
+              duration or timing function changes. Rebuilding the
+              shorthand on every speed change restarted the iteration
+              in Safari / Firefox. */}
+          <span
+            className="ah-bezier-preview-ball absolute top-1/2 rounded-full bg-accent shadow-glow"
+            style={{
+              width: PREVIEW_BALL_SIZE,
+              height: PREVIEW_BALL_SIZE,
+              ['--slide-end' as string]: `${slideEnd}px`,
+              animationName: 'ah-bezier-slide',
+              animationDuration: `${PREVIEW_DURATION_MS[speed]}ms`,
+              animationTimingFunction: `cubic-bezier(${value.join(', ')})`,
+              animationIterationCount: 'infinite',
+              animationDirection: 'alternate',
+            }}
+          />
+        </div>
+      )}
+      <div role="radiogroup" aria-label="Preview speed" className="flex gap-1">
+        {(['0.5x', '1x', '2x'] as const).map((s) => {
           const active = speed === s;
           return (
             <button
               key={s}
               type="button"
+              role="radio"
+              aria-checked={active}
               onClick={() => setSpeed(s)}
-              aria-pressed={active}
               className={cn(
-                'rounded-full border px-2 py-0.5 text-[10px] transition-colors focus-ring',
+                'rounded-full border px-2 py-0.5 text-[10px] tabular-nums transition-colors focus-ring',
                 active
                   ? 'border-accent/50 bg-accent/15 text-fg'
                   : 'border-border/70 bg-bg-soft text-fg-muted hover:text-fg'
