@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { ArrowDownToLine, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
+import { useCustomShapesStore } from '@/store/customShapesStore';
+import { resolveShapeDef } from '@/lib/shapes';
 import {
   clipPathToPoints,
   defaultPolygon,
@@ -8,6 +10,7 @@ import {
   type ClipPathPoint,
 } from '@/lib/clipPath';
 import { PolygonEditor } from './PolygonEditor';
+import type { ShapeKind, CustomShape } from '@/types/animation';
 
 /**
  * UI surface for animating CSS `clip-path` as a keyframe property
@@ -31,6 +34,10 @@ export function ClipPathAnimationSection() {
   const selectedId = useAnimationStore((s) => s.selectedKeyframeId);
   const keyframe = config.keyframes.find((k) => k.id === selectedId);
   const update = useAnimationStore((s) => s.updateKeyframe);
+  // Needed by getSeedPolygonForShape so custom shapes resolve to
+  // their polygon outline on first enable — same store as the
+  // shape picker so any user-authored shape works automatically.
+  const customShapes = useCustomShapesStore((s) => s.customShapes);
 
   // Parse the stored CSS clip-path string back into the editor's
   // point array. Returns `null` when the stored value is something
@@ -122,39 +129,46 @@ export function ClipPathAnimationSection() {
   };
 
   const addClipPath = () => {
-    // First decide what polygon to seed with: match an existing
-    // keyframe's vertex count so the mismatch warning doesn't fire,
-    // or fall back to a 4-pt square when this is the first
-    // clip-path in the animation.
-    let seed: ClipPathPoint[] = defaultPolygon();
-    if (maxVertexCount >= 3) {
-      for (const k of config.keyframes) {
-        if (k.id === keyframe.id) continue;
-        if (!k.clipPath) continue;
-        const pts = clipPathToPoints(k.clipPath);
-        if (pts && pts.length === maxVertexCount) {
-          seed = [...pts];
-          break;
+    const isFirstEnable = config.keyframes.every((k) => !k.clipPath);
+
+    // First enable: seed from the currently-selected shape's polygon
+    // so the 0 % keyframe matches the visible starting state.
+    // Previously this defaulted to a 4-pt square regardless of the
+    // current shape, which meant enabling clip-path on a star
+    // immediately clipped the star down to a rectangle at 0 % — a
+    // jarring visual jump that didn't match user intent.
+    //
+    // Subsequent enable (some keyframes already have clip-path, the
+    // current one doesn't): seed from a peer keyframe's polygon so
+    // the new keyframe matches the existing morph's vertex count.
+    // The current-shape polygon might have a different count and
+    // would trip the mismatch warning.
+    let seed: ClipPathPoint[];
+    if (isFirstEnable) {
+      seed = getSeedPolygonForShape(config.shape, customShapes);
+    } else {
+      seed = defaultPolygon();
+      if (maxVertexCount >= 3) {
+        for (const k of config.keyframes) {
+          if (k.id === keyframe.id) continue;
+          if (!k.clipPath) continue;
+          const pts = clipPathToPoints(k.clipPath);
+          if (pts && pts.length === maxVertexCount) {
+            seed = [...pts];
+            break;
+          }
         }
       }
     }
 
-    // Auto-propagate on FIRST enable: if no other keyframe in the
-    // animation has a clip-path yet, this is the user enabling the
-    // feature for the whole timeline. CSS interpolates between
+    // Auto-propagate on FIRST enable: CSS interpolates between
     // adjacent keyframes only; a single keyframe with a polygon and
     // others with no clip-path means the animation flips between
     // polygon and `none` (CSS default), which reads as a hard cut,
     // not a morph. Seeding every keyframe with the same polygon
-    // gives users a "ready to morph" starting state — they can then
-    // edit each keyframe's polygon to taste, and the matching
-    // vertex count means dragging vertices produces a smooth
-    // shape morph.
-    //
-    // Subsequent additions (when the user previously removed
-    // clip-path from some keyframes intentionally) only set this
-    // keyframe's value, respecting the explicit removal.
-    const isFirstEnable = config.keyframes.every((k) => !k.clipPath);
+    // gives users a "ready to morph" starting state — they edit each
+    // keyframe's polygon to taste, and the matching vertex count
+    // means dragging vertices produces a smooth shape morph.
     if (isFirstEnable && config.keyframes.length > 1) {
       const seedString = pointsToClipPath(seed);
       for (const k of config.keyframes) {
@@ -330,6 +344,60 @@ export function ClipPathAnimationSection() {
       )}
     </div>
   );
+}
+
+/**
+ * Pick the polygon to seed the very first clip-path keyframe with.
+ * Goal: make the 0% keyframe match the currently-visible shape so
+ * users see no visual jump when they enable clip-path animation.
+ *
+ *  - Built-in polygon shapes (triangle, star, hexagon, diamond, etc.):
+ *    parse the shape's static clip-path string into vertices and use
+ *    those directly. The visible silhouette is preserved exactly at
+ *    0%.
+ *  - Custom shapes: already stored as polygon points — use them.
+ *  - Circle: built-in's clip-path is null (rendered via
+ *    border-radius), so we approximate with a 24-vertex polygon.
+ *    24 is the standard "circle looks round enough" sample count
+ *    used across SVG / CAD circle-as-polygon approximations.
+ *  - Square / pill / heart / message: clip-path is null and we have
+ *    no good polygon approximation, so fall back to the 4-pt square
+ *    (full coverage). Visually matches square; for pill / heart /
+ *    message the user sees the underlying box outline when enabling
+ *    — acceptable since those shapes use mask-image / border-radius
+ *    that clip-path can't faithfully reproduce.
+ */
+function getSeedPolygonForShape(
+  shape: ShapeKind | undefined,
+  customShapes: ReadonlyArray<CustomShape>
+): ClipPathPoint[] {
+  const def = resolveShapeDef(shape, customShapes);
+  if (def?.clipPath) {
+    const pts = clipPathToPoints(def.clipPath);
+    if (pts) return pts;
+  }
+  if (shape === 'circle') return circlePolygon(24);
+  return defaultPolygon();
+}
+
+/**
+ * N-vertex polygon approximating the unit circle inscribed in the
+ * 0–100 % box. Vertex 0 at the top (12 o'clock); subsequent vertices
+ * walk clockwise. 3-decimal precision matches the round-trip the
+ * editor uses.
+ */
+function circlePolygon(n: number): ClipPathPoint[] {
+  const pts: ClipPathPoint[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * 2 * Math.PI - Math.PI / 2;
+    const x = 50 + 50 * Math.cos(a);
+    const y = 50 + 50 * Math.sin(a);
+    pts.push([
+      Math.round(x * 1000) / 1000,
+      Math.round(y * 1000) / 1000,
+    ]);
+  }
+  return pts;
 }
 
 /**
