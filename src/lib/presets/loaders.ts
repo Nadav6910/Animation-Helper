@@ -64,4 +64,45 @@ export const LOADER_PRESETS: Preset[] = [
       easing: { kind: 'preset', value: 'ease-in-out' },
     }),
   },
+  {
+    id: 'fade-spin',
+    name: 'Fade spin',
+    category: 'loaders',
+    description: 'Spin coupled with a breathing opacity pulse',
+    build: () => ({
+      target: 'shape', selector: '.animated', shape: 'circle', text: 'Animate', svgPath: 'check',
+      iterations: 'infinite', direction: 'normal', fill: 'none',
+      // rotate3d on Z gives a full 360° in-plane spin; opacity dips
+      // to 0.3 at the midpoint and recovers, layering two channels
+      // of motion onto the loader without needing a multi-element
+      // setup. Linear keeps the spin perceptually steady.
+      keyframes: [
+        { id: uid(), at: 0, opacity: 1, transform: { ...blank(), rotate3d: { x: 0, y: 0, z: 1, deg: 0 } } },
+        { id: uid(), at: 50, opacity: 0.3, transform: { ...blank(), rotate3d: { x: 0, y: 0, z: 1, deg: 180 } } },
+        { id: uid(), at: 100, opacity: 1, transform: { ...blank(), rotate3d: { x: 0, y: 0, z: 1, deg: 360 } } },
+      ],
+      duration: 1600, delay: 0,
+      easing: { kind: 'preset', value: 'linear' },
+    }),
+  },
+  {
+    id: 'bar-pulse',
+    name: 'Bar pulse',
+    category: 'loaders',
+    description: 'Vertical scale pulse that breathes in place',
+    build: () => ({
+      target: 'shape', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
+      iterations: 'infinite', direction: 'normal', fill: 'none',
+      // Distinct from bar-bounce (alternating endpoints): this one
+      // returns to baseline every cycle, giving a heartbeat-like
+      // breathing rhythm rather than a metronome bounce.
+      keyframes: [
+        { id: uid(), at: 0, transform: { ...blank(), scale: [1, 1] } },
+        { id: uid(), at: 50, transform: { ...blank(), scale: [1, 1.5] } },
+        { id: uid(), at: 100, transform: { ...blank(), scale: [1, 1] } },
+      ],
+      duration: 1400, delay: 0,
+      easing: { kind: 'preset', value: 'ease-in-out' },
+    }),
+  },
 ];

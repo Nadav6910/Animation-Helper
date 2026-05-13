@@ -116,4 +116,68 @@ export const ATTENTION_PRESETS: Preset[] = [
       easing: { kind: 'preset', value: 'ease-in-out' },
     }),
   },
+  {
+    id: 'wiggle',
+    name: 'Wiggle',
+    category: 'attention',
+    description: 'Quick side-to-side rotation oscillation',
+    build: () => ({
+      target: 'shape', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
+      iterations: 1, direction: 'normal', fill: 'none',
+      // rotate3d on Z gives in-plane rotation (around the screen
+      // normal) — distinct from the existing shake (translate) and
+      // wobble (translate + skew). Decaying amplitude lands at zero
+      // so iterations: 1 leaves the element in its rest pose.
+      keyframes: [
+        { id: uid(), at: 0, transform: { ...blank() } },
+        { id: uid(), at: 15, transform: { ...blank(), rotate3d: { x: 0, y: 0, z: 1, deg: -6 } } },
+        { id: uid(), at: 35, transform: { ...blank(), rotate3d: { x: 0, y: 0, z: 1, deg: 6 } } },
+        { id: uid(), at: 55, transform: { ...blank(), rotate3d: { x: 0, y: 0, z: 1, deg: -4 } } },
+        { id: uid(), at: 75, transform: { ...blank(), rotate3d: { x: 0, y: 0, z: 1, deg: 2 } } },
+        { id: uid(), at: 100, transform: { ...blank() } },
+      ],
+      duration: 900, delay: 0,
+      easing: { kind: 'preset', value: 'ease-in-out' },
+    }),
+  },
+  {
+    id: 'flash',
+    name: 'Flash',
+    category: 'attention',
+    description: 'Rapid opacity blinks to draw the eye',
+    build: () => ({
+      target: 'shape', selector: '.animated', shape: 'square', text: 'Animate', svgPath: 'check',
+      iterations: 1, direction: 'normal', fill: 'none',
+      keyframes: [
+        { id: uid(), at: 0, opacity: 1, transform: { ...blank() } },
+        { id: uid(), at: 25, opacity: 0, transform: { ...blank() } },
+        { id: uid(), at: 50, opacity: 1, transform: { ...blank() } },
+        { id: uid(), at: 75, opacity: 0, transform: { ...blank() } },
+        { id: uid(), at: 100, opacity: 1, transform: { ...blank() } },
+      ],
+      duration: 900, delay: 0,
+      easing: { kind: 'preset', value: 'linear' },
+    }),
+  },
+  {
+    id: 'glow-pulse',
+    name: 'Glow pulse',
+    category: 'attention',
+    description: 'Soft halo expands and fades in a loop',
+    build: () => ({
+      target: 'shape', selector: '.animated', shape: 'circle', text: 'Animate', svgPath: 'check',
+      iterations: 'infinite', direction: 'normal', fill: 'none',
+      // dropShadow is the supported filter primitive (text-shadow isn't
+      // wired through the generators); expanding the blur radius while
+      // dialling the colour's alpha creates a "halo breathing" effect.
+      // rgb(var(--accent)) follows the active theme accent.
+      keyframes: [
+        { id: uid(), at: 0, dropShadow: '0 0 0 rgb(var(--accent) / 0.7)', transform: { ...blank() } },
+        { id: uid(), at: 50, dropShadow: '0 0 24px rgb(var(--accent) / 0.0)', transform: { ...blank() } },
+        { id: uid(), at: 100, dropShadow: '0 0 0 rgb(var(--accent) / 0.7)', transform: { ...blank() } },
+      ],
+      duration: 2000, delay: 0,
+      easing: { kind: 'preset', value: 'ease-in-out' },
+    }),
+  },
 ];
