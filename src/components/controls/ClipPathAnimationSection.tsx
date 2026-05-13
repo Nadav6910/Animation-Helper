@@ -88,6 +88,22 @@ export function ClipPathAnimationSection() {
     return false;
   }, [config.keyframes, vertexCountsByKeyframe]);
 
+  // Partial coverage: some keyframes have a clip-path, others don't.
+  // The missing keyframes implicitly default to `none` in CSS, which
+  // CSS interpolates as discrete from / to a polygon — i.e. the
+  // animation flips at the boundary instead of morphing. Most common
+  // accidental cause of "why isn't my shape morphing?".
+  const hasPartialCoverage = useMemo(() => {
+    if (config.keyframes.length < 2) return false;
+    let withClip = 0;
+    let withoutClip = 0;
+    for (const k of config.keyframes) {
+      if (k.clipPath) withClip++;
+      else withoutClip++;
+    }
+    return withClip > 0 && withoutClip > 0;
+  }, [config.keyframes]);
+
   if (!keyframe) return null;
 
   const hasClipPath = !!keyframe.clipPath;
@@ -97,24 +113,61 @@ export function ClipPathAnimationSection() {
   };
 
   const addClipPath = () => {
-    // Match the vertex count of an existing keyframe's polygon when
-    // any exist, so the new keyframe doesn't immediately trip the
-    // mismatch warning. Source polygon: pick the keyframe whose
-    // vertex count equals the maxVertexCount so growing isn't
-    // needed; copy its points verbatim. Falls back to a 4-pt square
-    // when no other keyframe carries a clip-path.
+    // First decide what polygon to seed with: match an existing
+    // keyframe's vertex count so the mismatch warning doesn't fire,
+    // or fall back to a 4-pt square when this is the first
+    // clip-path in the animation.
+    let seed: ClipPathPoint[] = defaultPolygon();
     if (maxVertexCount >= 3) {
       for (const k of config.keyframes) {
         if (k.id === keyframe.id) continue;
         if (!k.clipPath) continue;
         const pts = clipPathToPoints(k.clipPath);
         if (pts && pts.length === maxVertexCount) {
-          setClipPath([...pts]);
-          return;
+          seed = [...pts];
+          break;
         }
       }
     }
-    setClipPath(defaultPolygon());
+
+    // Auto-propagate on FIRST enable: if no other keyframe in the
+    // animation has a clip-path yet, this is the user enabling the
+    // feature for the whole timeline. CSS interpolates between
+    // adjacent keyframes only; a single keyframe with a polygon and
+    // others with no clip-path means the animation flips between
+    // polygon and `none` (CSS default), which reads as a hard cut,
+    // not a morph. Seeding every keyframe with the same polygon
+    // gives users a "ready to morph" starting state — they can then
+    // edit each keyframe's polygon to taste, and the matching
+    // vertex count means dragging vertices produces a smooth
+    // shape morph.
+    //
+    // Subsequent additions (when the user previously removed
+    // clip-path from some keyframes intentionally) only set this
+    // keyframe's value, respecting the explicit removal.
+    const isFirstEnable = config.keyframes.every((k) => !k.clipPath);
+    if (isFirstEnable && config.keyframes.length > 1) {
+      const seedString = pointsToClipPath(seed);
+      for (const k of config.keyframes) {
+        update(k.id, { clipPath: seedString });
+      }
+    } else {
+      setClipPath(seed);
+    }
+  };
+
+  /**
+   * Add the current keyframe's clip-path to every other keyframe
+   * that doesn't have one. Surfaces from the partial-coverage
+   * warning so users can fix the "missing on some keyframes" cause
+   * of the discrete flip with one click.
+   */
+  const fillMissingKeyframes = () => {
+    if (!keyframe.clipPath) return;
+    for (const k of config.keyframes) {
+      if (k.clipPath) continue;
+      update(k.id, { clipPath: keyframe.clipPath });
+    }
   };
 
   const removeClipPath = () => {
@@ -184,6 +237,40 @@ export function ClipPathAnimationSection() {
             Remove clip-path from this keyframe
           </button>
         </>
+      )}
+
+      {hasPartialCoverage && (
+        // Partial coverage produces a discrete flip at every
+        // boundary where a clip-path-bearing keyframe meets a
+        // bare one (CSS treats the missing value as `none`).
+        // Most users hit this after the first-enable propagation
+        // because they've since removed clip-path from a keyframe
+        // they didn't realise was part of the morph.
+        <div className="flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5">
+          <div className="flex items-start gap-2">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-400" aria-hidden />
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] font-semibold text-amber-300">
+                Some keyframes have no clip-path
+              </span>
+              <p className="text-[11px] leading-snug text-amber-200/80">
+                CSS interpolates a missing clip-path as `none`, which
+                produces a hard cut at the boundary instead of a
+                morph. Add the current shape to every keyframe to get
+                a smooth morph across the whole animation.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={fillMissingKeyframes}
+            disabled={!keyframe.clipPath}
+            className="inline-flex h-7 items-center justify-center gap-1.5 self-start rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 text-[11px] font-medium text-amber-300 hover:bg-amber-500/15 focus-ring transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus size={12} />
+            Add this shape to every keyframe
+          </button>
+        </div>
       )}
 
       {hasMismatch && (
