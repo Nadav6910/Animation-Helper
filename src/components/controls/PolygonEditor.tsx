@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
+import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import {
   type ClipPathPoint,
@@ -10,15 +17,14 @@ type Props = {
   /** Points in % space (0–100). Caller owns the array. */
   points: ReadonlyArray<ClipPathPoint>;
   onChange: (points: ClipPathPoint[]) => void;
-  /** Pixel size of the square canvas. */
+  /** Pixel size of the square canvas. Defaults to 240 — comfortable for
+   *  the modal use case while still fitting in the controls column. */
   size?: number;
   /** Minimum vertex count enforced for delete. Default 3 (any polygon). */
   minPoints?: number;
 };
 
 // 3-decimal grid matches the round-trip precision in clipPath.ts.
-// Keeps state free of float crud so the same value reads "0.4" not
-// "0.40000000000000002".
 function round3(n: number): number {
   const r = Math.round(n * 1000) / 1000;
   return r === 0 ? 0 : r;
@@ -28,12 +34,35 @@ function clampPct(n: number): number {
   return Math.max(0, Math.min(100, n));
 }
 
+// Pre-tuned spring used for non-drag vertex movements (load a custom
+// shape, undo, paste-in). Drag updates bypass the spring so the
+// cursor and the vertex stay locked together.
+const VERTEX_SPRING = {
+  type: 'spring' as const,
+  stiffness: 540,
+  damping: 38,
+  mass: 0.45,
+};
+
 /**
  * Polygon authoring surface for the custom-shape modal and the
- * clip-path animation card. Reuses the BezierEditor pattern: SVG
- * canvas + draggable buttons for each vertex, click empty area to
- * insert a new vertex on the closest edge, × overlay on each vertex
- * to delete (greyed out at the minimum vertex count).
+ * clip-path animation card.
+ *
+ * Affordances:
+ *  - SVG canvas with a soft grid; the live polygon renders with a
+ *    semi-transparent accent fill so users see the resulting shape,
+ *    not just the wireframe.
+ *  - Vertex handles are layered (outer ring + inner dot) so the
+ *    drag target reads as a "grommet" the user can grab. Framer
+ *    Motion drives the spring on non-drag moves; the vertex snaps
+ *    to the pointer during a drag for zero lag.
+ *  - Hovering / pointer-moving inside the canvas shows a ghost
+ *    "insert here" dot on the closest edge — tapping commits.
+ *  - During a drag, a tiny tooltip floats above the vertex
+ *    showing the live X / Y in percentage units.
+ *  - Each vertex has a small × overlay (24×24 hit area, tabIndex=-1)
+ *    to remove. Backspace / Delete on a focused vertex does the same.
+ *  - Arrow keys nudge ±1 %, Shift+Arrow ±5 %.
  *
  * Coordinate system: input/output points are in 0 – 100 % to match
  * CSS clip-path syntax; the SVG renders them at the canvas's pixel
@@ -52,6 +81,8 @@ export function PolygonEditor({
   const helpId = `polygon-help-${reactId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const [insertHint, setInsertHint] = useState<ClipPathPoint | null>(null);
   // Same anti-stale-closure pattern as BezierEditor: the pointermove
   // listener captures `points` from the render that fired the drag.
   // valueRef lets the move read the latest array without re-binding
@@ -91,12 +122,9 @@ export function PolygonEditor({
 
   const onVertexPointerDown = (e: React.PointerEvent, idx: number) => {
     e.preventDefault();
-    e.stopPropagation(); // don't fire the canvas-tap insert handler
+    e.stopPropagation();
     setDragIdx(idx);
-    // setPointerCapture binds the gesture to the vertex element so the
-    // browser keeps routing pointer events to us even when the user
-    // drags outside the editor / iframe / window. Belt-and-braces:
-    // window listeners still drive the actual coordinate updates.
+    setInsertHint(null);
     try {
       (e.currentTarget as Element).setPointerCapture(e.pointerId);
     } catch {
@@ -121,14 +149,37 @@ export function PolygonEditor({
   };
 
   const onCanvasPointerDown = (e: React.PointerEvent) => {
-    // Tap on empty area → insert a new vertex on the closest edge.
-    // The vertex buttons stopPropagation, so this only fires for
-    // truly-empty clicks.
     const wrap = wrapRef.current;
     if (!wrap) return;
     const rect = wrap.getBoundingClientRect();
     const [x, y] = fromPx(e.clientX - rect.left, e.clientY - rect.top);
     onChange(insertPointAt(pointsRef.current, [round3(x), round3(y)]));
+    setInsertHint(null);
+  };
+
+  const onCanvasPointerMove = (e: React.PointerEvent) => {
+    if (dragIdx !== null) return;
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    // Ignore pointer outside the inner padded area — keeps the ghost
+    // from rendering on the edge ring or beyond.
+    if (
+      px < PAD ||
+      py < PAD ||
+      px > size - PAD ||
+      py > size - PAD
+    ) {
+      setInsertHint(null);
+      return;
+    }
+    setInsertHint(fromPx(px, py));
+  };
+
+  const onCanvasPointerLeave = () => {
+    setInsertHint(null);
   };
 
   const removePoint = (idx: number) => {
@@ -139,9 +190,6 @@ export function PolygonEditor({
 
   const handleVertexKey = (e: React.KeyboardEvent, idx: number) => {
     const step = e.shiftKey ? 5 : 1;
-    // Also swallow Space because the browser default fires a button
-    // click; without that, Space on a focused vertex would bubble to
-    // App's window-level `ah:replay` handler and restart the preview.
     const handled =
       e.key === 'ArrowLeft' ||
       e.key === 'ArrowRight' ||
@@ -154,11 +202,9 @@ export function PolygonEditor({
     if (!handled) return;
     e.preventDefault();
     // React's stopPropagation only halts the synthetic-event tree.
-    // App.tsx's keydown handler is on `window`, which is in the native
-    // capture/bubble path, so it would still fire — meaning ArrowRight
-    // on a vertex would scrub the timeline as well as nudge the
-    // vertex, and Space would replay the animation. stopImmediate-
-    // Propagation on the native event halts both paths.
+    // App.tsx's keydown handler is on `window` so we need to stop the
+    // native bubble path too, or ArrowRight would also scrub the
+    // timeline and Space would replay the animation.
     e.nativeEvent.stopImmediatePropagation();
     if (e.key === ' ' || e.code === 'Space') return;
     const cur = pointsRef.current[idx];
@@ -192,11 +238,13 @@ export function PolygonEditor({
     })
     .join(' ');
 
+  const insertHintPx = insertHint ? toPx(insertHint[0], insertHint[1]) : null;
+
   return (
     <div className="flex flex-col items-center gap-3">
       <span id={helpId} className="sr-only">
-        Drag the vertices to reshape the polygon. Tap an empty area
-        inside the canvas to add a new vertex on the closest edge.
+        Drag the vertices to reshape the polygon. Hover or tap an empty
+        area inside the canvas to add a new vertex at the closest edge.
         Use arrow keys to nudge a focused vertex; hold shift for a
         larger step. Backspace or Delete removes the focused vertex
         when more than {minPoints} remain.
@@ -204,25 +252,38 @@ export function PolygonEditor({
       <div
         ref={wrapRef}
         onPointerDown={onCanvasPointerDown}
+        onPointerMove={onCanvasPointerMove}
+        onPointerLeave={onCanvasPointerLeave}
         className="relative select-none touch-none"
         style={{ width: size, height: size }}
       >
         <svg
           width={size}
           height={size}
-          className="absolute inset-0 pointer-events-none"
+          className="absolute inset-0 pointer-events-none overflow-visible"
           aria-hidden
         >
+          <defs>
+            {/* Subtle inner glow on the polygon fill — gives the shape
+                a touch of depth so it doesn't read as a flat overlay. */}
+            <linearGradient id={`${helpId}-fill`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgb(var(--accent))" stopOpacity="0.22" />
+              <stop offset="100%" stopColor="rgb(var(--accent))" stopOpacity="0.08" />
+            </linearGradient>
+          </defs>
           <rect
             x={PAD}
             y={PAD}
             width={inner}
             height={inner}
-            rx={8}
+            rx={10}
             className="fill-bg-soft stroke-border/70"
           />
+          {/* Quarter / half / three-quarter gridlines. Slightly lower
+              opacity than the previous version so the polygon dominates
+              visually. */}
           {[0.25, 0.5, 0.75].map((t) => (
-            <g key={t} className="stroke-border/40">
+            <g key={t} className="stroke-border/30">
               <line
                 x1={PAD}
                 y1={PAD + t * inner}
@@ -238,56 +299,101 @@ export function PolygonEditor({
             </g>
           ))}
           {points.length >= 3 && (
-            <polygon
+            // motion.polygon animates the `points` attribute on
+            // non-drag updates (load a different shape, undo). During
+            // a drag we render directly because the points stream is
+            // already at pointer cadence.
+            <motion.polygon
               points={polyPoints}
-              className="fill-accent/15 stroke-accent"
-              strokeWidth={1.5}
+              fill={`url(#${helpId}-fill)`}
+              className="stroke-accent"
+              strokeWidth={1.75}
               strokeLinejoin="round"
+              animate={dragIdx === null ? { points: polyPoints } : undefined}
+              transition={dragIdx === null ? { duration: 0.12, ease: [0.22, 1, 0.36, 1] } : undefined}
             />
+          )}
+          {/* Insertion ghost: faint dot at the position the user's
+              click would land. Sits on the polygon edge if pointer is
+              near a side, snaps to wherever the user actually presses
+              otherwise. Hidden during drags. */}
+          {insertHintPx && dragIdx === null && (
+            <g className="pointer-events-none">
+              <circle
+                cx={insertHintPx.x}
+                cy={insertHintPx.y}
+                r={7}
+                className="fill-accent/15 stroke-accent/60"
+                strokeDasharray="3 3"
+              />
+              <circle
+                cx={insertHintPx.x}
+                cy={insertHintPx.y}
+                r={2}
+                className="fill-accent"
+              />
+            </g>
           )}
         </svg>
         {points.map((p, idx) => {
           const px = toPx(p[0], p[1]);
           const canDelete = points.length > minPoints;
+          const isDragging = dragIdx === idx;
+          const isHover = hoverIdx === idx;
           return (
-            <div
+            <motion.div
               key={idx}
               className="absolute"
-              style={{
-                left: px.x,
-                top: px.y,
-                transform: 'translate(-50%, -50%)',
-              }}
+              animate={{ x: px.x, y: px.y }}
+              transition={isDragging ? { duration: 0 } : VERTEX_SPRING}
+              style={{ translate: '-50% -50%' }}
             >
               <button
                 type="button"
                 onPointerDown={(e) => onVertexPointerDown(e, idx)}
+                onPointerEnter={() => setHoverIdx(idx)}
+                onPointerLeave={() => setHoverIdx((v) => (v === idx ? null : v))}
+                onFocus={() => setHoverIdx(idx)}
+                onBlur={() => setHoverIdx((v) => (v === idx ? null : v))}
                 onKeyDown={(e) => handleVertexKey(e, idx)}
                 aria-label={`Vertex ${idx + 1}, X ${p[0].toFixed(1)}, Y ${p[1].toFixed(1)}`}
                 aria-describedby={helpId}
                 aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown Backspace Delete"
                 className={cn(
-                  'grid h-8 w-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full cursor-grab focus-ring touch-none select-none [-webkit-touch-callout:none]',
-                  dragIdx === idx && 'cursor-grabbing'
+                  'group/vertex relative grid h-8 w-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full focus-ring touch-none select-none [-webkit-touch-callout:none]',
+                  isDragging ? 'cursor-grabbing' : 'cursor-grab'
                 )}
               >
+                {/* Outer halo — fades in on hover / drag for affordance. */}
                 <span
+                  aria-hidden
                   className={cn(
-                    'h-3.5 w-3.5 rounded-full bg-accent shadow-glow border-2 border-bg transition-transform',
-                    dragIdx === idx && 'scale-125'
+                    'absolute inset-0 m-auto h-6 w-6 rounded-full bg-accent/20 transition-all duration-150',
+                    isDragging
+                      ? 'scale-125 bg-accent/40'
+                      : isHover
+                        ? 'scale-110'
+                        : 'scale-90 opacity-0 group-focus-visible/vertex:opacity-100 group-focus-visible/vertex:scale-110'
                   )}
                 />
+                {/* Outer ring — the visible "grommet" edge. */}
+                <span
+                  aria-hidden
+                  className={cn(
+                    'relative grid h-4 w-4 place-items-center rounded-full border-2 border-accent bg-bg shadow-glow transition-transform duration-150',
+                    isDragging ? 'scale-125' : isHover ? 'scale-110' : 'scale-100'
+                  )}
+                >
+                  {/* Inner dot — fills the centre so the handle reads
+                      as a solid target rather than an empty ring. */}
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                </span>
               </button>
               {canDelete && (
-                // Small × overlay anchored to the vertex; click removes
-                // the point. Pointer events on the vertex button take
-                // precedence (stopPropagation in the canvas handler),
-                // so this only fires when the user explicitly clicks ×.
-                // 24×24 hit area satisfies the WCAG 2.5.5 AAA minimum
-                // with a 10-px visual icon centred inside. tabIndex=-1
-                // keeps keyboard users tabbing through vertices only —
-                // the Backspace / Delete shortcut on the vertex itself
-                // already covers deletion.
+                // 24×24 hit area satisfies WCAG 2.5.5; the visual icon
+                // is 10 px. tabIndex=-1 keeps keyboard users tabbing
+                // through vertices only — Backspace/Delete on the
+                // vertex covers keyboard deletion.
                 <button
                   type="button"
                   tabIndex={-1}
@@ -297,19 +403,33 @@ export function PolygonEditor({
                   }}
                   onPointerDown={(e) => e.stopPropagation()}
                   aria-label={`Remove vertex ${idx + 1}`}
-                  className="absolute -right-4 -top-4 grid h-6 w-6 place-items-center rounded-full border border-border bg-bg-panel text-fg-muted hover:text-red-400 hover:border-red-500/60 focus-ring transition-colors"
+                  className={cn(
+                    'absolute -right-4 -top-4 grid h-6 w-6 place-items-center rounded-full border border-border bg-bg-panel text-fg-muted hover:text-red-400 hover:border-red-500/60 focus-ring transition-all duration-150',
+                    isHover || isDragging
+                      ? 'opacity-100 scale-100'
+                      : 'opacity-0 scale-75 pointer-events-none'
+                  )}
                 >
                   <X size={10} />
                 </button>
               )}
-            </div>
+              {/* Live coordinate tooltip — only renders during drag. */}
+              {isDragging && (
+                <div
+                  aria-hidden
+                  className="absolute left-1/2 top-full mt-2 -translate-x-1/2 rounded-md border border-accent/40 bg-bg-panel/90 px-1.5 py-0.5 text-[10px] font-mono tabular-nums text-fg-muted shadow-glass backdrop-blur whitespace-nowrap pointer-events-none"
+                >
+                  {p[0].toFixed(1)}, {p[1].toFixed(1)}
+                </div>
+              )}
+            </motion.div>
           );
         })}
       </div>
       <p className="text-[11px] text-fg-subtle text-center max-w-[260px]">
         {points.length} {points.length === 1 ? 'vertex' : 'vertices'}
         {' · '}
-        Drag points to reshape. Tap empty space to add. × to remove.
+        Drag to reshape, tap empty space to add, × or Delete to remove
       </p>
     </div>
   );
