@@ -138,6 +138,25 @@ describe('insertPointAt', () => {
     ]);
   });
 
+  it('handles zero-length edges without NaN', () => {
+    // Two adjacent vertices at the same coords would make
+    // distanceToSegment divide by zero if not guarded. The function
+    // falls back to the point-distance from the shared endpoint —
+    // tested explicitly so a future refactor can't drop the guard
+    // silently.
+    const degenerate = [
+      [50, 50],
+      [50, 50],
+      [0, 100],
+    ] as const;
+    const result = insertPointAt(degenerate, [10, 10]);
+    // Click is closer to (0, 100) → (50, 50) edge than to either of
+    // the zero-length pairs. Result is finite and correctly placed.
+    expect(result).toHaveLength(4);
+    expect(result.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y)))
+      .toBe(true);
+  });
+
   it('considers the wrap-around edge (last → first)', () => {
     const square = [
       [0, 0],

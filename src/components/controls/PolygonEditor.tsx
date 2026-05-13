@@ -93,6 +93,15 @@ export function PolygonEditor({
     e.preventDefault();
     e.stopPropagation(); // don't fire the canvas-tap insert handler
     setDragIdx(idx);
+    // setPointerCapture binds the gesture to the vertex element so the
+    // browser keeps routing pointer events to us even when the user
+    // drags outside the editor / iframe / window. Belt-and-braces:
+    // window listeners still drive the actual coordinate updates.
+    try {
+      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    } catch {
+      /* setPointerCapture can throw on detached targets; ignore. */
+    }
     const wrap = wrapRef.current;
     if (!wrap) return;
     const rect = wrap.getBoundingClientRect();
@@ -130,16 +139,28 @@ export function PolygonEditor({
 
   const handleVertexKey = (e: React.KeyboardEvent, idx: number) => {
     const step = e.shiftKey ? 5 : 1;
+    // Also swallow Space because the browser default fires a button
+    // click; without that, Space on a focused vertex would bubble to
+    // App's window-level `ah:replay` handler and restart the preview.
     const handled =
       e.key === 'ArrowLeft' ||
       e.key === 'ArrowRight' ||
       e.key === 'ArrowUp' ||
       e.key === 'ArrowDown' ||
       e.key === 'Backspace' ||
-      e.key === 'Delete';
+      e.key === 'Delete' ||
+      e.key === ' ' ||
+      e.code === 'Space';
     if (!handled) return;
     e.preventDefault();
-    e.stopPropagation();
+    // React's stopPropagation only halts the synthetic-event tree.
+    // App.tsx's keydown handler is on `window`, which is in the native
+    // capture/bubble path, so it would still fire — meaning ArrowRight
+    // on a vertex would scrub the timeline as well as nudge the
+    // vertex, and Space would replay the animation. stopImmediate-
+    // Propagation on the native event halts both paths.
+    e.nativeEvent.stopImmediatePropagation();
+    if (e.key === ' ' || e.code === 'Space') return;
     const cur = pointsRef.current[idx];
     if (!cur) return;
     const [x, y] = cur;
@@ -165,9 +186,9 @@ export function PolygonEditor({
 
   // Polygon path string for the SVG <polygon>. Uses pixel coords.
   const polyPoints = points
-    .map(({ }, i) => {
-      const p = toPx(points[i][0], points[i][1]);
-      return `${p.x},${p.y}`;
+    .map((p) => {
+      const px = toPx(p[0], p[1]);
+      return `${px.x},${px.y}`;
     })
     .join(' ');
 
@@ -262,15 +283,21 @@ export function PolygonEditor({
                 // the point. Pointer events on the vertex button take
                 // precedence (stopPropagation in the canvas handler),
                 // so this only fires when the user explicitly clicks ×.
+                // 24×24 hit area satisfies the WCAG 2.5.5 AAA minimum
+                // with a 10-px visual icon centred inside. tabIndex=-1
+                // keeps keyboard users tabbing through vertices only —
+                // the Backspace / Delete shortcut on the vertex itself
+                // already covers deletion.
                 <button
                   type="button"
+                  tabIndex={-1}
                   onClick={(e) => {
                     e.stopPropagation();
                     removePoint(idx);
                   }}
                   onPointerDown={(e) => e.stopPropagation()}
                   aria-label={`Remove vertex ${idx + 1}`}
-                  className="absolute -right-3 -top-3 grid h-5 w-5 place-items-center rounded-full border border-border bg-bg-panel text-fg-muted hover:text-red-400 hover:border-red-500/60 focus-ring transition-colors"
+                  className="absolute -right-4 -top-4 grid h-6 w-6 place-items-center rounded-full border border-border bg-bg-panel text-fg-muted hover:text-red-400 hover:border-red-500/60 focus-ring transition-colors"
                 >
                   <X size={10} />
                 </button>
