@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import type { Easing } from '@/types/animation';
 import { NumberInput } from '@/components/ui/NumberInput';
@@ -296,7 +304,6 @@ const PREVIEW_DURATION_MS: Record<PreviewSpeed, number> = {
   '2x': 600,
 };
 
-const PREVIEW_TRACK_MAX_WIDTH = 260;
 const PREVIEW_BALL_SIZE = 12;
 
 function BezierPreviewBall({
@@ -306,17 +313,21 @@ function BezierPreviewBall({
 }) {
   const [speed, setSpeed] = useState<PreviewSpeed>('1x');
   const trackRef = useRef<HTMLDivElement | null>(null);
-  // Measure the actual rendered track width so the ball's end position
-  // matches the track on narrow viewports. A hard 260px would overflow
-  // narrow controls panels and let the ball travel past the visible
-  // edge. Falling back to the max width on layouts that haven't
-  // measured yet (SSR / first paint) keeps the ball visible.
-  const [trackWidth, setTrackWidth] = useState(PREVIEW_TRACK_MAX_WIDTH);
+  // Null until the first synchronous measurement lands. The ball is
+  // held back until we know the real width, eliminating the first-paint
+  // flash where it would otherwise render at the 260-px fallback and
+  // then snap to a narrower value once the observer fired.
+  const [trackWidth, setTrackWidth] = useState<number | null>(null);
+  const [docHidden, setDocHidden] = useState(false);
   const reduceMotion = useReducedMotion();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = trackRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
+    if (!el) return;
+    // Synchronous initial measurement before paint so the ball renders
+    // at the correct slide-end on its very first frame.
+    setTrackWidth(el.getBoundingClientRect().width);
+    if (typeof ResizeObserver === 'undefined') return;
     const obs = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width ?? 0;
       if (w > 0) setTrackWidth(w);
@@ -325,10 +336,27 @@ function BezierPreviewBall({
     return () => obs.disconnect();
   }, []);
 
-  const slideEnd = Math.max(0, trackWidth - PREVIEW_BALL_SIZE);
+  // Pause the animation while the browser tab is hidden. CSS animations
+  // on the compositor can keep ticking at a reduced rate even when the
+  // page isn't visible — saves a small but real amount of battery on
+  // long sessions left in the background.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const onChange = () => setDocHidden(document.hidden);
+    onChange();
+    document.addEventListener('visibilitychange', onChange);
+    return () => document.removeEventListener('visibilitychange', onChange);
+  }, []);
+
+  const slideEnd =
+    trackWidth !== null ? Math.max(0, trackWidth - PREVIEW_BALL_SIZE) : null;
 
   return (
-    <div className="flex w-full max-w-[260px] flex-col items-center gap-1.5">
+    // px-4 reserves horizontal room for the ball's overshoot on
+    // elastic curves (cubic-bezier values with Y outside [0,1]) so it
+    // can travel a little past the track edges without colliding with
+    // the editor's outer card.
+    <div className="flex w-full max-w-[260px] flex-col items-center gap-1.5 px-4">
       <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
         Live preview
       </span>
@@ -336,10 +364,11 @@ function BezierPreviewBall({
         // prefers-reduced-motion users get a static hint instead of an
         // empty track with a frozen dot, which would otherwise read as
         // a broken control. The curve in the editor above already
-        // communicates the easing visually.
+        // communicates the easing visually; no live-region role is
+        // needed — sighted users see the hint, screen readers ignore it.
         <div
           className="grid h-6 w-full place-items-center rounded-full border border-border/70 bg-bg-soft px-2 text-[10px] italic text-fg-subtle"
-          role="status"
+          aria-hidden
         >
           Preview paused for reduced motion
         </div>
@@ -353,20 +382,26 @@ function BezierPreviewBall({
               lets browsers preserve current progress when only the
               duration or timing function changes. Rebuilding the
               shorthand on every speed change restarted the iteration
-              in Safari / Firefox. */}
-          <span
-            className="ah-bezier-preview-ball absolute top-1/2 rounded-full bg-accent shadow-glow"
-            style={{
-              width: PREVIEW_BALL_SIZE,
-              height: PREVIEW_BALL_SIZE,
-              ['--slide-end' as string]: `${slideEnd}px`,
-              animationName: 'ah-bezier-slide',
-              animationDuration: `${PREVIEW_DURATION_MS[speed]}ms`,
-              animationTimingFunction: `cubic-bezier(${value.join(', ')})`,
-              animationIterationCount: 'infinite',
-              animationDirection: 'alternate',
-            }}
-          />
+              in Safari / Firefox. Visual differentiation from the
+              accent-coloured handles above: subtle linear gradient +
+              a thin highlight ring so the ball reads as a "physical"
+              moving object distinct from the editor's draggable knobs. */}
+          {slideEnd !== null && (
+            <span
+              className="ah-bezier-preview-ball absolute top-1/2 rounded-full bg-gradient-to-br from-accent via-accent/85 to-accent/60 ring-1 ring-accent/40 shadow-[0_2px_8px_-2px_rgb(var(--accent)/0.55)]"
+              style={{
+                width: PREVIEW_BALL_SIZE,
+                height: PREVIEW_BALL_SIZE,
+                ['--slide-end' as string]: `${slideEnd}px`,
+                animationName: 'ah-bezier-slide',
+                animationDuration: `${PREVIEW_DURATION_MS[speed]}ms`,
+                animationTimingFunction: `cubic-bezier(${value.join(', ')})`,
+                animationIterationCount: 'infinite',
+                animationDirection: 'alternate',
+                animationPlayState: docHidden ? 'paused' : 'running',
+              }}
+            />
+          )}
         </div>
       )}
       <div role="radiogroup" aria-label="Preview speed" className="flex gap-1">

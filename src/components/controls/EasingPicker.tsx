@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, ChevronDown, Copy } from 'lucide-react';
 import { useAnimationStore } from '@/store/animationStore';
@@ -335,6 +335,17 @@ function CurrentEasingHint({ easing }: { easing: Easing }) {
   const showToast = useUiStore((s) => s.showToast);
   const [justCopied, setJustCopied] = useState(false);
   const copyTimerRef = useRef<number | null>(null);
+
+  // Clear the pending check-icon timer on unmount so we don't call
+  // setJustCopied on a stale component if the user copies and then
+  // navigates away within 1.5s.
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
 
   const onCopy = async () => {
     const css = easingToCss(easing);
