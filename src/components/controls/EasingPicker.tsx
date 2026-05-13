@@ -6,6 +6,7 @@ import { useUiStore } from '@/store/uiStore';
 import {
   CUBIC_QUICK_STARTERS,
   EASING_PRESETS,
+  EASING_VALUE_TOLERANCE,
   easingToCss,
   easingToCubicPreview,
   parseEasing,
@@ -38,7 +39,9 @@ export function EasingPicker() {
     if (e.kind !== easing.kind) return false;
     if (e.kind === 'preset' && easing.kind === 'preset') return e.value === easing.value;
     if (e.kind === 'cubic' && easing.kind === 'cubic') {
-      return e.v.every((n, i) => Math.abs(n - easing.v[i]) < 0.001);
+      return e.v.every(
+        (n, i) => Math.abs(n - easing.v[i]) < EASING_VALUE_TOLERANCE
+      );
     }
     return false;
   };
@@ -263,10 +266,10 @@ function CubicQuickStartChips({
     v: [number, number, number, number]
   ): boolean =>
     currentValue !== null &&
-    // 1e-3 tolerance matches BezierEditor's round3() output, so a chip
+    // Tolerance matches BezierEditor's round3() output, so a chip
     // applied earlier still reads as "active" after a no-op tweak in
     // the editor.
-    v.every((n, i) => Math.abs(n - currentValue[i]) < 0.001);
+    v.every((n, i) => Math.abs(n - currentValue[i]) < EASING_VALUE_TOLERANCE);
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -277,11 +280,17 @@ function CubicQuickStartChips({
         {CUBIC_QUICK_STARTERS.map(({ name, v }) => {
           const active = matchesCurrent(v);
           return (
+            // aria-current (not aria-pressed) because clicking always
+            // applies the value rather than toggling a state; the
+            // active styling is a read of external state, not a press
+            // memory. Screen readers announce "current" only on the
+            // matching chip, which is the correct semantic.
             <button
               key={name}
               type="button"
               onClick={() => onApply(v)}
-              aria-pressed={active}
+              aria-current={active ? 'true' : undefined}
+              aria-label={`Apply ${name}${active ? ', currently selected' : ''}`}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] transition-colors focus-ring',
                 active

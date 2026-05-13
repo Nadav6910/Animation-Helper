@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CUBIC_QUICK_STARTERS,
+  EASING_VALUE_TOLERANCE,
   easingToCss,
   easingToCubicPreview,
   parseEasing,
@@ -201,6 +203,28 @@ describe('parseEasing', () => {
       expect(
         easingToCubicPreview({ kind: 'steps', n: 4, jump: 'end' })
       ).toBeNull();
+    });
+  });
+
+  describe('CUBIC_QUICK_STARTERS', () => {
+    // Lock the curated values against silent drift — a typo or refactor
+    // that changed any tuple would visibly change every chip thumbnail
+    // and break user muscle memory ("the easeOutBack chip used to look
+    // like this"). The values come from https://easings.net and must
+    // round-trip exactly.
+    it('contains the curated easings.net set with canonical control points', () => {
+      expect(CUBIC_QUICK_STARTERS).toEqual([
+        { name: 'easeOutQuint', v: [0.22, 1, 0.36, 1] },
+        { name: 'easeOutBack', v: [0.34, 1.56, 0.64, 1] },
+        { name: 'easeInOutCirc', v: [0.85, 0, 0.15, 1] },
+        { name: 'easeOutCirc', v: [0, 0.55, 0.45, 1] },
+        { name: 'easeInExpo', v: [0.7, 0, 0.84, 0] },
+        { name: 'easeOutExpo', v: [0.16, 1, 0.3, 1] },
+      ]);
+    });
+
+    it('exposes a stable tolerance constant for active-state matching', () => {
+      expect(EASING_VALUE_TOLERANCE).toBe(0.001);
     });
   });
 

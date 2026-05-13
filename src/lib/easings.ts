@@ -46,6 +46,15 @@ const PRESET_NAMES: readonly EasingPreset[] = [
   'ease-in-out',
 ];
 
+/**
+ * Numeric tolerance used by UI to decide whether a cubic-bezier value
+ * "matches" a known preset or starter — set to the same precision as
+ * BezierEditor's `round3()` so that a chip stays lit through round-trip
+ * edits and de-activates the moment a drag introduces a real change.
+ * Single-sourced here so a future precision change updates everywhere.
+ */
+export const EASING_VALUE_TOLERANCE = 0.001;
+
 // Spec-defined cubic-bezier approximations for the named CSS easings
 // (per https://drafts.csswg.org/css-easing/#valdef-easing-function-ease).
 // Used purely for visualisation — the engine still emits the named
@@ -80,7 +89,16 @@ export function easingToCubicPreview(
  * the "named curves from easings.net" that designers ask for. Picked
  * so each has a distinct shape from anything in EASING_PRESETS.
  *
- * Sourced from https://easings.net (Public Domain).
+ * Curve values match the canonical control points published at
+ * https://easings.net. The control-point tuples themselves are
+ * mathematical constants derived from Robert Penner's original
+ * equations and are not subject to copyright; we cite easings.net
+ * as a courtesy and to anchor the names users will Google.
+ *
+ * camelCase names match easings.net's published identifiers
+ * verbatim — designers searching docs type "easeOutQuint", not
+ * "ease-out-quint" — even though `EASING_PRESETS` above uses
+ * kebab-case for the CSS-spec keywords.
  */
 export const CUBIC_QUICK_STARTERS: {
   name: string;

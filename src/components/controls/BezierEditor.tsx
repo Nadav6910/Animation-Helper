@@ -30,6 +30,10 @@ const Y_MAX = 2.5;
 // Round dragged / typed values to 3 decimals. Keeps state free of float
 // crud (no 0.4000000000000001 artefacts in the generated CSS) without
 // losing perceptible precision — 0.001 ≈ 1/5 of a pixel on this editor.
+// The same 0.001 grid is exported as EASING_VALUE_TOLERANCE from
+// `@/lib/easings` and consumed by the preset / quick-starter
+// active-state matchers, so a single constant governs both round-trip
+// precision and "did the user's drag move them off this preset".
 // Normalise `-0` away so JSON-serialised state and CSS output never
 // surface a stray minus sign.
 const round3 = (n: number) => {
