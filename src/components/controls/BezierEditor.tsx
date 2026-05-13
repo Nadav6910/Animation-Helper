@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { Easing } from '@/types/animation';
 import { NumberInput } from '@/components/ui/NumberInput';
@@ -34,6 +34,8 @@ const clampY = (y: number) => Math.max(Y_MIN, Math.min(Y_MAX, y));
 export function BezierEditor({ value, onChange }: Props) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [dragging, setDragging] = useState<0 | 1 | null>(null);
+  const reactId = useId();
+  const helpId = `bezier-help-${reactId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
   // Mirror the latest `value` into a ref so the pointermove closure
   // can read fresh state without re-attaching listeners on every render.
   // Without this, a drag started at render N keeps a snapshot of `value`
@@ -107,6 +109,13 @@ export function BezierEditor({ value, onChange }: Props) {
 
   return (
     <div className="flex flex-col items-center gap-3">
+      {/* Spoken once on handle focus via aria-describedby. Kept off the
+          visual layout via sr-only so screen-reader users get the
+          shortcut hint without sighted users seeing repeated copy. */}
+      <span id={helpId} className="sr-only">
+        Use arrow keys to nudge the handle. Hold shift for a larger step.
+        Press Home or End to snap X to its endpoints.
+      </span>
       <div
         ref={wrapRef}
         className="relative select-none"
@@ -159,14 +168,67 @@ export function BezierEditor({ value, onChange }: Props) {
             gesture for scroll / pull-to-refresh while the user is
             dragging — without it, mobile drags feel sticky and short. */}
         {[
-          { idx: 0 as const, p: p1 },
-          { idx: 1 as const, p: p2 },
-        ].map(({ idx, p }) => (
+          { idx: 0 as const, p: p1, x: value[0], y: value[1] },
+          { idx: 1 as const, p: p2, x: value[2], y: value[3] },
+        ].map(({ idx, p, x, y }) => (
           <button
             key={idx}
             type="button"
             onPointerDown={(e) => handlePointer(e, idx)}
-            aria-label={`Bezier handle ${idx + 1}`}
+            onKeyDown={(e) => {
+              // Sighted keyboard users get arrow-key nudges; shift
+              // multiplies the step by 10 for coarse moves. Screen-reader
+              // users typically navigate via the NumberInputs instead —
+              // those expose proper number-input semantics and don't
+              // require 2D coordinate navigation. Home/End snap X to the
+              // endpoints (a no-op for clamp-bounded x but useful for
+              // resetting from a dragged interior).
+              //
+              // stopPropagation is critical: App.tsx has a window-level
+              // ArrowLeft/ArrowRight handler that dispatches
+              // `ah:scrub-nudge`, which would otherwise fire alongside
+              // the handle nudge and scrub the timeline every time the
+              // user adjusted X.
+              const handled =
+                e.key === 'ArrowLeft' ||
+                e.key === 'ArrowRight' ||
+                e.key === 'ArrowUp' ||
+                e.key === 'ArrowDown' ||
+                e.key === 'Home' ||
+                e.key === 'End';
+              if (!handled) return;
+              e.preventDefault();
+              e.stopPropagation();
+              const step = e.shiftKey ? 0.1 : 0.01;
+              switch (e.key) {
+                case 'ArrowLeft':
+                  setHandle(idx, x - step, y);
+                  break;
+                case 'ArrowRight':
+                  setHandle(idx, x + step, y);
+                  break;
+                case 'ArrowUp':
+                  setHandle(idx, x, y + step);
+                  break;
+                case 'ArrowDown':
+                  setHandle(idx, x, y - step);
+                  break;
+                case 'Home':
+                  setHandle(idx, X_MIN, y);
+                  break;
+                case 'End':
+                  setHandle(idx, X_MAX, y);
+                  break;
+              }
+            }}
+            // aria-label carries ONLY the current X/Y so screen readers
+            // can announce the value succinctly on each nudge. The static
+            // shortcut help moves into an off-screen description span
+            // (referenced by aria-describedby) so it's spoken once on
+            // focus, not every time the value changes.
+            aria-label={`Bezier handle ${idx + 1}, X ${x.toFixed(2)}, Y ${y.toFixed(2)}`}
+            aria-describedby={helpId}
+            aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown Home End"
             className="absolute grid h-8 w-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full cursor-grab focus-ring touch-none select-none [-webkit-touch-callout:none]"
             style={{ left: p.x, top: p.y }}
           >
