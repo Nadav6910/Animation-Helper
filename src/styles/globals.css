@@ -171,3 +171,29 @@
     -moz-appearance: textfield;
   }
 }
+
+/* Live preview ball for the cubic-bezier editor. Lives outside @layer
+   components so it's not pruned by Tailwind's content scan (PostCSS
+   plugin orders matter here). The --slide-end custom property lets
+   the consuming component fix the travel distance without us having
+   to emit a per-instance @keyframes block.
+
+   `alternate` plays the curve forward then in reverse, doubling the
+   visible curve shape per cycle and avoiding the jarring snap-back
+   of a non-alternating loop. */
+@keyframes ah-bezier-slide {
+  from {
+    transform: translate(0, -50%);
+  }
+  to {
+    transform: translate(var(--slide-end, 248px), -50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Honour the user's preference: pause the preview ball, but leave
+     the editor itself usable. The current curve still renders. */
+  .ah-bezier-preview-ball {
+    animation: none !important;
+  }
+}

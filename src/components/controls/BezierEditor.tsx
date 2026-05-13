@@ -283,6 +283,77 @@ export function BezierEditor({ value, onChange }: Props) {
           step={0.01}
         />
       </div>
+      <BezierPreviewBall value={value} />
+    </div>
+  );
+}
+
+type PreviewSpeed = 'slow' | 'normal' | 'fast';
+
+const PREVIEW_DURATION_MS: Record<PreviewSpeed, number> = {
+  slow: 2400,
+  normal: 1200,
+  fast: 600,
+};
+
+const PREVIEW_TRACK_WIDTH = 260;
+const PREVIEW_BALL_SIZE = 12;
+
+function BezierPreviewBall({
+  value,
+}: {
+  value: [number, number, number, number];
+}) {
+  const [speed, setSpeed] = useState<PreviewSpeed>('normal');
+  const slideEnd = PREVIEW_TRACK_WIDTH - PREVIEW_BALL_SIZE;
+  // Inline the cubic-bezier value into the animation shorthand. When
+  // the user drags a handle, React re-renders with a new style string;
+  // the browser swaps the timing function for the remainder of the
+  // current iteration without restarting the animation. That avoids
+  // the jarring "ball snaps to start on every drag tick" we'd get from
+  // remounting via a React key.
+  const animation = `ah-bezier-slide ${PREVIEW_DURATION_MS[speed]}ms cubic-bezier(${value.join(', ')}) infinite alternate`;
+  return (
+    <div className="flex w-full flex-col items-center gap-1.5">
+      <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
+        Live preview
+      </span>
+      <div
+        className="relative h-6 overflow-visible rounded-full border border-border/70 bg-bg-soft"
+        style={{ width: PREVIEW_TRACK_WIDTH }}
+        aria-hidden
+      >
+        <span
+          className="ah-bezier-preview-ball absolute top-1/2 rounded-full bg-accent shadow-glow"
+          style={{
+            width: PREVIEW_BALL_SIZE,
+            height: PREVIEW_BALL_SIZE,
+            ['--slide-end' as string]: `${slideEnd}px`,
+            animation,
+          }}
+        />
+      </div>
+      <div className="flex gap-1">
+        {(['slow', 'normal', 'fast'] as const).map((s) => {
+          const active = speed === s;
+          return (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setSpeed(s)}
+              aria-pressed={active}
+              className={cn(
+                'rounded-full border px-2 py-0.5 text-[10px] transition-colors focus-ring',
+                active
+                  ? 'border-accent/50 bg-accent/15 text-fg'
+                  : 'border-border/70 bg-bg-soft text-fg-muted hover:text-fg'
+              )}
+            >
+              {s}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
