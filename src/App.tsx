@@ -110,6 +110,16 @@ export function App() {
 
       if (inField || inOverlay) return;
 
+      // When the mobile sheet covers the preview entirely, the stage
+      // is paused and out of view — replay / scrub hotkeys would restart
+      // or seek an invisible animation, defeating the occlusion pause
+      // and confusing the play-state on un-occlusion. Copy stays
+      // allowed since it touches code, not the stage.
+      const stageOccluded = ui.stageOccluded;
+      if (stageOccluded && (e.code === 'Space' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        return;
+      }
+
       if (e.code === 'Space') {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('ah:replay'));

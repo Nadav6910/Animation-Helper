@@ -10,7 +10,7 @@ import { PlayButton, type PlayButtonState } from './PlayButton';
 import { TimelinePanel } from './TimelinePanel';
 import { AnimatePresence, motion } from 'framer-motion';
 import { PanelBottomClose, PanelBottomOpen } from 'lucide-react';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { hasMeaningfulAnimation, totalDuration } from '@/lib/timing';
 
 export function PreviewStage() {
@@ -36,11 +36,22 @@ export function PreviewStage() {
   // paused before opening the sheet doesn't see it auto-resume. Done
   // via the controller (not via CSS animation-play-state) so the play
   // button's React state stays in sync with the WAAPI state.
+  const stageMountedRef = useRef(true);
+  useEffect(() => {
+    stageMountedRef.current = true;
+    return () => {
+      stageMountedRef.current = false;
+    };
+  }, []);
   useEffect(() => {
     if (!stageOccluded) return;
     if (!controller.isPlaying) return;
     controller.pause();
     return () => {
+      // Skip the resume on full unmount — by then the className-targeted
+      // animation is also gone, and play()'s missing-animation fallback
+      // would bump the className and reset state on a doomed tree.
+      if (!stageMountedRef.current) return;
       controller.play();
     };
     // Reading isPlaying inside the effect captures the play state at the
