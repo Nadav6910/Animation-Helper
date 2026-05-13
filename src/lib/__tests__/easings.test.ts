@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { easingToCss, parseEasing } from '@/lib/easings';
+import {
+  easingToCss,
+  easingToCubicPreview,
+  parseEasing,
+} from '@/lib/easings';
 import type { Easing } from '@/types/animation';
 
 describe('parseEasing', () => {
@@ -170,6 +174,33 @@ describe('parseEasing', () => {
       expect(parseEasing('not-a-function(0, 0, 0, 0)')).toBeNull();
       expect(parseEasing('cubic-bezier')).toBeNull();
       expect(parseEasing('cubic-bezier()')).toBeNull();
+    });
+  });
+
+  describe('easingToCubicPreview', () => {
+    // Locks the spec-defined cubic-bezier approximations of the named
+    // CSS easings against silent drift. Visual thumbnails depend on
+    // these — if they change, every preset thumbnail changes shape.
+    it.each([
+      ['linear', [0, 0, 1, 1]],
+      ['ease', [0.25, 0.1, 0.25, 1]],
+      ['ease-in', [0.42, 0, 1, 1]],
+      ['ease-out', [0, 0, 0.58, 1]],
+      ['ease-in-out', [0.42, 0, 0.58, 1]],
+    ] as const)('maps preset %s to its spec cubic-bezier', (name, expected) => {
+      const result = easingToCubicPreview({ kind: 'preset', value: name });
+      expect(result).toEqual(expected);
+    });
+
+    it('passes cubic easings through unchanged', () => {
+      const cubic: Easing = { kind: 'cubic', v: [0.68, -0.6, 0.32, 1.6] };
+      expect(easingToCubicPreview(cubic)).toEqual([0.68, -0.6, 0.32, 1.6]);
+    });
+
+    it('returns null for steps easings (no continuous curve)', () => {
+      expect(
+        easingToCubicPreview({ kind: 'steps', n: 4, jump: 'end' })
+      ).toBeNull();
     });
   });
 

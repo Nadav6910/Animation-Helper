@@ -10,7 +10,7 @@ import {
   parseEasing,
 } from '@/lib/easings';
 import { BezierEditor, easingDescription } from './BezierEditor';
-import { CurveThumbnail } from './CurveThumbnail';
+import { CurveThumbnail } from '@/components/ui/CurveThumbnail';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { copyToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/cn';
