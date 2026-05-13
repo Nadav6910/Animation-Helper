@@ -4,14 +4,16 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
  * Tracks whether the referenced element is intersecting the viewport
  * (or a configurable root). Pause-when-offscreen pattern for repeating
  * CSS animations: returns the ref to attach to the observed element
- * and an `inView` boolean the caller flips into `animation-play-state`.
+ * and an `inView` boolean the caller flips.
  *
- * Initial state is resolved synchronously in useLayoutEffect via
- * getBoundingClientRect vs. window bounds, before the first paint —
- * so cards mounted off-screen don't flash as running for a frame
- * before the observer callback fires. Falls back to true (always
- * animate) when IntersectionObserver isn't available; safer than
- * freezing the UI on a quirky browser.
+ * Initial state is resolved synchronously in useLayoutEffect against
+ * the viewport expanded by the same rootMargin the IO will use, so
+ * an element mounted just outside the viewport doesn't briefly flip
+ * to `false` (and back to `true` once the IO fires) when it would
+ * otherwise be inside the margin band.
+ *
+ * Falls back to `true` when IntersectionObserver isn't available —
+ * safer than freezing the UI on a quirky browser.
  *
  * `options` should be a stable reference (define outside the component
  * or wrap in useMemo); changing it tears down and re-creates the
@@ -31,13 +33,24 @@ export function useInView<T extends Element>(
     const el = ref.current;
     if (!el || typeof window === 'undefined') return;
     const r = el.getBoundingClientRect();
+    // Match the IO's effective root: viewport expanded by rootMargin.
+    // Parsing a uniform "100px" or four-value rootMargin is overkill
+    // for our usage — we accept a single positive number expressed as
+    // a px string, falling back to 0. Keeps the initial check in sync
+    // with what the observer reports, so boundary cards don't flicker
+    // paused→running on the first frame after mount.
+    const margin = parseInt(
+      (options?.rootMargin ?? '0').split(' ')[0] ?? '0',
+      10
+    );
+    const safeMargin = Number.isFinite(margin) ? margin : 0;
     const initialInView =
-      r.bottom > 0 &&
-      r.right > 0 &&
-      r.top < window.innerHeight &&
-      r.left < window.innerWidth;
+      r.bottom > -safeMargin &&
+      r.right > -safeMargin &&
+      r.top < window.innerHeight + safeMargin &&
+      r.left < window.innerWidth + safeMargin;
     setInView(initialInView);
-  }, []);
+  }, [options]);
 
   useEffect(() => {
     const el = ref.current;

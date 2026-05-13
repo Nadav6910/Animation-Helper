@@ -40,11 +40,16 @@ export function PresetMiniPreview({ config, className }: Props) {
     PRESET_PREVIEW_IO_OPTIONS
   );
   const documentVisible = useUiStore((s) => s.documentVisible);
-  // Animate only when BOTH conditions hold: card is in (or near) the
-  // viewport AND the browser tab is visible. Browsers already throttle
-  // hidden tabs, but an explicit pause stops the CSS animation from
-  // ticking entirely so backgrounded sessions cost nothing.
-  const playState = inView && documentVisible ? 'running' : 'paused';
+  // Disable the animation entirely (not pause) when the card is
+  // off-screen or the tab is hidden. Pausing landed the animation on
+  // whatever frame the IO caught — for entrance-style presets (fadeIn,
+  // scaleIn, slideIn) that frame is often `opacity: 0` / `scale: 0`,
+  // so the user saw empty cards. `animation: none` makes the element
+  // render in its base, un-animated CSS state — which for every
+  // preset target (shape, text, svg) is always visible. When the
+  // card scrolls back in, the className's animation re-engages and
+  // restarts from frame 0 — same as initial mount, no surprise.
+  const animationDisabled = !(inView && documentVisible);
 
   const loopCfg = useMemo<AnimationConfig>(
     () => ({
@@ -75,14 +80,16 @@ export function PresetMiniPreview({ config, className }: Props) {
     setTick((n) => n + 1);
   }, [config]);
 
-  // animation-play-state is not inherited, so it has to land on every
-  // element that carries a generated `animation` shorthand. For
-  // stagger text, generateCss emits TWO separate @keyframes — one on
-  // .cls (the wrapper, usually empty / decorative) and one on .cls > span
-  // (each letter, where the visible motion lives). Paused play-state
-  // therefore has to be set on each span as well as on the wrapper —
-  // the wrapper alone wouldn't stop the per-letter animations.
-  const animStyle: React.CSSProperties = { animationPlayState: playState };
+  // animation-play-state is not inherited, so the override has to land
+  // on every element that carries a generated `animation` shorthand.
+  // For stagger text, generateCss emits TWO separate @keyframes — one
+  // on .cls (the wrapper) and one on .cls > span (each letter, where
+  // the visible motion lives). Setting `animation: 'none'` on each
+  // turns the override off; when re-rendered without the override the
+  // className's animation re-engages from frame 0.
+  const animStyle: React.CSSProperties = animationDisabled
+    ? { animation: 'none' }
+    : {};
 
   let inner: React.ReactNode;
   if (config.target === 'text') {
@@ -97,7 +104,7 @@ export function PresetMiniPreview({ config, className }: Props) {
             key={i}
             style={{
               ['--i' as never]: String(i),
-              animationPlayState: playState,
+              ...(animationDisabled ? { animation: 'none' } : null),
             } as React.CSSProperties}
           >
             {ch}
