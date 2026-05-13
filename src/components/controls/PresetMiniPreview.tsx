@@ -146,17 +146,27 @@ export function PresetMiniPreview({ config, className }: Props) {
     );
   }
 
+  // Two-layer wrapper: the OUTER carries the IntersectionObserver ref
+  // and is stable for the lifetime of the component. The INNER carries
+  // `key={tick}` so it remounts on config change to reset the
+  // animation. If the ref lived on the keyed element, the IO would
+  // keep observing the detached original DOM node forever after the
+  // first config-driven remount (it fires once on mount via the
+  // `useEffect([config])` above), the new element would never be
+  // observed, and `inView` would freeze at false — exactly the
+  // "nothing animates" failure mode we just hit on the live preview.
   return (
     <div
       ref={inViewRef}
-      key={tick}
       aria-hidden
       className={cn(
         'flex h-14 w-full items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-bg-soft/50',
         className
       )}
     >
-      {inner}
+      <div key={tick} className="contents">
+        {inner}
+      </div>
     </div>
   );
 }
