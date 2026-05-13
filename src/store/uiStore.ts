@@ -44,6 +44,21 @@ type State = {
    *  the same element + its WAAPI Animation without a React ref tunnel. */
   previewTargetClassName: string | null;
   setPreviewTargetClassName: (cn: string | null) => void;
+  /** True when the preview stage is visually occluded — currently flipped
+   *  by MobileSheet when its snap reaches 'full' (the sheet covers the
+   *  stage entirely). PreviewStage reads this and pauses the running
+   *  WAAPI animation so we don't keep ticking compositor work behind an
+   *  invisible overlay. Defaults false on desktop (sheet never mounts). */
+  stageOccluded: boolean;
+  setStageOccluded: (v: boolean) => void;
+  /** Mirror of `!document.hidden`. Subscribed once at the app root via a
+   *  visibilitychange listener; everywhere else just reads this flag.
+   *  Single source of truth means consumers (preview stage, preset
+   *  cards, bezier preview ball) don't each register their own listener
+   *  — one listener, N subscribers. Defaults true on first paint so
+   *  nothing flashes paused before the listener installs. */
+  documentVisible: boolean;
+  setDocumentVisible: (v: boolean) => void;
 };
 
 let toastCounter = 0;
@@ -64,6 +79,10 @@ export const useUiStore = create<State>((set) => ({
   setTourStepId: (id) => set({ tourStepId: id }),
   previewTargetClassName: null,
   setPreviewTargetClassName: (cn) => set({ previewTargetClassName: cn }),
+  stageOccluded: false,
+  setStageOccluded: (v) => set({ stageOccluded: v }),
+  documentVisible: true,
+  setDocumentVisible: (v) => set({ documentVisible: v }),
   toast: null,
   showToast: (message, tone = 'info') => {
     toastCounter += 1;
