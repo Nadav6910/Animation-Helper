@@ -142,7 +142,7 @@ ${frames}
     const delayExpr = stepMs
       ? `${num(c.delay)} + i * ${stepMs}`
       : `${num(c.delay)}`;
-    return `${perTokenNote}// Web Animations API · per-token text
+    return `${perTokenNote}// Web Animations API · ${hasTokenAnimations(c) ? 'per-token text' : 'per-letter stagger'}
 // Markup expectation: <p class="${selector.replace(/^\./, '')}">
 //   <span>A</span><span>n</span><span>i</span>...
 // </p>

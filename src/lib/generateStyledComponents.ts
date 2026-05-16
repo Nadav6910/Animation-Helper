@@ -1,5 +1,6 @@
 import type { AnimationConfig } from '@/types/animation';
 import { buildKeyframesBody, buildRuleDeclLines } from './generateCss';
+import { hasTokenAnimations } from './tokenize';
 
 export type GenerateStyledComponentsOptions = {
   componentName?: string;
@@ -44,6 +45,23 @@ export function generateStyledComponents(
     })
     .join('\n');
 
+  // styled.div carries only the element's own rule. Per-letter stagger
+  // and per-token overrides live on `> span` (and
+  // `> span[data-anim="…"]`) descendant rules that this single-element
+  // template doesn't render — same scope boundary SCSS keeps. Flag it
+  // honestly and point at the CSS export, which emits the complete set.
+  const spanNote =
+    c.target === 'text' && (c.stagger || hasTokenAnimations(c))
+      ? `
+// NOTE: this animation uses ${
+          hasTokenAnimations(c) ? 'per-token overrides' : 'per-letter stagger'
+        },
+// which need per-character <span> children plus extra \`> span\`
+// (and \`> span[data-anim="…"]\`) rules + their own @keyframes. The
+// styled.div above only animates the element as a whole — copy the
+// CSS export for the complete, ready-to-paste per-token output.`
+      : '';
+
   return `import styled, { keyframes } from 'styled-components';
 
 const play = keyframes\`
@@ -53,5 +71,5 @@ ${keyframesBody}
 export const ${name} = styled.div\`
 ${ruleBody}
 \`;
-`;
+${spanNote}`;
 }

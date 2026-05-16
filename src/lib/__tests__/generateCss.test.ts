@@ -549,4 +549,46 @@ describe('generateCss — per-token animations', () => {
     expect(resolveTokenPresets(makeConfig({ target: 'shape' }))).toEqual([]);
     expect(resolveTokenPresets(textCfg())).toEqual([]);
   });
+
+  it('a fully-shadowed duplicate entry emits no dead @keyframes / rule', () => {
+    // token 0 resolves to text-wave (first match wins); the second
+    // entry only lists 0, so text-pop-in owns no token and must NOT
+    // produce a rule the markup can never select.
+    const css = generateCss(
+      textCfg({
+        tokenAnimations: [
+          { tokens: [0], presetId: 'text-wave' },
+          { tokens: [0], presetId: 'text-pop-in' },
+        ],
+      })
+    );
+    expect(css).toContain('[data-anim="text-wave"]');
+    expect(css).not.toContain('text-pop-in');
+    expect(css).not.toContain('play-tok-2');
+  });
+
+  it('per-token override uses literal preset timing even under cssVars', () => {
+    const css = generateCss(
+      textCfg({
+        stagger: { step: 30 },
+        tokenAnimations: [{ tokens: [0], presetId: 'text-wave' }],
+      }),
+      { cssVars: true }
+    );
+    // base span rule references the cascaded global vars …
+    expect(css).toMatch(/> span\s*\{[^}]*animation-duration: var\(--ah-duration\);/);
+    // … but the override rule resets to a literal `animation:` shorthand
+    // with the PRESET's own timing (not var(--ah-*)), so it can't pick
+    // up the global duration/easing.
+    expect(css).toMatch(
+      /> span\[data-anim="text-wave"\]\s*\{\s*animation: play-tok-1 /
+    );
+    expect(css).not.toMatch(
+      /\[data-anim="text-wave"\]\s*\{[^}]*var\(--ah-duration\)/
+    );
+    // staggered delay still applied to the override
+    expect(css).toMatch(
+      /\[data-anim="text-wave"\]\s*\{[^}]*animation-delay: calc\(var\(--i\) \* 30ms\);/
+    );
+  });
 });

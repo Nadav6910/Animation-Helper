@@ -1,7 +1,7 @@
 import type { AnimationConfig, Keyframe } from '@/types/animation';
 import { easingToCss } from './easings';
 import { transformToCss, filterToCss } from './generateCss';
-import { hasTokenAnimations } from './tokenize';
+import { hasTokenAnimations, tokenizeModeOf } from './tokenize';
 import {
   GRADIENT_RE,
   cssValueSafe,
@@ -108,28 +108,37 @@ export function generateTailwind(
 // <svg viewBox="..."><path d="..." pathLength="100" className="${className} [stroke-dasharray:100]" stroke="currentColor" fill="none" /></svg>
 `;
   } else if (c.target === 'text' && (c.stagger || hasTokenAnimations(c))) {
+    const heading = c.stagger ? 'Per-letter stagger' : 'Per-token text';
     const delayLine = c.stagger
       ? `//     animation-delay: calc(var(--i) * ${num(c.stagger.step)}ms);\n`
       : '';
+    // The split example must match how this app actually tokenizes the
+    // text, otherwise the per-token `data-anim` selectors won't line up.
+    const splitExample =
+      tokenizeModeOf(c) === 'word'
+        ? `//   <p className="${className}">{'Animate this'.split(/(\\s+)/).map((tok, i) => (
+//     <span key={i} style={{ '--i': i }}>{tok}</span>
+//   ))}</p>`
+        : `//   <p className="${className}">{[...'Animate'].map((ch, i) => (
+//     <span key={i} style={{ '--i': i }}>{ch}</span>
+//   ))}</p>`;
     const perTokenNote = hasTokenAnimations(c)
       ? `//
-// This animation also has PER-TOKEN overrides, which need one extra
+// This animation has PER-TOKEN overrides, which need one extra
 // @keyframes + \`> span[data-anim="…"]\` rule per preset. Tailwind
 // config can't express those — copy the CSS export instead for the
 // full per-token output (it includes the markup-matching selectors).
 `
       : '';
     usageHint = `
-// Per-letter stagger — Tailwind config can't express the descendant
+// ${heading} — Tailwind config can't express the descendant
 // selector + CSS variable, so add this rule to your global stylesheet:
 //   .${className} > span {
 //     animation: ${animValue};
 ${delayLine}//     display: inline-block;
 //   }
-// Then split the text:
-//   <p className="${className}">{[...'Animate'].map((ch, i) => (
-//     <span key={i} style={{ '--i': i }}>{ch}</span>
-//   ))}</p>
+// Then split the text (matching this tool's ${tokenizeModeOf(c)} tokenization):
+${splitExample}
 ${perTokenNote}`;
   } else {
     usageHint = `

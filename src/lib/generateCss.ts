@@ -1,7 +1,7 @@
 import type { AnimationConfig, Keyframe, Transform } from '@/types/animation';
 import { easingToCss } from './easings';
 import { getPreset } from './presets';
-import { hasTokenAnimations } from './tokenize';
+import { buildTokenPresetMap, hasTokenAnimations } from './tokenize';
 import { sanitisePathD } from './svgPathSafety';
 import {
   GRADIENT_RE,
@@ -271,13 +271,24 @@ export type ResolvedTokenPreset = {
 };
 
 /**
- * Distinct, resolvable per-token presets in first-appearance order,
- * capped at {@link PER_TOKEN_PRESET_CAP}. A presetId that doesn't
- * resolve to a real preset is skipped entirely (the token falls back
- * to the global animation via the base `> span` rule) — this is the
- * graceful-degradation contract `resolveTokenPreset`'s doc-comment
- * promises. Exported so the non-CSS generators resolve the exact same
- * set / order / cap and stay consistent with the CSS output.
+ * Distinct, resolvable per-token presets, capped at
+ * {@link PER_TOKEN_PRESET_CAP}. Resolution runs off the FLATTENED
+ * `buildTokenPresetMap` — the exact same first-match-wins-by-index
+ * map the renderer / markup use to stamp `data-anim` — NOT the raw
+ * entry list. Consequences:
+ *
+ *  - a presetId that no token actually ends up with (a fully-shadowed
+ *    or duplicate entry from a tampered / legacy blob) contributes
+ *    nothing to the map and so emits no dead `@keyframes` / selector
+ *  - a presetId that doesn't resolve to a real preset is skipped (the
+ *    token falls back to the global animation via the base `> span`
+ *    rule — the graceful-degradation contract `resolveTokenPreset`'s
+ *    doc-comment promises)
+ *  - order is the first-token-encounter order from the map, so
+ *    `kfName` is stable and deterministic
+ *
+ * Exported so the non-CSS generators resolve the exact same set /
+ * order / cap and stay consistent with the CSS output.
  */
 export function resolveTokenPresets(
   c: AnimationConfig,
@@ -286,8 +297,7 @@ export function resolveTokenPresets(
   if (c.target !== 'text' || !c.tokenAnimations?.length) return [];
   const seen = new Set<string>();
   const out: ResolvedTokenPreset[] = [];
-  for (const entry of c.tokenAnimations) {
-    const pid = entry.presetId;
+  for (const pid of buildTokenPresetMap(c.tokenAnimations).values()) {
     if (seen.has(pid)) continue;
     seen.add(pid);
     const preset = getPreset(pid);
@@ -307,9 +317,10 @@ export function resolveTokenPresets(
  *  practice this is defence-in-depth against a tampered share URL that
  *  somehow paired an exotic presetId with a colliding registry id. */
 function cssAttrValue(s: string): string {
-  return s.replace(/["\\\n\r]/g, (ch) => {
+  return s.replace(/["\\\n\r\f]/g, (ch) => {
     if (ch === '\n') return '\\a ';
     if (ch === '\r') return '\\d ';
+    if (ch === '\f') return '\\c ';
     return `\\${ch}`;
   });
 }
