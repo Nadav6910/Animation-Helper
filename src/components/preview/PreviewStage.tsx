@@ -188,6 +188,8 @@ export function PreviewStage() {
           className={className}
           text={config.text ?? ''}
           stagger={config.stagger}
+          tokenizeMode={config.tokenizeMode}
+          tokenAnimations={config.tokenAnimations}
         />
       );
     }

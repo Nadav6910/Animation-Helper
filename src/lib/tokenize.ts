@@ -1,5 +1,6 @@
 import type {
   AnimationConfig,
+  TokenAnimation,
   TokenizeMode,
 } from '@/types/animation';
 
@@ -60,7 +61,20 @@ export function tokenAnimationFor(
   tokenIndex: number,
   config: AnimationConfig
 ): string | null {
-  const list = config.tokenAnimations;
+  return resolveTokenPreset(tokenIndex, config.tokenAnimations);
+}
+
+/**
+ * Same resolution as `tokenAnimationFor` but takes the list
+ * directly, for consumers (the renderer) that hold only the
+ * `tokenAnimations` array and shouldn't have to thread a whole
+ * AnimationConfig just for the lookup. Single source of truth —
+ * `tokenAnimationFor` delegates here.
+ */
+export function resolveTokenPreset(
+  tokenIndex: number,
+  list: ReadonlyArray<TokenAnimation> | undefined
+): string | null {
   if (!list || list.length === 0) return null;
   for (const entry of list) {
     if (entry.tokens.includes(tokenIndex)) return entry.presetId;
