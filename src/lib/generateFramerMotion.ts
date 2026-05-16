@@ -2,6 +2,7 @@ import type { AnimationConfig, Easing, Keyframe, Transform } from '@/types/anima
 import { easingToCss } from './easings';
 import { sanitisePathD } from './svgPathSafety';
 import { cssValueSafe, firstColorStop, GRADIENT_RE, num } from './css-helpers';
+import { hasTokenAnimations } from './tokenize';
 
 type ChannelKey =
   | 'x'
@@ -283,13 +284,27 @@ ${transitionLines.join('\n')}
 `;
   }
 
-  if (c.target === 'text' && c.stagger) {
+  if (c.target === 'text' && (c.stagger || hasTokenAnimations(c))) {
     // Per-letter stagger: split the text into motion.spans and offset each
     // child's transition delay by `i * step`. The shared transition is
     // declared once and we override `delay` per child.
     const safeText = (c.text ?? 'Animate').replace(/`/g, '\\`');
-    const stepMs = num(c.stagger.step);
-    return `import { motion } from 'framer-motion';
+    const stepMs = c.stagger ? num(c.stagger.step) : 0;
+    // Framer Motion drives state from a single variant object, so N
+    // independent per-token keyframe sets can't be expressed without
+    // emitting N separate components. When per-token overrides exist
+    // we still render the spans with the GLOBAL animation and point
+    // the user at the CSS export, which carries the real per-token
+    // `@keyframes` + `data-anim` selectors. Same format-limitation
+    // honesty as the Tailwind / Lottie outputs.
+    const perTokenNote = hasTokenAnimations(c)
+      ? `// NOTE: this animation has per-token overrides. Framer Motion's
+// single-variant model can't drive each token independently — every
+// span below uses the global animation. Copy the CSS export for the
+// full per-token output (one @keyframes + selector per preset).
+`
+      : '';
+    return `${perTokenNote}import { motion } from 'framer-motion';
 
 const TEXT = ${JSON.stringify(safeText)};
 

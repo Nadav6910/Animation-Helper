@@ -1,6 +1,7 @@
 import type { AnimationConfig, Keyframe } from '@/types/animation';
 import { easingToCss } from './easings';
 import { transformToCss, filterToCss } from './generateCss';
+import { hasTokenAnimations } from './tokenize';
 import {
   GRADIENT_RE,
   cssValueSafe,
@@ -106,20 +107,30 @@ export function generateTailwind(
 // SVG path-draw — apply alongside the animation class:
 // <svg viewBox="..."><path d="..." pathLength="100" className="${className} [stroke-dasharray:100]" stroke="currentColor" fill="none" /></svg>
 `;
-  } else if (c.stagger && c.target === 'text') {
+  } else if (c.target === 'text' && (c.stagger || hasTokenAnimations(c))) {
+    const delayLine = c.stagger
+      ? `//     animation-delay: calc(var(--i) * ${num(c.stagger.step)}ms);\n`
+      : '';
+    const perTokenNote = hasTokenAnimations(c)
+      ? `//
+// This animation also has PER-TOKEN overrides, which need one extra
+// @keyframes + \`> span[data-anim="…"]\` rule per preset. Tailwind
+// config can't express those — copy the CSS export instead for the
+// full per-token output (it includes the markup-matching selectors).
+`
+      : '';
     usageHint = `
 // Per-letter stagger — Tailwind config can't express the descendant
 // selector + CSS variable, so add this rule to your global stylesheet:
 //   .${className} > span {
 //     animation: ${animValue};
-//     animation-delay: calc(var(--i) * ${num(c.stagger.step)}ms);
-//     display: inline-block;
+${delayLine}//     display: inline-block;
 //   }
 // Then split the text:
 //   <p className="${className}">{[...'Animate'].map((ch, i) => (
 //     <span key={i} style={{ '--i': i }}>{ch}</span>
 //   ))}</p>
-`;
+${perTokenNote}`;
   } else {
     usageHint = `
 // Apply with:

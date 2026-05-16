@@ -272,6 +272,10 @@ export function generateLottie(
   if (c.keyframes.some((k) => k.bg)) dropped.push('background animation');
   if (c.offsetPath) dropped.push('offset-path');
   if (c.stagger) dropped.push('per-letter stagger');
+  if (c.target === 'text' && c.tokenAnimations?.length)
+    dropped.push(
+      'per-token animations (each token would need its own Lottie layer — rebuild per-character in After Effects)'
+    );
   if (c.target === 'text') dropped.push('text rendering (use a Lottie text layer in After Effects to add it back)');
   if (c.target === 'svg') dropped.push('SVG path geometry (replace the rect shape with your <path>)');
   if (c.keyframes.some((k) => k.easing?.kind === 'steps'))

@@ -1,5 +1,7 @@
 import type { AnimationConfig, Keyframe, Transform } from '@/types/animation';
 import { easingToCss } from './easings';
+import { getPreset } from './presets';
+import { hasTokenAnimations } from './tokenize';
 import { sanitisePathD } from './svgPathSafety';
 import {
   GRADIENT_RE,
@@ -250,6 +252,68 @@ export function buildKeyframesBody(
   return lines.join('\n');
 }
 
+/** Hard ceiling on distinct per-token presets emitted into a single
+ *  stylesheet. Each adds one `@keyframes` block + one selector rule;
+ *  capping keeps the snippet (and the shared share-URL blob) bounded.
+ *  Tokens whose preset is past the cap silently fall back to the
+ *  config's global animation — the same graceful degradation an
+ *  unknown / stale presetId gets. */
+export const PER_TOKEN_PRESET_CAP = 20;
+
+export type ResolvedTokenPreset = {
+  presetId: string;
+  /** Safe `@keyframes` ident — derived from a counter, never from the
+   *  (validator-bounded but charset-unrestricted) presetId. */
+  kfName: string;
+  /** The preset's own built config — its keyframes / duration / easing
+   *  / iterations drive this token independently of the global. */
+  cfg: AnimationConfig;
+};
+
+/**
+ * Distinct, resolvable per-token presets in first-appearance order,
+ * capped at {@link PER_TOKEN_PRESET_CAP}. A presetId that doesn't
+ * resolve to a real preset is skipped entirely (the token falls back
+ * to the global animation via the base `> span` rule) — this is the
+ * graceful-degradation contract `resolveTokenPreset`'s doc-comment
+ * promises. Exported so the non-CSS generators resolve the exact same
+ * set / order / cap and stay consistent with the CSS output.
+ */
+export function resolveTokenPresets(
+  c: AnimationConfig,
+  name = 'play'
+): ResolvedTokenPreset[] {
+  if (c.target !== 'text' || !c.tokenAnimations?.length) return [];
+  const seen = new Set<string>();
+  const out: ResolvedTokenPreset[] = [];
+  for (const entry of c.tokenAnimations) {
+    const pid = entry.presetId;
+    if (seen.has(pid)) continue;
+    seen.add(pid);
+    const preset = getPreset(pid);
+    if (!preset) continue;
+    out.push({
+      presetId: pid,
+      kfName: `${name}-tok-${out.length + 1}`,
+      cfg: preset.build(),
+    });
+    if (out.length >= PER_TOKEN_PRESET_CAP) break;
+  }
+  return out;
+}
+
+/** Escape a string for use inside a double-quoted attribute-selector
+ *  value. Resolvable presetIds are registry slugs (`[a-z0-9-]`), so in
+ *  practice this is defence-in-depth against a tampered share URL that
+ *  somehow paired an exotic presetId with a colliding registry id. */
+function cssAttrValue(s: string): string {
+  return s.replace(/["\\\n\r]/g, (ch) => {
+    if (ch === '\n') return '\\a ';
+    if (ch === '\r') return '\\d ';
+    return `\\${ch}`;
+  });
+}
+
 export function generateCss(
   c: AnimationConfig,
   opts: GenerateCssOptions = {}
@@ -274,7 +338,18 @@ export function generateCss(
   lines.push('}');
   lines.push('');
 
-  if (c.stagger && c.target === 'text') {
+  const perToken = resolveTokenPresets(c, name);
+  // Per-token overrides need addressable spans even with stagger off,
+  // so the base `> span` rule is emitted whenever EITHER feature is on
+  // — matching TextTarget, which renders spans under the same
+  // condition. Without stagger the spans simply share the global
+  // timing (no per-letter delay), so a non-overridden token animates
+  // exactly as the whole-text version did.
+  const staggered = !!c.stagger && c.target === 'text';
+  const wantSpanRules =
+    c.target === 'text' && (staggered || hasTokenAnimations(c));
+
+  if (wantSpanRules) {
     lines.push(`${ruleSelector} > span {`);
     if (opts.cssVars) {
       // Animation properties don't inherit, so the spans need their
@@ -286,7 +361,9 @@ export function generateCss(
       lines.push(`${indent}animation-duration: var(--ah-duration);`);
       lines.push(`${indent}animation-timing-function: var(--ah-easing);`);
       lines.push(
-        `${indent}animation-delay: calc(var(--i) * ${num(c.stagger.step)}ms);`
+        staggered
+          ? `${indent}animation-delay: calc(var(--i) * ${num(c.stagger!.step)}ms);`
+          : `${indent}animation-delay: var(--ah-delay);`
       );
       lines.push(`${indent}animation-iteration-count: var(--ah-iterations);`);
       if (c.direction !== 'normal') {
@@ -296,21 +373,56 @@ export function generateCss(
         lines.push(`${indent}animation-fill-mode: ${c.fill};`);
       }
     } else {
-      const animationValue = buildAnimationShorthand(c, name);
-      lines.push(`${indent}animation: ${animationValue};`);
-      lines.push(
-        `${indent}animation-delay: calc(var(--i) * ${num(c.stagger.step)}ms);`
-      );
+      lines.push(`${indent}animation: ${buildAnimationShorthand(c, name)};`);
+      if (staggered) {
+        lines.push(
+          `${indent}animation-delay: calc(var(--i) * ${num(c.stagger!.step)}ms);`
+        );
+      }
     }
     lines.push(`${indent}display: inline-block;`);
     lines.push('}');
     lines.push('');
+
+    // Per-token override rules. The attribute selector adds
+    // specificity over the bare `> span`, so a token carrying
+    // `data-anim="<presetId>"` wins. Each rule uses the PRESET's own
+    // timing (literal, even in cssVars mode — the `--ah-*` vars hold
+    // the GLOBAL timing, which is deliberately not what an override
+    // token wants). The staggered per-letter delay is still applied
+    // so an overridden token keeps its place in the wave.
+    for (const pt of perToken) {
+      lines.push(
+        `${ruleSelector} > span[data-anim="${cssAttrValue(pt.presetId)}"] {`
+      );
+      lines.push(
+        `${indent}animation: ${buildAnimationShorthand(pt.cfg, pt.kfName)};`
+      );
+      if (staggered) {
+        lines.push(
+          `${indent}animation-delay: calc(var(--i) * ${num(c.stagger!.step)}ms);`
+        );
+      }
+      lines.push(`${indent}display: inline-block;`);
+      lines.push('}');
+      lines.push('');
+    }
   }
 
   lines.push(`@keyframes ${name} {`);
   const body = buildKeyframesBody(c, { indent });
   if (body) lines.push(body);
   lines.push('}');
+
+  // One @keyframes per distinct per-token preset, built from that
+  // preset's own keyframes so the token animates independently.
+  for (const pt of perToken) {
+    lines.push('');
+    lines.push(`@keyframes ${pt.kfName} {`);
+    const tokBody = buildKeyframesBody(pt.cfg, { indent });
+    if (tokBody) lines.push(tokBody);
+    lines.push('}');
+  }
 
   return lines.join('\n');
 }

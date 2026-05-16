@@ -1,5 +1,11 @@
 import type { AnimationConfig } from '@/types/animation';
 import { generateCss } from './generateCss';
+import {
+  tokenize,
+  tokenizeModeOf,
+  buildTokenPresetMap,
+  hasTokenAnimations,
+} from './tokenize';
 import { SVG_PATH_BY_ID } from './svgPaths';
 import { resolveShapeDef, SHAPE_BY_KIND } from './shapes';
 import type { CustomShape } from '@/types/animation';
@@ -57,17 +63,28 @@ function targetMarkup(
   const safeFamily = cssValueSafe(fontFamily) || 'system-ui, sans-serif';
   const textFontStyle = `font: 700 64px/1.1 ${safeFamily}`;
   if (c.target === 'text') {
-    const text = escapeHtml(c.text ?? 'Animate');
-    if (c.stagger) {
-      const letters = [...text]
-        .map(
-          (ch, i) =>
-            `<span style="display:inline-block;--i:${i}">${ch === ' ' ? '&nbsp;' : ch}</span>`
-        )
+    const raw = c.text || 'Animate';
+    // Mirror TextTarget: spans are emitted when EITHER stagger or
+    // per-token overrides are on, tokenized in the config's mode, and
+    // carry data-anim so the per-token CSS rules from generateCss
+    // actually match in the static export.
+    if (c.stagger || hasTokenAnimations(c)) {
+      const mode = tokenizeModeOf(c);
+      const presetMap = buildTokenPresetMap(c.tokenAnimations);
+      const spans = tokenize(raw, mode)
+        .map((tok, i) => {
+          const isWs = /^\s+$/.test(tok);
+          // whiteSpace:pre keeps whitespace runs from collapsing
+          // inside the inline-block span (same as TextTarget).
+          const style = `display:inline-block;--i:${i}${isWs ? ';white-space:pre' : ''}`;
+          const pid = presetMap.get(i);
+          const animAttr = pid ? ` data-anim="${escapeHtml(pid)}"` : '';
+          return `<span style="${style}"${animAttr}>${escapeHtml(tok)}</span>`;
+        })
         .join('');
-      return `<p class="${className}" style="${escapeHtml(textFontStyle)}">${letters}</p>`;
+      return `<p class="${className}" style="${escapeHtml(textFontStyle)}">${spans}</p>`;
     }
-    return `<p class="${className}" style="${escapeHtml(textFontStyle)}">${text}</p>`;
+    return `<p class="${className}" style="${escapeHtml(textFontStyle)}">${escapeHtml(raw)}</p>`;
   }
   if (c.target === 'svg') {
     const def = SVG_PATH_BY_ID[c.svgPath ?? 'check'];
