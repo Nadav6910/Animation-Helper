@@ -8,6 +8,8 @@ import type {
   OffsetPath,
   ShapeKind,
   TargetKind,
+  TokenAnimation,
+  TokenizeMode,
   Transform,
 } from '@/types/animation';
 import { createHistoryRecorder } from './middleware/history';
@@ -110,6 +112,8 @@ export type AnimationState = {
   setFill: (f: FillMode) => void;
   setEasing: (e: Easing) => void;
   setStagger: (step: number | null) => void;
+  setTokenizeMode: (mode: TokenizeMode) => void;
+  setTokenAnimations: (list: TokenAnimation[] | undefined) => void;
   setOffsetPath: (op: OffsetPath | undefined) => void;
   setPathDraw: (enabled: boolean) => void;
   // keyframes
@@ -181,6 +185,15 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
       if (target !== 'text' && updated.stagger) {
         delete updated.stagger;
       }
+      // tokenizeMode / tokenAnimations are text-only for the same
+      // reason as stagger: the per-token span machinery and the
+      // per-token generators only run for text targets. Drop them on
+      // the way out so a shape / svg config can't carry stale token
+      // overrides that nothing renders.
+      if (target !== 'text') {
+        if (updated.tokenizeMode) delete updated.tokenizeMode;
+        if (updated.tokenAnimations) delete updated.tokenAnimations;
+      }
       history.record(updated);
       set({
         config: updated,
@@ -211,6 +224,37 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
         // captured next time they switch back to text.
         if (c.target !== 'text') return c;
         return { ...c, stagger: step === null ? undefined : { step } };
+      }),
+    setTokenizeMode: (mode) =>
+      update((c) => {
+        if (c.target !== 'text') return c;
+        const next: TokenizeMode = mode === 'word' ? 'word' : 'letter';
+        const current: TokenizeMode =
+          c.tokenizeMode === 'word' ? 'word' : 'letter';
+        if (next === current) return c;
+        // Token indices are tokenization-relative: index 3 means the
+        // 3rd letter in letter mode but the 3rd word in word mode, so
+        // any existing per-token overrides become semantically wrong
+        // the instant the mode flips. Clear them rather than silently
+        // re-point them at the wrong tokens. Store 'letter' as absent
+        // to keep the serialised blob / share URL minimal — every
+        // consumer reads the default through `tokenizeModeOf`.
+        return {
+          ...c,
+          tokenizeMode: next === 'word' ? 'word' : undefined,
+          tokenAnimations: undefined,
+        };
+      }),
+    setTokenAnimations: (list) =>
+      update((c) => {
+        if (c.target !== 'text') return c;
+        // Empty / absent normalises to undefined so the validator's
+        // "drop empty array" branch and the renderer's hasPerToken
+        // guard agree, and the share URL doesn't carry a dead `[]`.
+        return {
+          ...c,
+          tokenAnimations: list && list.length > 0 ? list : undefined,
+        };
       }),
     setOffsetPath: (op) =>
       update((c) => {

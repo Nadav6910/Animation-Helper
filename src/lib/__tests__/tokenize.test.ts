@@ -6,6 +6,8 @@ import {
   hasTokenAnimations,
   resolveTokenPreset,
   buildTokenPresetMap,
+  assignTokenPreset,
+  clearTokenPreset,
 } from '@/lib/tokenize';
 import { validateAnimationConfig } from '@/lib/validateConfig';
 import type { AnimationConfig } from '@/types/animation';
@@ -214,6 +216,77 @@ describe('buildTokenPresetMap', () => {
       { tokens: [1], presetId: 'second' },
     ]);
     expect(map.get(1)).toBe('first');
+  });
+});
+
+describe('assignTokenPreset', () => {
+  it('creates a fresh entry from an empty / undefined list', () => {
+    expect(assignTokenPreset(undefined, [2, 0, 2], 'p')).toEqual([
+      { tokens: [0, 2], presetId: 'p' },
+    ]);
+    expect(assignTokenPreset([], [1], 'p')).toEqual([
+      { tokens: [1], presetId: 'p' },
+    ]);
+  });
+
+  it('merges into the existing entry for the same presetId', () => {
+    expect(
+      assignTokenPreset([{ tokens: [0, 1], presetId: 'p' }], [3, 1], 'p')
+    ).toEqual([{ tokens: [0, 1, 3], presetId: 'p' }]);
+  });
+
+  it('moves a token away from its previous preset (no double-assign)', () => {
+    const out = assignTokenPreset(
+      [{ tokens: [0, 1, 2], presetId: 'a' }],
+      [1],
+      'b'
+    );
+    expect(out).toEqual([
+      { tokens: [0, 2], presetId: 'a' },
+      { tokens: [1], presetId: 'b' },
+    ]);
+  });
+
+  it('drops an entry left empty after a reassignment', () => {
+    const out = assignTokenPreset([{ tokens: [1], presetId: 'a' }], [1], 'b');
+    expect(out).toEqual([{ tokens: [1], presetId: 'b' }]);
+  });
+
+  it('ignores negative / non-integer indices', () => {
+    expect(assignTokenPreset(undefined, [-1, 1.5, 2], 'p')).toEqual([
+      { tokens: [2], presetId: 'p' },
+    ]);
+  });
+
+  it('an empty selection is a no-op clone (does not mutate input)', () => {
+    const input = [{ tokens: [0], presetId: 'p' }];
+    const out = assignTokenPreset(input, [], 'p');
+    expect(out).toEqual(input);
+    expect(out).not.toBe(input);
+  });
+});
+
+describe('clearTokenPreset', () => {
+  it('removes the indices and drops emptied entries', () => {
+    expect(
+      clearTokenPreset(
+        [
+          { tokens: [0, 1], presetId: 'a' },
+          { tokens: [2], presetId: 'b' },
+        ],
+        [1, 2]
+      )
+    ).toEqual([{ tokens: [0], presetId: 'a' }]);
+  });
+
+  it('returns [] when every token is cleared', () => {
+    expect(
+      clearTokenPreset([{ tokens: [0, 1], presetId: 'a' }], [0, 1])
+    ).toEqual([]);
+  });
+
+  it('returns [] for an undefined list', () => {
+    expect(clearTokenPreset(undefined, [0])).toEqual([]);
   });
 });
 
