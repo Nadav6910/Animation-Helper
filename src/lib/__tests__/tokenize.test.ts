@@ -77,6 +77,20 @@ describe('tokenize — word mode', () => {
     expect(tokenize('Solo', 'word')).toEqual(['Solo']);
   });
 
+  it('whitespace-only text → a single whitespace token', () => {
+    expect(tokenize('   ', 'word')).toEqual(['   ']);
+  });
+
+  it('treats non-breaking space (U+00A0) as a whitespace token', () => {
+    // JS \s matches NBSP, so it must NOT be glued onto an adjacent
+    // word — the rendered layout depends on this.
+    expect(tokenize('a\u00A0b', 'word')).toEqual(['a', '\u00A0', 'b']);
+  });
+
+  it('treats thin space (U+2009) as whitespace', () => {
+    expect(tokenize('a\u2009b', 'word')).toEqual(['a', '\u2009', 'b']);
+  });
+
   it('returns [] for empty text', () => {
     expect(tokenize('', 'word')).toEqual([]);
   });
@@ -132,12 +146,37 @@ describe('tokenAnimationFor / hasTokenAnimations', () => {
     };
     expect(tokenAnimationFor(1, cfg)).toBe('first');
   });
+
+  it('returns null for an out-of-range index (no entry covers it)', () => {
+    const cfg: AnimationConfig = {
+      ...base,
+      tokenAnimations: [{ tokens: [0, 1], presetId: 'p' }],
+    };
+    expect(tokenAnimationFor(999, cfg)).toBeNull();
+  });
 });
 
 describe('validateAnimationConfig — tokenize fields', () => {
   it("accepts tokenizeMode 'word'", () => {
     const parsed = validateAnimationConfig({ ...base, tokenizeMode: 'word' });
     expect(parsed?.tokenizeMode).toBe('word');
+  });
+
+  it('accepts tokenizeMode with tokenAnimations absent', () => {
+    const parsed = validateAnimationConfig({
+      ...base,
+      tokenizeMode: 'word',
+    });
+    expect(parsed?.tokenizeMode).toBe('word');
+    expect(parsed?.tokenAnimations).toBeUndefined();
+  });
+
+  it('drops an empty tokenAnimations array (no entries to keep)', () => {
+    const parsed = validateAnimationConfig({
+      ...base,
+      tokenAnimations: [],
+    });
+    expect(parsed?.tokenAnimations).toBeUndefined();
   });
 
   it('drops an invalid tokenizeMode', () => {
@@ -158,14 +197,14 @@ describe('validateAnimationConfig — tokenize fields', () => {
     ]);
   });
 
-  it('floors token indices to non-negative integers', () => {
+  it('drops out-of-domain token indices instead of clamping', () => {
     const parsed = validateAnimationConfig({
       ...base,
-      tokenAnimations: [{ tokens: [-3, 1.7, 2], presetId: 'p' }],
+      tokenAnimations: [{ tokens: [-3, 1.7, 2, 5], presetId: 'p' }],
     });
-    // -3 → 0, 1.7 → 1, 2 → 2
+    // -3 (negative), 1.7 (non-integer) dropped; 2 and 5 kept as-is.
     expect(parsed?.tokenAnimations).toEqual([
-      { tokens: [0, 1, 2], presetId: 'p' },
+      { tokens: [2, 5], presetId: 'p' },
     ]);
   });
 

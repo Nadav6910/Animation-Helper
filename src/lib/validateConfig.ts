@@ -377,9 +377,16 @@ export function validateAnimationConfig(
       const tokens: number[] = [];
       for (const t of e.tokens.slice(0, MAX_TOKENS_PER_ENTRY)) {
         const n = finiteOrUndef(t);
-        if (n === undefined) continue;
-        const idx = Math.max(0, Math.floor(n));
-        tokens.push(idx);
+        // Drop out-of-domain indices rather than clamp them. A
+        // tampered blob with `-3` or `1.7` shouldn't silently
+        // retarget an entry onto token 0 (visible-but-wrong) —
+        // dropping keeps the stored data honest and the worst-case
+        // failure mode is "nothing animates" rather than "the wrong
+        // token animates". The real UI only ever emits valid
+        // non-negative integers so this never rejects legitimate
+        // data.
+        if (n === undefined || n < 0 || !Number.isInteger(n)) continue;
+        tokens.push(n);
       }
       if (tokens.length > 0) {
         entries.push({ tokens, presetId: e.presetId });

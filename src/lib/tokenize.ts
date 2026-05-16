@@ -47,6 +47,14 @@ export function tokenizeModeOf(config: AnimationConfig): TokenizeMode {
  * index, the earlier entry takes precedence. The UI is responsible
  * for not producing overlaps, but the resolver stays total either
  * way.
+ *
+ * NOTE: this returns the raw id WITHOUT checking the preset
+ * actually exists — the validator doesn't check existence either
+ * (it stays decoupled from the preset registry). The step-3/4
+ * consumer that turns this id into keyframes MUST treat an unknown
+ * id as "fall back to the config's global animation" so a renamed
+ * / stale preset id degrades gracefully instead of silently
+ * producing a dead, un-animated token. Tracked so it isn't lost.
  */
 export function tokenAnimationFor(
   tokenIndex: number,
