@@ -90,3 +90,24 @@ export function resolveTokenPreset(
 export function hasTokenAnimations(config: AnimationConfig): boolean {
   return !!config.tokenAnimations && config.tokenAnimations.length > 0;
 }
+
+/**
+ * Flatten `tokenAnimations` into a `tokenIndex → presetId` map for
+ * O(1) per-token resolution. Honours the same first-match-wins rule
+ * as `resolveTokenPreset` (an index already mapped by an earlier
+ * entry is never overwritten). The renderer builds this once per
+ * `tokenAnimations` reference (memoised) so resolving N token spans
+ * is O(N) instead of O(N × entries × indices).
+ */
+export function buildTokenPresetMap(
+  list: ReadonlyArray<TokenAnimation> | undefined
+): Map<number, string> {
+  const map = new Map<number, string>();
+  if (!list) return map;
+  for (const entry of list) {
+    for (const idx of entry.tokens) {
+      if (!map.has(idx)) map.set(idx, entry.presetId);
+    }
+  }
+  return map;
+}

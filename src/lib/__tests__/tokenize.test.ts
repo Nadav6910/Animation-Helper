@@ -4,6 +4,8 @@ import {
   tokenizeModeOf,
   tokenAnimationFor,
   hasTokenAnimations,
+  resolveTokenPreset,
+  buildTokenPresetMap,
 } from '@/lib/tokenize';
 import { validateAnimationConfig } from '@/lib/validateConfig';
 import type { AnimationConfig } from '@/types/animation';
@@ -153,6 +155,65 @@ describe('tokenAnimationFor / hasTokenAnimations', () => {
       tokenAnimations: [{ tokens: [0, 1], presetId: 'p' }],
     };
     expect(tokenAnimationFor(999, cfg)).toBeNull();
+  });
+});
+
+describe('resolveTokenPreset', () => {
+  it('returns null for an undefined list', () => {
+    expect(resolveTokenPreset(0, undefined)).toBeNull();
+  });
+
+  it('returns null for an empty list', () => {
+    expect(resolveTokenPreset(0, [])).toBeNull();
+  });
+
+  it('returns the presetId for a covered index, null otherwise', () => {
+    const list = [
+      { tokens: [0, 2], presetId: 'a' },
+      { tokens: [4], presetId: 'b' },
+    ];
+    expect(resolveTokenPreset(0, list)).toBe('a');
+    expect(resolveTokenPreset(2, list)).toBe('a');
+    expect(resolveTokenPreset(4, list)).toBe('b');
+    expect(resolveTokenPreset(1, list)).toBeNull();
+    expect(resolveTokenPreset(99, list)).toBeNull();
+  });
+
+  it('first matching entry wins on overlap', () => {
+    const list = [
+      { tokens: [1], presetId: 'first' },
+      { tokens: [1], presetId: 'second' },
+    ];
+    expect(resolveTokenPreset(1, list)).toBe('first');
+  });
+});
+
+describe('buildTokenPresetMap', () => {
+  it('returns an empty Map for undefined', () => {
+    expect(buildTokenPresetMap(undefined).size).toBe(0);
+  });
+
+  it('returns an empty Map for an empty list', () => {
+    expect(buildTokenPresetMap([]).size).toBe(0);
+  });
+
+  it('flattens entries into an index → presetId map', () => {
+    const map = buildTokenPresetMap([
+      { tokens: [0, 2], presetId: 'a' },
+      { tokens: [4], presetId: 'b' },
+    ]);
+    expect(map.get(0)).toBe('a');
+    expect(map.get(2)).toBe('a');
+    expect(map.get(4)).toBe('b');
+    expect(map.has(1)).toBe(false);
+  });
+
+  it('honours first-match-wins (earlier entry not overwritten)', () => {
+    const map = buildTokenPresetMap([
+      { tokens: [1], presetId: 'first' },
+      { tokens: [1], presetId: 'second' },
+    ]);
+    expect(map.get(1)).toBe('first');
   });
 });
 

@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import { useFontStore } from '@/store/fontStore';
-import { resolveTokenPreset, tokenize } from '@/lib/tokenize';
+import { buildTokenPresetMap, tokenize } from '@/lib/tokenize';
 import type { TokenAnimation, TokenizeMode } from '@/types/animation';
 
 type Props = {
@@ -26,6 +27,15 @@ export function TextTarget({
   tokenAnimations,
 }: Props) {
   const font = useFontStore((s) => s.font);
+  // Flatten the override list to a Map once per tokenAnimations
+  // reference so each span's lookup is O(1) instead of scanning
+  // every entry. Declared before any early return so the hook
+  // order is stable regardless of the stagger/per-token branch.
+  const presetMap = useMemo(
+    () => buildTokenPresetMap(tokenAnimations),
+    [tokenAnimations]
+  );
+
   const display = text || 'Animate';
   const style: React.CSSProperties = { fontFamily: font.family };
 
@@ -57,11 +67,11 @@ export function TextTarget({
         // the config's global animation. data-i + --i keep the
         // existing stagger machinery (.cls > span { animation-delay:
         // calc(var(--i) * step) }) working unchanged.
-        const presetId = resolveTokenPreset(i, tokenAnimations);
+        const presetId = presetMap.get(i) ?? null;
         const ws = isWhitespace(tok);
         return (
           <span
-            key={`${tok}-${i}`}
+            key={i}
             data-i={i}
             data-anim={presetId ?? undefined}
             style={
