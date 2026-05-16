@@ -3,6 +3,7 @@ import { easingToCss } from './easings';
 import { transformToCss, filterToCss } from './generateCss';
 import { sanitisePathD } from './svgPathSafety';
 import { cssValueSafe, GRADIENT_RE, num } from './css-helpers';
+import { hasTokenAnimations } from './tokenize';
 
 function keyframeObj(k: Keyframe): Record<string, string | number> {
   const out: Record<string, string | number> = {};
@@ -120,12 +121,28 @@ ${frames}
   }
 );`;
 
-  if (c.target === 'text' && c.stagger) {
+  if (c.target === 'text' && (c.stagger || hasTokenAnimations(c))) {
     // For per-letter stagger we animate each child <span> in sequence with
     // a per-element delay offset. Caller is expected to have rendered the
     // text as an inline-block span per character.
-    const stepMs = num(c.stagger.step);
-    return `// Web Animations API · per-letter stagger
+    const stepMs = c.stagger ? num(c.stagger.step) : 0;
+    // One el.animate() call with one keyframe array drives every span;
+    // expressing N independent per-token keyframe sets would mean
+    // branching on each span's data-anim and carrying N frame arrays.
+    // Kept out of the WAAPI snippet for the same format-limitation
+    // reason as Tailwind / Framer — the CSS export is the source of
+    // truth for per-token (its `@keyframes` + `[data-anim]` selectors
+    // already match the markup this app renders).
+    const perTokenNote = hasTokenAnimations(c)
+      ? `// NOTE: per-token overrides are NOT applied here — every span uses
+// the global animation. Use the CSS export for the real per-token
+// output (one @keyframes + selector per preset).
+`
+      : '';
+    const delayExpr = stepMs
+      ? `${num(c.delay)} + i * ${stepMs}`
+      : `${num(c.delay)}`;
+    return `${perTokenNote}// Web Animations API · ${hasTokenAnimations(c) ? 'per-token text' : 'per-letter stagger'}
 // Markup expectation: <p class="${selector.replace(/^\./, '')}">
 //   <span>A</span><span>n</span><span>i</span>...
 // </p>
@@ -136,7 +153,7 @@ export function ${fnName}() {
   const letters = Array.from(root.querySelectorAll(':scope > span'));
   return letters.map((el, i) => ${animateBlock.replace(
     `delay: ${num(c.delay)},`,
-    `delay: ${num(c.delay)} + i * ${stepMs},`
+    `delay: ${delayExpr},`
   )});
 }
 `;

@@ -148,8 +148,34 @@ describe('generateFramerMotion', () => {
       stagger: { step: 80 },
     });
     expect(out).toContain('motion.span');
-    expect(out).toContain('[...TEXT].map');
+    // Tokenized to match TextTarget — letter mode yields a char array.
+    expect(out).toContain('TOKENS.map');
+    expect(out).toContain('const TOKENS = ["H","i"];');
     expect(out).toContain('i * 80');
+  });
+
+  it('word mode splits TOKENS into words + whitespace runs', () => {
+    const out = generateFramerMotion({
+      ...cfg,
+      target: 'text',
+      text: 'Hi there',
+      tokenizeMode: 'word',
+      stagger: { step: 50 },
+    });
+    expect(out).toContain('const TOKENS = ["Hi"," ","there"];');
+  });
+
+  it('renders spans + a per-token limitation note when tokenAnimations exist (no stagger)', () => {
+    const out = generateFramerMotion({
+      ...cfg,
+      target: 'text',
+      text: 'Hi',
+      tokenAnimations: [{ tokens: [0], presetId: 'text-wave' }],
+    });
+    expect(out).toContain('motion.span');
+    expect(out).toContain('NOTE: this animation has per-token overrides');
+    // no stagger → all spans share the same delay (i * 0)
+    expect(out).toContain('(i * 0) / 1000');
   });
 
   it('exports rotate3d Z-axis rotation as rotateZ', () => {

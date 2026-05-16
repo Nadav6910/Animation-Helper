@@ -8,6 +8,7 @@ import { resolveShapeDef, SHAPE_BY_KIND } from './shapes';
 import type { CustomShape } from '@/types/animation';
 import { SVG_PATH_BY_ID } from './svgPaths';
 import { sanitisePathD } from './svgPathSafety';
+import { hasTokenAnimations } from './tokenize';
 import { num } from './css-helpers';
 
 const escapeXml = (s: string) =>
@@ -128,8 +129,19 @@ export function generateAnimatedSvg(
   // `generateLottie.ts` so the visual exports look identical.
   // Bumping the brand colour means updating both constants.
   const accent = '#7c5cff';
+  // The target is rendered as a single <text>/<rect>/<path>, so
+  // per-letter stagger and per-token overrides (which need per-token
+  // <tspan>/<span> children + `> span[data-anim="…"]` rules) collapse
+  // to a whole-element animation here. Flag it in an XML comment, same
+  // honesty as the clip-path note above and the SCSS / styled notes.
+  const spanNote =
+    c.target === 'text' && (c.stagger || hasTokenAnimations(c))
+      ? `<!-- Note: this animation uses ${
+          hasTokenAnimations(c) ? 'per-token overrides' : 'per-letter stagger'
+        }; a single SVG <text> element can't carry per-token sub-animations, so the whole text animates as one. Use the CSS / HTML export for the per-token output. -->\n`
+      : '';
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${num(size)} ${num(size)}" width="${num(size)}" height="${num(size)}" color="${accent}" style="overflow:visible">
+${spanNote}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${num(size)} ${num(size)}" width="${num(size)}" height="${num(size)}" color="${accent}" style="overflow:visible">
   <style><![CDATA[
 ${css.replace(/^/gm, '    ')}
   ]]></style>

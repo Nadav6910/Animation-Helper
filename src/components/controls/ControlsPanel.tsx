@@ -24,6 +24,7 @@ import { EasingPicker } from './EasingPicker';
 import { ColorFilterSection } from './ColorFilterSection';
 import { StaggerControls } from './StaggerControls';
 import { TextEffectsPicker } from './TextEffectsPicker';
+import { PerTokenAnimations } from './PerTokenAnimations';
 import { KeyframeTimeline } from './KeyframeTimeline';
 import { PresetGallery } from './PresetGallery';
 import { OffsetPathSection } from './OffsetPathSection';
@@ -128,6 +129,17 @@ export function ControlsPanel() {
             <TextEffectsPicker />
             <StaggerControls />
           </div>
+        </Section>
+      )}
+
+      {target === 'text' && (
+        <Section
+          title="Per-token animations"
+          description="Give individual letters or words their own preset"
+          icon={<Type size={16} />}
+          defaultOpen={false}
+        >
+          <PerTokenAnimations />
         </Section>
       )}
 

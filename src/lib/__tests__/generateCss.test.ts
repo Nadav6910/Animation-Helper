@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { generateCss, transformToCss, filterToCss } from '../generateCss';
+import {
+  generateCss,
+  transformToCss,
+  filterToCss,
+  resolveTokenPresets,
+  PER_TOKEN_PRESET_CAP,
+} from '../generateCss';
+import { PRESETS } from '@/lib/presets';
 import type { AnimationConfig, Keyframe } from '@/types/animation';
 
 const makeConfig = (overrides: Partial<AnimationConfig> = {}): AnimationConfig => ({
@@ -437,6 +444,151 @@ describe('generateCss — cssVars output', () => {
     );
     expect(css).toMatch(
       /> span\s*\{[^}]*animation-delay: calc\(var\(--i\) \* 50ms\);/
+    );
+  });
+});
+
+describe('generateCss — per-token animations', () => {
+  const textCfg = (overrides: Partial<AnimationConfig> = {}) =>
+    makeConfig({
+      target: 'text',
+      selector: '.t',
+      text: 'Hi there',
+      ...overrides,
+    });
+
+  it('emits a base > span rule + a data-anim override rule + its @keyframes', () => {
+    const css = generateCss(
+      textCfg({ tokenAnimations: [{ tokens: [0], presetId: 'text-wave' }] })
+    );
+    // base span rule so non-overridden tokens still animate
+    expect(css).toContain('.t > span {');
+    // override rule, keyed by the raw presetId
+    expect(css).toContain('.t > span[data-anim="text-wave"] {');
+    expect(css).toMatch(
+      /> span\[data-anim="text-wave"\]\s*\{[^}]*animation: play-tok-1 /
+    );
+    // a dedicated @keyframes built from the preset's own keyframes
+    expect(css).toContain('@keyframes play-tok-1 {');
+    expect(css).toContain('@keyframes play {');
+  });
+
+  it('dedupes a presetId used by multiple entries into one rule + one @keyframes', () => {
+    const css = generateCss(
+      textCfg({
+        tokenAnimations: [
+          { tokens: [0], presetId: 'text-wave' },
+          { tokens: [3], presetId: 'text-wave' },
+        ],
+      })
+    );
+    const kf = css.match(/@keyframes play-tok-1 \{/g) ?? [];
+    const rule = css.match(/\[data-anim="text-wave"\]/g) ?? [];
+    expect(kf.length).toBe(1);
+    expect(rule.length).toBe(1);
+    expect(css).not.toContain('play-tok-2');
+  });
+
+  it('an unknown presetId emits no override rule / @keyframes but keeps the base span rule', () => {
+    const css = generateCss(
+      textCfg({ tokenAnimations: [{ tokens: [0], presetId: 'no-such' }] })
+    );
+    expect(css).toContain('.t > span {'); // hasTokenAnimations → spans
+    expect(css).not.toContain('data-anim="no-such"');
+    expect(css).not.toContain('play-tok-1');
+  });
+
+  it('without stagger the spans carry no per-letter delay', () => {
+    const css = generateCss(
+      textCfg({ tokenAnimations: [{ tokens: [0], presetId: 'text-wave' }] })
+    );
+    expect(css).not.toContain('animation-delay: calc(var(--i)');
+  });
+
+  it('with stagger the override rule also gets the staggered delay', () => {
+    const css = generateCss(
+      textCfg({
+        stagger: { step: 40 },
+        tokenAnimations: [{ tokens: [1], presetId: 'text-wave' }],
+      })
+    );
+    expect(css).toMatch(
+      /> span\[data-anim="text-wave"\]\s*\{[^}]*animation-delay: calc\(var\(--i\) \* 40ms\);/
+    );
+  });
+
+  it('non-text targets never emit per-token output', () => {
+    const css = generateCss(
+      makeConfig({
+        target: 'shape',
+        tokenAnimations: [{ tokens: [0], presetId: 'text-wave' }],
+      })
+    );
+    expect(css).not.toContain('> span');
+    expect(css).not.toContain('play-tok-1');
+  });
+
+  it('resolveTokenPresets caps distinct presets and skips unknown ids', () => {
+    const ids = PRESETS.slice(0, PER_TOKEN_PRESET_CAP + 5).map((p) => p.id);
+    const cfg = textCfg({
+      tokenAnimations: [
+        ...ids.map((presetId, i) => ({ tokens: [i], presetId })),
+        { tokens: [999], presetId: 'definitely-not-real' },
+      ],
+    });
+    const resolved = resolveTokenPresets(cfg);
+    expect(resolved.length).toBe(PER_TOKEN_PRESET_CAP);
+    expect(resolved.every((r) => r.presetId !== 'definitely-not-real')).toBe(
+      true
+    );
+    // kfName is counter-derived & safe regardless of the presetId charset
+    expect(resolved[0].kfName).toBe('play-tok-1');
+  });
+
+  it('resolveTokenPresets returns [] for non-text / no overrides', () => {
+    expect(resolveTokenPresets(makeConfig({ target: 'shape' }))).toEqual([]);
+    expect(resolveTokenPresets(textCfg())).toEqual([]);
+  });
+
+  it('a fully-shadowed duplicate entry emits no dead @keyframes / rule', () => {
+    // token 0 resolves to text-wave (first match wins); the second
+    // entry only lists 0, so text-pop-in owns no token and must NOT
+    // produce a rule the markup can never select.
+    const css = generateCss(
+      textCfg({
+        tokenAnimations: [
+          { tokens: [0], presetId: 'text-wave' },
+          { tokens: [0], presetId: 'text-pop-in' },
+        ],
+      })
+    );
+    expect(css).toContain('[data-anim="text-wave"]');
+    expect(css).not.toContain('text-pop-in');
+    expect(css).not.toContain('play-tok-2');
+  });
+
+  it('per-token override uses literal preset timing even under cssVars', () => {
+    const css = generateCss(
+      textCfg({
+        stagger: { step: 30 },
+        tokenAnimations: [{ tokens: [0], presetId: 'text-wave' }],
+      }),
+      { cssVars: true }
+    );
+    // base span rule references the cascaded global vars …
+    expect(css).toMatch(/> span\s*\{[^}]*animation-duration: var\(--ah-duration\);/);
+    // … but the override rule resets to a literal `animation:` shorthand
+    // with the PRESET's own timing (not var(--ah-*)), so it can't pick
+    // up the global duration/easing.
+    expect(css).toMatch(
+      /> span\[data-anim="text-wave"\]\s*\{\s*animation: play-tok-1 /
+    );
+    expect(css).not.toMatch(
+      /\[data-anim="text-wave"\]\s*\{[^}]*var\(--ah-duration\)/
+    );
+    // staggered delay still applied to the override
+    expect(css).toMatch(
+      /\[data-anim="text-wave"\]\s*\{[^}]*animation-delay: calc\(var\(--i\) \* 30ms\);/
     );
   });
 });

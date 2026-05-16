@@ -351,6 +351,49 @@ export function validateAnimationConfig(
     const step = finiteOrUndef(raw.stagger.step);
     if (step !== undefined) out.stagger = { step: Math.max(0, step) };
   }
+  // tokenizeMode: strict allow-list. Anything else (missing,
+  // tampered, a future value an older client doesn't know) is
+  // dropped so consumers fall back to the 'letter' default via
+  // tokenizeModeOf().
+  if (raw.tokenizeMode === 'letter' || raw.tokenizeMode === 'word') {
+    out.tokenizeMode = raw.tokenizeMode;
+  }
+  // tokenAnimations: array of { tokens:number[], presetId:string }.
+  // Bounded on every axis so a tampered URL hash / localStorage
+  // blob can't smuggle a giant payload back into the store on
+  // reload. Indices are floored to non-negative integers; presetId
+  // is a capped string (its existence as a real preset is checked
+  // at resolve time, not here — keeps the validator decoupled from
+  // the preset registry).
+  if (Array.isArray(raw.tokenAnimations)) {
+    const MAX_ENTRIES = 64;
+    const MAX_TOKENS_PER_ENTRY = 512;
+    const entries: { tokens: number[]; presetId: string }[] = [];
+    for (const e of raw.tokenAnimations.slice(0, MAX_ENTRIES)) {
+      if (!isObject(e)) continue;
+      if (typeof e.presetId !== 'string' || !e.presetId) continue;
+      if (e.presetId.length > 64) continue;
+      if (!Array.isArray(e.tokens)) continue;
+      const tokens: number[] = [];
+      for (const t of e.tokens.slice(0, MAX_TOKENS_PER_ENTRY)) {
+        const n = finiteOrUndef(t);
+        // Drop out-of-domain indices rather than clamp them. A
+        // tampered blob with `-3` or `1.7` shouldn't silently
+        // retarget an entry onto token 0 (visible-but-wrong) —
+        // dropping keeps the stored data honest and the worst-case
+        // failure mode is "nothing animates" rather than "the wrong
+        // token animates". The real UI only ever emits valid
+        // non-negative integers so this never rejects legitimate
+        // data.
+        if (n === undefined || n < 0 || !Number.isInteger(n)) continue;
+        tokens.push(n);
+      }
+      if (tokens.length > 0) {
+        entries.push({ tokens, presetId: e.presetId });
+      }
+    }
+    if (entries.length > 0) out.tokenAnimations = entries;
+  }
   if ('offsetPath' in raw) {
     const op = validateOffsetPath(raw.offsetPath);
     if (op) out.offsetPath = op;

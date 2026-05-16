@@ -112,6 +112,31 @@ export type OffsetPath = {
   rotate?: 'auto' | 'reverse' | number;
 };
 
+/**
+ * How `text` is split into independently-addressable tokens for the
+ * stagger + per-token animation features.
+ *  - 'letter': one token per Unicode code point (matches the legacy
+ *    `[...text]` split, including spaces as their own tokens so
+ *    token indices stay aligned with the rendered spans).
+ *  - 'word': alternating word / whitespace runs, e.g.
+ *    "Hello World" → ['Hello', ' ', 'World']. Whitespace is its own
+ *    token so the rendered layout is preserved.
+ * Absent ⇒ treated as 'letter' (backward-compatible default).
+ */
+export type TokenizeMode = 'letter' | 'word';
+
+/**
+ * Assigns a library preset's animation to a specific set of token
+ * indices (indices into `tokenize(text, tokenizeMode)`). Tokens not
+ * covered by any TokenAnimation use the config's own global
+ * keyframes/timing. v1 reuses existing presets by id; bespoke
+ * per-token keyframes is a deliberate v2 deferral.
+ */
+export type TokenAnimation = {
+  tokens: number[];
+  presetId: string;
+};
+
 export type AnimationConfig = {
   target: TargetKind;
   selector: string;
@@ -127,4 +152,11 @@ export type AnimationConfig = {
   easing: Easing;
   stagger?: { step: number };
   offsetPath?: OffsetPath;
+  /** Token granularity for stagger + per-token animations. Absent ⇒
+   *  'letter' so existing configs render exactly as before. */
+  tokenizeMode?: TokenizeMode;
+  /** Per-token animation overrides. Each entry maps a preset onto a
+   *  set of token indices; uncovered tokens fall back to the global
+   *  animation. */
+  tokenAnimations?: TokenAnimation[];
 };
