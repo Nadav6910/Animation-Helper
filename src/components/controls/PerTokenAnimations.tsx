@@ -1,13 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAnimationStore } from '@/store/animationStore';
 import { TEXT_PRESETS } from '@/lib/presets/text';
-import {
-  tokenize,
-  tokenizeModeOf,
-  buildTokenPresetMap,
-  assignTokenPreset,
-  clearTokenPreset,
-} from '@/lib/tokenize';
+import { tokenize, tokenizeModeOf, buildTokenPresetMap } from '@/lib/tokenize';
 import { cn } from '@/lib/cn';
 
 const isWhitespace = (s: string) => /^\s+$/.test(s);
@@ -27,8 +21,11 @@ export function PerTokenAnimations() {
   const config = useAnimationStore((s) => s.config);
   const setTokenizeMode = useAnimationStore((s) => s.setTokenizeMode);
   const setTokenAnimations = useAnimationStore((s) => s.setTokenAnimations);
+  const assignPreset = useAnimationStore((s) => s.assignTokenPreset);
+  const clearPreset = useAnimationStore((s) => s.clearTokenPreset);
 
   const mode = tokenizeModeOf(config);
+  const hasText = (config.text ?? '').trim().length > 0;
   const display = config.text || 'Animate';
   const tokens = useMemo(() => tokenize(display, mode), [display, mode]);
   const presetMap = useMemo(
@@ -49,6 +46,17 @@ export function PerTokenAnimations() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [anchor, setAnchor] = useState<number | null>(null);
   const [presetId, setPresetId] = useState(TEXT_PRESETS[0]?.id ?? '');
+
+  // Selection holds token *indices*, which are only meaningful for the
+  // current text + tokenize mode. Undo/redo, URL load, preset apply,
+  // resetAll, an external text edit, or a mode flip can all swap the
+  // config out from under this still-mounted card. Drop the transient
+  // selection whenever the token domain changes so a later "Apply"
+  // can't write a preset onto tokens the user never picked.
+  useEffect(() => {
+    setSelected(new Set());
+    setAnchor(null);
+  }, [config.text, mode]);
 
   const wsIndices = useMemo(() => {
     const s = new Set<number>();
@@ -80,16 +88,14 @@ export function PerTokenAnimations() {
 
   function apply() {
     if (!hasSelection || !presetId) return;
-    setTokenAnimations(
-      assignTokenPreset(config.tokenAnimations, selectedArr, presetId)
-    );
+    assignPreset(selectedArr, presetId);
     setSelected(new Set());
     setAnchor(null);
   }
 
   function clearSelection() {
     if (!hasSelection) return;
-    setTokenAnimations(clearTokenPreset(config.tokenAnimations, selectedArr));
+    clearPreset(selectedArr);
     setSelected(new Set());
     setAnchor(null);
   }
@@ -105,6 +111,13 @@ export function PerTokenAnimations() {
           animation. Click to select, Shift-click for a range.
         </p>
       </div>
+
+      {!hasText && (
+        <p className="rounded-lg border border-dashed border-border/70 bg-bg-soft px-3 py-2 text-[11px] text-fg-subtle">
+          Add some text in the Target section first — per-token overrides
+          attach to the characters you type.
+        </p>
+      )}
 
       <div
         className="flex rounded-lg border border-border/70 bg-bg-soft p-0.5 text-xs"
@@ -129,6 +142,8 @@ export function PerTokenAnimations() {
         ))}
       </div>
 
+      {hasText && (
+       <>
       <div className="flex flex-wrap gap-1.5">
         {tokens.map((tok, i) => {
           if (wsIndices.has(i)) {
@@ -232,6 +247,8 @@ export function PerTokenAnimations() {
           </button>
         </div>
       </div>
+       </>
+      )}
     </div>
   );
 }

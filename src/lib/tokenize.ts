@@ -112,43 +112,49 @@ export function buildTokenPresetMap(
   return map;
 }
 
+const inDomain = (n: number) => Number.isInteger(n) && n >= 0;
+const sortDedup = (xs: ReadonlyArray<number>) =>
+  [...new Set(xs)].sort((a, b) => a - b);
+
 /**
  * Assign `presetId` to every index in `tokenIndices`, returning a
- * fresh, normalised list. Normalisation guarantees the invariants the
- * renderer + generators rely on:
+ * fresh, fully-normalised list. The whole returned list satisfies the
+ * invariants the renderer + generators rely on — not just the touched
+ * entry:
  *
  *  - an index appears in at most one entry (the selection is first
  *    stripped from every existing entry before being merged in), so
  *    first-match-wins never has to arbitrate a token the UI assigned
  *  - entries are grouped by presetId (one entry per distinct preset)
- *  - token arrays are de-duplicated and sorted ascending
+ *  - EVERY entry's token array is de-duplicated and sorted ascending
+ *    (kept entries are re-normalised too, so a hand-crafted / legacy
+ *    blob that slipped past with unsorted or duplicated indices comes
+ *    out clean)
  *  - entries left with zero tokens are dropped
  *
- * Negative / non-integer indices are ignored — the same domain rule
- * the validator enforces, applied here so the store never holds an
- * out-of-domain index even before a round-trip.
+ * Negative / non-integer indices in the selection are ignored — the
+ * same domain rule the validator enforces, applied here so the store
+ * never holds an out-of-domain index even before a round-trip.
  */
 export function assignTokenPreset(
   list: ReadonlyArray<TokenAnimation> | undefined,
   tokenIndices: ReadonlyArray<number>,
   presetId: string
 ): TokenAnimation[] {
-  const sel = new Set(
-    tokenIndices.filter((n) => Number.isInteger(n) && n >= 0)
-  );
+  const sel = new Set(tokenIndices.filter(inDomain));
   const out: TokenAnimation[] = [];
   for (const entry of list ?? []) {
     const kept = entry.tokens.filter((t) => !sel.has(t));
-    if (kept.length > 0) out.push({ tokens: kept, presetId: entry.presetId });
+    if (kept.length > 0) {
+      out.push({ tokens: sortDedup(kept), presetId: entry.presetId });
+    }
   }
   if (sel.size === 0) return out;
   const target = out.find((e) => e.presetId === presetId);
   if (target) {
-    target.tokens = [...new Set([...target.tokens, ...sel])].sort(
-      (a, b) => a - b
-    );
+    target.tokens = sortDedup([...target.tokens, ...sel]);
   } else {
-    out.push({ tokens: [...sel].sort((a, b) => a - b), presetId });
+    out.push({ tokens: sortDedup([...sel]), presetId });
   }
   return out;
 }
@@ -156,17 +162,21 @@ export function assignTokenPreset(
 /**
  * Drop every index in `tokenIndices` from the list (the tokens fall
  * back to the config's global animation). Entries emptied by the
- * removal are dropped. Always returns a fresh array.
+ * removal are dropped; surviving entries are re-normalised (sorted,
+ * de-duplicated) so the whole returned list holds the same invariants
+ * as `assignTokenPreset`'s output. Always returns a fresh array.
  */
 export function clearTokenPreset(
   list: ReadonlyArray<TokenAnimation> | undefined,
   tokenIndices: ReadonlyArray<number>
 ): TokenAnimation[] {
-  const sel = new Set(tokenIndices);
+  const sel = new Set(tokenIndices.filter(inDomain));
   const out: TokenAnimation[] = [];
   for (const entry of list ?? []) {
     const kept = entry.tokens.filter((t) => !sel.has(t));
-    if (kept.length > 0) out.push({ tokens: kept, presetId: entry.presetId });
+    if (kept.length > 0) {
+      out.push({ tokens: sortDedup(kept), presetId: entry.presetId });
+    }
   }
   return out;
 }

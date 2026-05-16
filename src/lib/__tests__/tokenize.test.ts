@@ -258,11 +258,28 @@ describe('assignTokenPreset', () => {
     ]);
   });
 
-  it('an empty selection is a no-op clone (does not mutate input)', () => {
-    const input = [{ tokens: [0], presetId: 'p' }];
-    const out = assignTokenPreset(input, [], 'p');
-    expect(out).toEqual(input);
-    expect(out).not.toBe(input);
+  it('an empty selection still normalises every kept entry without mutating input', () => {
+    const input = [{ tokens: [2, 0, 2], presetId: 'a' }];
+    const out = assignTokenPreset(input, [], 'b');
+    // kept entry is sorted + de-duplicated even though the selection
+    // was empty (the whole returned list holds the invariant)
+    expect(out).toEqual([{ tokens: [0, 2], presetId: 'a' }]);
+    expect(input[0].tokens).toEqual([2, 0, 2]); // input untouched
+  });
+
+  it('re-normalises a kept (untouched) entry that had unsorted / dup indices', () => {
+    const out = assignTokenPreset(
+      [
+        { tokens: [5, 3, 3], presetId: 'a' },
+        { tokens: [9], presetId: 'b' },
+      ],
+      [9],
+      'c'
+    );
+    expect(out).toEqual([
+      { tokens: [3, 5], presetId: 'a' },
+      { tokens: [9], presetId: 'c' },
+    ]);
   });
 });
 
@@ -287,6 +304,18 @@ describe('clearTokenPreset', () => {
 
   it('returns [] for an undefined list', () => {
     expect(clearTokenPreset(undefined, [0])).toEqual([]);
+  });
+
+  it('re-normalises surviving entries (sorted, de-duplicated)', () => {
+    expect(
+      clearTokenPreset([{ tokens: [4, 1, 1, 7], presetId: 'a' }], [7])
+    ).toEqual([{ tokens: [1, 4], presetId: 'a' }]);
+  });
+
+  it('ignores negative / non-integer indices in the selection', () => {
+    expect(
+      clearTokenPreset([{ tokens: [0, 1], presetId: 'a' }], [-1, 1.5])
+    ).toEqual([{ tokens: [0, 1], presetId: 'a' }]);
   });
 });
 

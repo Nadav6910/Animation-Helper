@@ -12,6 +12,10 @@ import type {
   TokenizeMode,
   Transform,
 } from '@/types/animation';
+import {
+  assignTokenPreset as assignTokenPresetReducer,
+  clearTokenPreset as clearTokenPresetReducer,
+} from '@/lib/tokenize';
 import { createHistoryRecorder } from './middleware/history';
 
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -114,6 +118,8 @@ export type AnimationState = {
   setStagger: (step: number | null) => void;
   setTokenizeMode: (mode: TokenizeMode) => void;
   setTokenAnimations: (list: TokenAnimation[] | undefined) => void;
+  assignTokenPreset: (tokens: number[], presetId: string) => void;
+  clearTokenPreset: (tokens: number[]) => void;
   setOffsetPath: (op: OffsetPath | undefined) => void;
   setPathDraw: (enabled: boolean) => void;
   // keyframes
@@ -255,6 +261,27 @@ export const useAnimationStore = create<AnimationState>((set, get) => {
           ...c,
           tokenAnimations: list && list.length > 0 ? list : undefined,
         };
+      }),
+    // assign / clear run the pure reducer against the LIVE config
+    // (`update` reads get().config) rather than a component-render
+    // snapshot, so concurrent edits / undo / URL-load can't make the
+    // merge drop another preset's tokens. Mirrors how setStagger /
+    // setOffsetPath keep their merge logic inside the store.
+    assignTokenPreset: (tokens, presetId) =>
+      update((c) => {
+        if (c.target !== 'text') return c;
+        const next = assignTokenPresetReducer(
+          c.tokenAnimations,
+          tokens,
+          presetId
+        );
+        return { ...c, tokenAnimations: next.length > 0 ? next : undefined };
+      }),
+    clearTokenPreset: (tokens) =>
+      update((c) => {
+        if (c.target !== 'text') return c;
+        const next = clearTokenPresetReducer(c.tokenAnimations, tokens);
+        return { ...c, tokenAnimations: next.length > 0 ? next : undefined };
       }),
     setOffsetPath: (op) =>
       update((c) => {
